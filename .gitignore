@@ -1,0 +1,32 @@
+# macOS and editors
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# Local environment and logs
+.env
+.env.*
+!.env.example
+.dev-logs/
+*.log
+
+# Flutter / Dart generated files
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/build/
+app/.packages
+app/test/failures/
+
+# Node generated files
+admin/node_modules/
+admin/dist/
+admin/dist-ssr/
+
+# .NET generated files
+restapi/bin/
+restapi/obj/
+
+# Runtime uploads (keep bundled system avatars)
+restapi/uploads/avatars/

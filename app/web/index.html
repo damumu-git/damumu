@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="搭慕慕，发现附近值得一起参加的活动。">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="搭慕慕">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>搭慕慕</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #f3f5fa;
+    }
+
+    #app-loader {
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      display: grid;
+      place-items: center;
+      background: #f3f5fa;
+      color: #17162c;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+        "Microsoft YaHei", sans-serif;
+      transition: opacity 180ms ease-out, visibility 180ms ease-out;
+    }
+
+    #app-loader.ready {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .loader-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .loader-mark {
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 19px;
+      color: white;
+      font-size: 27px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #5b4bdb, #7668ea);
+      box-shadow: 0 14px 32px rgba(91, 75, 219, .25);
+      animation: loader-breathe 1.15s ease-in-out infinite alternate;
+    }
+
+    .loader-name {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+
+    @keyframes loader-breathe {
+      to { transform: translateY(-4px); box-shadow: 0 18px 38px rgba(91, 75, 219, .34); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .loader-mark { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app-loader" role="status" aria-label="搭慕慕正在加载">
+    <div class="loader-content">
+      <div class="loader-mark">慕</div>
+      <div class="loader-name">搭慕慕</div>
+    </div>
+  </div>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    (() => {
+      const startedAt = Date.now();
+      const loader = document.getElementById('app-loader');
+      let hidden = false;
+      const hideLoader = () => {
+        if (hidden) return;
+        hidden = true;
+        // Give the CanvasKit font fallback a moment to settle before reveal.
+        const delay = Math.max(0, 650 - (Date.now() - startedAt));
+        window.setTimeout(() => loader.classList.add('ready'), delay);
+      };
+      window.addEventListener('flutter-first-frame', hideLoader, { once: true });
+      // Avoid trapping users behind the loader if startup reports no event.
+      window.setTimeout(hideLoader, 12000);
+    })();
+  </script>
+</body>
+</html>
