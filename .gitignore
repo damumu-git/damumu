@@ -27,6 +27,7 @@ admin/dist-ssr/
 # .NET generated files
 restapi/bin/
 restapi/obj/
+restapi/.codex-build/
 
 # Runtime uploads (keep bundled system avatars)
 restapi/uploads/avatars/
