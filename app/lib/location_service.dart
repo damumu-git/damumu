@@ -19,18 +19,19 @@ class AppLocation {
 class LocationService {
   LocationService({http.Client? client}) : _client = client ?? http.Client();
 
-  // v2 invalidates labels cached before the Simplified Chinese locale fix.
-  static const _labelKey = 'last_location_label_v2';
-  static const _latitudeKey = 'last_location_latitude_v2';
-  static const _longitudeKey = 'last_location_longitude_v2';
-  static const _cachedAtKey = 'last_location_cached_at_v2';
+  // v3 separates labels by App language and invalidates older locale-agnostic
+  // labels, which could keep showing Traditional Chinese after a language change.
+  static const _cacheVersion = 'v3';
   static const _cacheLifetime = Duration(minutes: 30);
 
   final http.Client _client;
 
-  Future<AppLocation> locate({bool forceRefresh = false}) async {
+  Future<AppLocation> locate({
+    required String languageCode,
+    bool forceRefresh = false,
+  }) async {
     if (!forceRefresh) {
-      final cached = await _readCache();
+      final cached = await _readCache(languageCode);
       if (cached != null) return cached;
     }
 
@@ -56,24 +57,37 @@ class LocationService {
         timeLimit: Duration(seconds: 12),
       ),
     );
-    final label = await _reverseGeocode(position.latitude, position.longitude);
+    final label = await _reverseGeocode(
+      position.latitude,
+      position.longitude,
+      languageCode,
+    );
     final result = AppLocation(
       latitude: position.latitude,
       longitude: position.longitude,
       label: label,
     );
-    await _writeCache(result);
+    await _writeCache(result, languageCode);
     return result;
   }
 
-  Future<String> _reverseGeocode(double latitude, double longitude) async {
+  Future<String> _reverseGeocode(
+    double latitude,
+    double longitude,
+    String languageCode,
+  ) async {
+    final acceptedLanguages = switch (languageCode) {
+      'ko' => 'ko-KR,ko,en',
+      'en' => 'en-US,en',
+      _ => 'zh-CN,zh-Hans-CN,zh-Hans,en',
+    };
     final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
       'format': 'jsonv2',
       'lat': latitude.toStringAsFixed(7),
       'lon': longitude.toStringAsFixed(7),
       'zoom': '12',
       'addressdetails': '1',
-      'accept-language': 'zh-Hans-CN,zh-Hans,zh-CN,ko,en',
+      'accept-language': acceptedLanguages,
     });
     try {
       final response = await _client
@@ -115,12 +129,17 @@ class LocationService {
     return null;
   }
 
-  Future<AppLocation?> _readCache() async {
+  String _cacheKey(String field, String languageCode) =>
+      'last_location_${field}_${_cacheVersion}_$languageCode';
+
+  Future<AppLocation?> _readCache(String languageCode) async {
     final preferences = await SharedPreferences.getInstance();
-    final cachedAt = preferences.getInt(_cachedAtKey);
-    final latitude = preferences.getDouble(_latitudeKey);
-    final longitude = preferences.getDouble(_longitudeKey);
-    final label = preferences.getString(_labelKey);
+    final cachedAt = preferences.getInt(_cacheKey('cached_at', languageCode));
+    final latitude = preferences.getDouble(_cacheKey('latitude', languageCode));
+    final longitude = preferences.getDouble(
+      _cacheKey('longitude', languageCode),
+    );
+    final label = preferences.getString(_cacheKey('label', languageCode));
     if (cachedAt == null ||
         latitude == null ||
         longitude == null ||
@@ -134,13 +153,25 @@ class LocationService {
     return AppLocation(latitude: latitude, longitude: longitude, label: label);
   }
 
-  Future<void> _writeCache(AppLocation location) async {
+  Future<void> _writeCache(
+    AppLocation location,
+    String languageCode,
+  ) async {
     final preferences = await SharedPreferences.getInstance();
     await Future.wait([
-      preferences.setDouble(_latitudeKey, location.latitude),
-      preferences.setDouble(_longitudeKey, location.longitude),
-      preferences.setString(_labelKey, location.label),
-      preferences.setInt(_cachedAtKey, DateTime.now().millisecondsSinceEpoch),
+      preferences.setDouble(
+        _cacheKey('latitude', languageCode),
+        location.latitude,
+      ),
+      preferences.setDouble(
+        _cacheKey('longitude', languageCode),
+        location.longitude,
+      ),
+      preferences.setString(_cacheKey('label', languageCode), location.label),
+      preferences.setInt(
+        _cacheKey('cached_at', languageCode),
+        DateTime.now().millisecondsSinceEpoch,
+      ),
     ]);
   }
 }

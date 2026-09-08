@@ -65,7 +65,17 @@ class _DaziAppState extends State<DaziApp> {
             surface: _cream,
           ),
           scaffoldBackgroundColor: _cream,
-          fontFamilyFallback: const ['PingFang SC', 'Noto Sans CJK SC'],
+          fontFamily: 'Noto Sans SC',
+          fontFamilyFallback: const [
+            'Noto Sans KR',
+            'Segoe UI Emoji',
+            'Apple Color Emoji',
+            'Noto Color Emoji',
+            'Noto Emoji',
+            'PingFang SC',
+            'Microsoft YaHei',
+            'Noto Sans CJK SC',
+          ],
           textTheme: const TextTheme(
             headlineLarge: TextStyle(
               fontSize: 30,
@@ -133,6 +143,7 @@ class EventItem {
     this.tags = const [],
     this.approval = false,
     this.isJoined = false,
+    this.isOwned = false,
   });
 
   final int id;
@@ -151,6 +162,7 @@ class EventItem {
   final List<String> tags;
   final bool approval;
   bool isJoined;
+  final bool isOwned;
 }
 
 final demoEvents = <EventItem>[
@@ -272,6 +284,7 @@ class _AppShellState extends State<AppShell> {
     final district = '${json['district_name'] ?? json['district_code'] ?? ''}';
     final distanceMeters = json['distance_meters'] as num?;
     final priceAmount = (json['price_amount'] as num?)?.toInt() ?? 0;
+    final currentUserId = AuthScope.of(context).user?.id;
     return EventItem(
       id: rawId.hashCode,
       emoji: '${json['category_icon'] ?? '✨'}',
@@ -288,6 +301,9 @@ class _AppShellState extends State<AppShell> {
       capacity: (json['capacity'] as num?)?.toInt() ?? 0,
       price: priceAmount == 0 ? '免费' : '预计 ₩$priceAmount/人',
       approval: json['approval_mode'] == 'manual',
+      isOwned:
+          currentUserId != null &&
+          '${json['organizer_user_id']}' == currentUserId,
       description: '${json['description'] ?? ''}',
       tags: [
         '${json['category_name'] ?? ''}',
@@ -299,8 +315,19 @@ class _AppShellState extends State<AppShell> {
   void _openEvent(EventItem event) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) =>
-            EventDetailPage(event: event, onChanged: () => setState(() {})),
+        builder: (_) => EventDetailPage(
+          event: event,
+          onChanged: () => setState(() {}),
+          onOpenMyActivities: () {
+            final token = AuthScope.of(context).token;
+            if (token == null) return;
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => MyActivitiesPage(token: token),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -515,11 +542,15 @@ class _HomePageState extends State<HomePage> {
   final Set<String> _selectedFilters = {'附近热门'};
   String _locationLabel = '正在定位…';
   bool _locating = true;
+  String? _locationLanguage;
 
   @override
-  void initState() {
-    super.initState();
-    _locate();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final language = Localizations.localeOf(context).languageCode;
+    if (_locationLanguage == language) return;
+    _locationLanguage = language;
+    _locate(forceRefresh: true);
   }
 
   @override
@@ -591,6 +622,7 @@ class _HomePageState extends State<HomePage> {
     });
     try {
       final location = await _locationService.locate(
+        languageCode: _locationLanguage ?? 'zh',
         forceRefresh: forceRefresh,
       );
       if (!mounted) return;
@@ -1054,6 +1086,13 @@ class EventCard extends StatelessWidget {
                         const Icon(Icons.check_circle, color: _green, size: 19),
                     ],
                   ),
+                  if (event.isOwned) ...[
+                    const SizedBox(height: 7),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: _Pill('我发布的', green: true),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Text(
                     event.time,
@@ -1305,10 +1344,12 @@ class EventDetailPage extends StatefulWidget {
   const EventDetailPage({
     required this.event,
     required this.onChanged,
+    required this.onOpenMyActivities,
     super.key,
   });
   final EventItem event;
   final VoidCallback onChanged;
+  final VoidCallback onOpenMyActivities;
 
   @override
   State<EventDetailPage> createState() => _EventDetailPageState();
@@ -1362,8 +1403,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     spacing: 8,
                     children: [
                       _Pill(e.category),
+                      if (e.isOwned) const _Pill('我发布的', green: true),
                       if (e.approval) const _Pill('需组织者审核'),
-                      if (e.isJoined) const _Pill('已参加', green: true),
+                      if (e.isJoined && !e.isOwned)
+                        const _Pill('已参加', green: true),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -1512,17 +1555,23 @@ class _EventDetailPageState extends State<EventDetailPage> {
                 child: FilledButton(
                   onPressed: _joining
                       ? null
+                      : e.isOwned
+                      ? widget.onOpenMyActivities
                       : e.isJoined
                       ? () => _leave(e)
                       : () => _join(e, full),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    backgroundColor: e.isJoined ? Colors.grey.shade700 : _green,
+                    backgroundColor: e.isJoined && !e.isOwned
+                        ? Colors.grey.shade700
+                        : _green,
                   ),
                   child: _joining
                       ? const _ButtonProgress(label: '提交中…')
                       : Text(
-                          e.isJoined
+                          e.isOwned
+                              ? '查看我的活动'
+                              : e.isJoined
                               ? '退出活动'
                               : full
                               ? '加入候补'
@@ -2201,12 +2250,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
         time: _formatDateTime(_startsAt!),
         area: '$_city · $_district',
         distance: '你发布的',
-        host: '林夏',
+        host: AuthScope.of(context).user?.nickname ?? '我',
         hostScore: 4.8,
         joined: 1,
         capacity: _capacity,
         price: priceAmount == 0 ? '免费' : '预计 ₩$priceAmount/人',
         approval: _approval,
+        isOwned: true,
         description: _description.text.trim().isEmpty
             ? '一起度过轻松愉快的时间，欢迎第一次参加的新朋友。'
             : _description.text.trim(),

@@ -114,12 +114,29 @@
       const startedAt = Date.now();
       const loader = document.getElementById('app-loader');
       let hidden = false;
-      const hideLoader = () => {
+      const hideLoader = async () => {
         if (hidden) return;
         hidden = true;
-        // Give the CanvasKit font fallback a moment to settle before reveal.
-        const delay = Math.max(0, 650 - (Date.now() - startedAt));
-        window.setTimeout(() => loader.classList.add('ready'), delay);
+
+        // The first Flutter frame can arrive before CanvasKit has finished
+        // resolving fallback fonts. Keep that frame covered until browser fonts
+        // are ready and for a short interval after the event. Previously the
+        // delay was measured from page startup, so a slow startup got no delay
+        // at all and briefly exposed missing-glyph squares.
+        if (document.fonts?.ready) {
+          try {
+            await document.fonts.ready;
+          } catch (_) {
+            // The post-frame delay below is still a safe fallback.
+          }
+        }
+
+        const earliestReveal = Math.max(startedAt + 650, Date.now() + 300);
+        window.setTimeout(() => {
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => loader.classList.add('ready'));
+          });
+        }, Math.max(0, earliestReveal - Date.now()));
       };
       window.addEventListener('flutter-first-frame', hideLoader, { once: true });
       // Avoid trapping users behind the loader if startup reports no event.

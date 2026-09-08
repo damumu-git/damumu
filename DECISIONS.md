@@ -84,3 +84,14 @@ session state, increasing token use and making stale information harder to spot.
 concise, reference source paths instead of copying code, and verify claims against
 the repository before acting.
 
+## 2026-09-07 — User-facing location names follow the App locale
+
+**Decision:** Reverse-geocoded labels use the language selected inside the App,
+not the device or browser locale. Chinese requests explicitly prefer Simplified
+Chinese, and cached labels are isolated by App language.
+
+**Reason:** A device locale or stale shared cache could otherwise show Traditional
+Chinese while the App itself is set to Simplified Chinese.
+
+**Consequence:** Any future geocoder must accept the current App language and must
+not reuse a human-readable location label across different languages.

@@ -25,3 +25,13 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: Noto Sans SC
+      fonts:
+        - asset: assets/fonts/NotoSansSC-VF.ttf
+    - family: Noto Sans KR
+      fonts:
+        - asset: assets/fonts/NotoSansKR-VF.ttf
+    - family: Noto Emoji
+      fonts:
+        - asset: assets/fonts/NotoEmoji-VF.ttf

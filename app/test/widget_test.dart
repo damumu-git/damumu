@@ -45,6 +45,45 @@ void main() {
     expect(find.text('活动群聊已解锁，可在「消息」中查看'), findsOneWidget);
   });
 
+  testWidgets('自己发布的活动显示身份且不出现报名按钮', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    final ownedEvent = EventItem(
+      id: 99,
+      emoji: '🌿',
+      title: '我发布的测试活动',
+      category: '户外',
+      time: '今天 18:30',
+      area: '首尔',
+      distance: '1.0 km',
+      host: '林夏',
+      hostScore: 4.8,
+      joined: 1,
+      capacity: 8,
+      approval: true,
+      isOwned: true,
+    );
+    var openedMyActivities = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDetailPage(
+          event: ownedEvent,
+          onChanged: () {},
+          onOpenMyActivities: () => openedMyActivities = true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('我发布的'), findsOneWidget);
+    expect(find.text('查看我的活动'), findsOneWidget);
+    expect(find.text('申请参加'), findsNothing);
+    expect(find.text('立即参加'), findsNothing);
+
+    await tester.tap(find.text('查看我的活动'));
+    expect(openedMyActivities, isTrue);
+  });
+
   testWidgets('五个一级入口均可访问', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpWidget(authenticatedApp());
