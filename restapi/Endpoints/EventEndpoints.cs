@@ -39,6 +39,19 @@ public static class EventEndpoints
                        s.starts_at, s.ends_at,
                        u.id AS organizer_user_id, up.nickname AS organizer_name,
                        COALESCE(ts.score, 0) AS organizer_score,
+                       (e.title ILIKE '%新手%' OR e.description ILIKE '%新手%'
+                        OR EXISTS (
+                            SELECT 1
+                            FROM event_tag beginner_tag
+                            JOIN interest beginner_interest
+                              ON beginner_interest.id=beginner_tag.interest_id
+                            WHERE beginner_tag.event_id=e.id
+                              AND (
+                                  beginner_interest.code ILIKE '%beginner%'
+                                  OR beginner_interest.name_zh_cn ILIKE '%新手%'
+                                  OR beginner_interest.name_ko_kr ILIKE '%초보%'
+                              )
+                        )) AS beginner_friendly,
                        CASE WHEN @hasGeo AND p.public_geo IS NOT NULL
                             THEN ST_Distance(p.public_geo, ST_Point(@longitude, @latitude, 4326)::geography)
                             ELSE NULL END AS distance_meters
@@ -215,14 +228,14 @@ public static class EventEndpoints
                     INSERT INTO event (
                         id, organizer_user_id, category_id, place_id, title, description,
                         city_code, district_code, status, published_at, visibility, approval_mode,
-                        min_participants, capacity, min_age, max_age,
+                        min_participants, capacity, approved_count, min_age, max_age,
                         price_min, price_max, price_amount, price_currency, language_codes,
                         announcement, organizer_note, review_status
                     )
                     VALUES (
                         @eventId, @userId, @categoryId, @placeId, @title, @description,
                         @cityCode, @districtCode, 'published', now(), @visibility, @approvalMode,
-                        @minParticipants, @capacity, @minAge, @maxAge,
+                        @minParticipants, @capacity, 1, @minAge, @maxAge,
                         @priceMin, @priceMax, @priceMin, @priceCurrency, @languageCodes,
                         @announcement, @organizerNote, 'not_required'
                     )

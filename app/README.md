@@ -29,3 +29,16 @@ Release 构建不会启用自动登录。需要显式关闭时传入
 `--dart-define=DEV_AUTO_LOGIN=false`。
 
 A new Flutter project.
+
+
+## 活动列表分页
+
+首页和发现列表使用 `/activities` Cursor 接口，每页 20 条。接近列表底部自动加载，
+也可点“加载更多”；下拉刷新重新取首屏。页面共享已加载活动，使用 UUID 去重，
+后续页失败保留列表并允许重试，定位变化/刷新使旧请求失效。
+搜索和筛选当前作用于已加载活动，尚有后续页时会提示继续加载。
+
+```powershell
+flutter analyze
+flutter test test/event_pagination_test.dart test/activity_feed_test.dart test/widget_test.dart
+```

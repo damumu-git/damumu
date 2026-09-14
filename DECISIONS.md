@@ -1,7 +1,33 @@
-# MUDA Decision Log
+# DAMUMU Decision Log
 
 This file records decisions that should survive individual Codex sessions. Add a
 new dated entry when a decision changes; do not silently rewrite history.
+
+## 2026-09-11 — Product brand is DAMUMU
+
+**Decision:** The product's Latin-letter brand is `DAMUMU`. The former uppercase
+brand is retired and must not appear in product copy, documentation, HTTP client
+identification, scripts, or operational examples.
+
+**Reason:** Product naming is now unified around DAMUMU and the Chinese UI name
+“搭慕慕”.
+
+**Consequence:** Use `DAMUMU` for all new brand references. Existing lowercase or
+PascalCase technical identifiers remain unchanged until a separately planned
+compatibility migration can rename database, assembly, namespace, and credential
+identifiers without disrupting existing environments.
+
+## 2026-09-11 — App introduction website is independent
+
+**Decision:** The public-facing App introduction is a standalone static site in
+`website/dist/`, separate from the Flutter Web application and Admin console.
+
+**Reason:** The introduction page has a different audience and release lifecycle
+from the authenticated product surfaces.
+
+**Consequence:** Keep marketing content truthful to implemented or planned
+capabilities, preserve the product's cost and location-privacy rules, and avoid
+coupling the site to local API availability.
 
 ## 2026-08-29 — Events publish immediately
 
@@ -16,7 +42,7 @@ policy.
 **Consequence:** Do not introduce a mandatory pending-review screen or hide new
 events unless a later product decision explicitly changes this rule.
 
-## 2026-08-29 — MUDA does not process activity payments
+## 2026-08-29 — DAMUMU does not process activity payments
 
 **Decision:** The platform shows an organizer-provided estimated per-person
 offline cost in KRW but provides no payment, transfer, escrow, refund, or financial
@@ -26,7 +52,7 @@ guarantee.
 between strangers create fraud and safety risks.
 
 **Consequence:** Join confirmation must communicate the estimate and safety
-warning. Amount `0` means free. Product copy must not imply that MUDA charges or
+warning. Amount `0` means free. Product copy must not imply that DAMUMU charges or
 guarantees the amount.
 
 ## 2026-08-29 — Exact meeting points are approval-gated
@@ -95,3 +121,15 @@ Chinese while the App itself is set to Simplified Chinese.
 
 **Consequence:** Any future geocoder must accept the current App language and must
 not reuse a human-readable location label across different languages.
+
+## 2026-09-08 — Activity capacity includes the organizer
+
+**Decision:** The organizer is the first approved person in an activity and uses
+one place in its configured capacity.
+
+**Reason:** Published headcounts and remaining-place calculations must represent
+everyone who will attend, including the person who created the activity.
+
+**Consequence:** New events start with `approved_count = 1`; repairs and future
+counter calculations sum the organizer together with approved or attended
+participants and their party sizes.

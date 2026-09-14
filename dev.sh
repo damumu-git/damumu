@@ -73,7 +73,7 @@ admin_pid=""
 cleanup() {
   trap - EXIT INT TERM
   echo
-  echo "正在停止 MUDA 开发服务…"
+  echo "正在停止 DAMUMU 开发服务…"
   [[ -n "$api_pid" ]] && pkill -TERM -P "$api_pid" 2>/dev/null || true
   [[ -n "$admin_pid" ]] && pkill -TERM -P "$admin_pid" 2>/dev/null || true
   [[ -n "$api_pid" ]] && kill "$api_pid" 2>/dev/null || true

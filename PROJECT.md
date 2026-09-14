@@ -1,10 +1,10 @@
-# MUDA Project Overview
+# DAMUMU Project Overview
 
 Last reviewed: 2026-09-01 (Asia/Seoul)
 
 ## Purpose
 
-MUDA, currently presented in much of the UI as “搭慕慕”, helps people in Korea
+DAMUMU, currently presented in much of the UI as “搭慕慕”, helps people in Korea
 discover, create, join, and manage nearby offline activities. The intended core
 loop is:
 

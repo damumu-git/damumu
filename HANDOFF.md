@@ -1,4 +1,4 @@
-# MUDA Session Handoff
+# DAMUMU Session Handoff
 
 Updated: 2026-09-07 (Asia/Seoul)
 
@@ -6,6 +6,14 @@ Updated: 2026-09-07 (Asia/Seoul)
 
 Finish the real, database-backed event participation loop before broad UI polish
 or unrelated refactoring.
+
+The permanent Latin-letter product brand is now `DAMUMU`; the previous uppercase
+brand has been removed from tracked source and documentation. Lowercase and
+PascalCase internal identifiers are retained for compatibility pending a separate
+migration.
+
+An independent static introduction website now lives in `website/dist/`. It
+describes the App without depending on the Flutter, API, or Admin runtimes.
 
 ## Repository state at handoff
 
@@ -51,6 +59,15 @@ Recent ownership and localization fixes:
 - Admin npm dependencies are installed locally, audit reports zero known
   vulnerabilities, and build/lint pass. The Vite development server was verified
   at `http://localhost:5173` with the API and dashboard endpoints returning 200.
+- Activity capacity now includes the organizer as the first approved person.
+  Migration `009_count_organizer_in_capacity.sql` repairs historical counters;
+  it was applied to the configured target database and verified with no count or
+  organizer mismatches.
+- Organizer activity records now load pending applications and can approve or
+  reject them (with a required reason) through the real member-review endpoints.
+- Home filters now use raw start timestamps, geocoded coordinates/region fallback,
+  popularity ordering, and a server-provided beginner-friendly signal instead of
+  relying only on formatted display strings.
 
 Connected to real API/database paths:
 
@@ -64,7 +81,7 @@ Available in the API but not yet complete in the Flutter app:
 
 - `GET /events/{id}` as the source of truth for event details.
 - Real join and leave flows.
-- Organizer approval/rejection and member management.
+- Full organizer member management beyond pending approval/rejection.
 - Event edit, cancel, and check-in.
 - Real notifications, conversations, and messages.
 - Reports, blocking, reviews, and safety-meeting flows.
@@ -80,8 +97,8 @@ Available in the API but not yet complete in the Flutter app:
 4. Connect join and leave actions to the API.
 5. Add the join confirmation content: no platform payment/escrow, no advance
    transfer to strangers, offline personal/property safety, and expected KRW cost.
-6. Connect organizer member review, capacity, approval, rejection, and waitlist
-   state.
+6. Complete organizer capacity, approved-member, and waitlist management beyond
+   the connected pending approval/rejection actions.
 7. Make My Activities open the real detail and expose appropriate organizer
    actions.
 8. Connect notifications and activity chat, then governance and safety flows.
