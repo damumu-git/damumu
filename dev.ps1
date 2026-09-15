@@ -11,21 +11,24 @@ $apiBaseUrl = if ($env:API_BASE_URL) {
 }
 $databaseConnection = $env:ConnectionStrings__Muda
 if ([string]::IsNullOrWhiteSpace($databaseConnection)) {
-    $databaseName = if ($env:DAMUMU_LOCAL_POSTGRES_DATABASE) {
-        $env:DAMUMU_LOCAL_POSTGRES_DATABASE
-    } else { 'muda' }
-    $databaseUsername = if ($env:DAMUMU_LOCAL_POSTGRES_USERNAME) {
-        $env:DAMUMU_LOCAL_POSTGRES_USERNAME
+    $databaseHost = if ($env:DAMUMU_POSTGRES_HOST) {
+        $env:DAMUMU_POSTGRES_HOST
+    } else { '100.66.109.44' }
+    $databaseName = if ($env:DAMUMU_POSTGRES_DATABASE) {
+        $env:DAMUMU_POSTGRES_DATABASE
+    } else { 'damumu' }
+    $databaseUsername = if ($env:DAMUMU_POSTGRES_USERNAME) {
+        $env:DAMUMU_POSTGRES_USERNAME
     } else { 'postgres' }
-    $databasePassword = $env:DAMUMU_LOCAL_POSTGRES_PASSWORD
+    $databasePassword = $env:DAMUMU_POSTGRES_PASSWORD
     if ([string]::IsNullOrWhiteSpace($databasePassword)) {
-        $securePassword = Read-Host 'localhost:5432 PostgreSQL password' -AsSecureString
+        $securePassword = Read-Host "$databaseHost`:5432/$databaseName PostgreSQL password" -AsSecureString
         $databasePassword = [System.Net.NetworkCredential]::new('', $securePassword).Password
     }
     if ([string]::IsNullOrWhiteSpace($databasePassword)) {
-        throw '本地 PostgreSQL 密码不能为空。'
+        throw 'PostgreSQL 密码不能为空。'
     }
-    $databaseConnection = "Host=127.0.0.1;Port=5432;Database=$databaseName;Username=$databaseUsername;Password=$databasePassword;SSL Mode=Disable"
+    $databaseConnection = "Host=$databaseHost;Port=5432;Database=$databaseName;Username=$databaseUsername;Password=$databasePassword;SSL Mode=Disable"
 }
 $flutterArguments = @($args)
 $servicesOnly = $flutterArguments.Count -gt 0 -and $flutterArguments[0] -eq '--services'
@@ -58,29 +61,24 @@ function Wait-DevelopmentEndpoint(
     [System.Diagnostics.Process]$Process,
     [int]$Attempts = 30
 ) {
-    $client = [System.Net.Http.HttpClient]::new()
-    $client.Timeout = [TimeSpan]::FromSeconds(2)
-    try {
-        for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
-            if ($Process.HasExited) { return $false }
+    for ($attempt = 0; $attempt -lt $Attempts; $attempt++) {
+        if ($Process.HasExited) { return $false }
+        try {
+            $request = [System.Net.WebRequest]::Create($Uri)
+            $request.Method = 'GET'
+            $request.Timeout = 2000
+            $response = $request.GetResponse()
             try {
-                $response = $client.GetAsync(
-                    $Uri,
-                    [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead
-                ).GetAwaiter().GetResult()
-                try {
-                    if ($response.IsSuccessStatusCode) { return $true }
-                } finally {
-                    $response.Dispose()
-                }
-            } catch {
-                Start-Sleep -Milliseconds 500
+                $statusCode = [int]$response.StatusCode
+                if ($statusCode -ge 200 -and $statusCode -lt 300) { return $true }
+            } finally {
+                $response.Close()
             }
+        } catch {
+            Start-Sleep -Milliseconds 500
         }
-        return $false
-    } finally {
-        $client.Dispose()
     }
+    return $false
 }
 
 $dotnet = Resolve-Executable @('dotnet.exe', 'dotnet') '.NET 10 SDK'
@@ -129,7 +127,7 @@ try {
 
     if (-not (Wait-DevelopmentEndpoint "http://localhost:$apiPort/api/v1/health" $apiProcess)) {
         Show-StartupFailure 'REST API' $apiErrorLog
-        throw 'REST API 未通过健康检查，请确认 localhost:5432/muda 的账号和密码。'
+        throw 'REST API 未通过健康检查，请确认 Tailscale 和 PostgreSQL 的账号、密码。'
     }
     if (-not (Wait-DevelopmentEndpoint "http://localhost:$adminPort" $adminProcess)) {
         Show-StartupFailure 'Admin' $adminErrorLog

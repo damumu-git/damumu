@@ -27,7 +27,7 @@ register or sign in
 | User app | `app/` | Flutter / Dart | `http://localhost:3000` for web |
 | REST API | `restapi/` | ASP.NET Core 10 | `http://localhost:8080/api/v1` |
 | Admin console | `admin/` | React 19 / Vite | `http://localhost:5173` |
-| Database | external container | PostgreSQL + PostGIS | `127.0.0.1:5432` |
+| Database | Tailscale host | PostgreSQL + PostGIS | `100.66.109.44:5432` |
 
 OpenAPI is normally available at `http://localhost:8080/openapi/v1.json`.
 
@@ -125,4 +125,3 @@ development credentials or automatic login.
 - `MVP.md`: MVP requirements and acceptance criteria.
 - `FIRST_RELEASE_FLOWS.md`: full first-release flows and gaps.
 - `app/README.md`, `restapi/README.md`, `admin/README.md`: module-specific setup.
-

@@ -3,6 +3,16 @@
 ASP.NET Core 10 + PostgreSQL/PostGIS API，覆盖用户、活动、报名候补、聊天、
 安全会面、评价、举报治理、通知、配置与管理员运营接口。
 
+开发环境默认通过 Tailscale 连接 `100.66.109.44:5432/damumu`。真实密码保存在本机
+.NET User Secrets，不能写入 `appsettings.json`：
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:Muda" "Host=100.66.109.44;Port=5432;Database=damumu;Username=postgres;Password=你的密码;SSL Mode=Disable" --project ./restapi/Muda.Api.csproj
+```
+
+Admin 不直接连接 PostgreSQL；它通过 `http://localhost:8080/api/v1` 使用同一个 REST API，
+所以 REST API 的连接配置同时决定用户 App 和 Admin 读取的数据库。
+
 ## 使用 Docker 启动
 
 数据库容器已运行在宿主机 `127.0.0.1:5432` 时：
@@ -56,25 +66,24 @@ done
 docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 ```
 
-## 本地 PostgreSQL 集成测试
+## Tailscale PostgreSQL 集成测试
 
-当前测试直接使用电脑上已经运行的 `localhost:5432` PostgreSQL，不启动 Docker，
-也不连接远端数据库。当前本机数据库名为 `muda`，默认用户为 `postgres`。
-在 Windows PowerShell 中从仓库根目录执行，脚本会隐藏输入本地数据库密码：
+当前测试通过 Tailscale 连接 `100.66.109.44:5432/damumu`，默认用户为 `postgres`。
+在 Windows PowerShell 中从仓库根目录执行，脚本会隐藏输入数据库密码：
 
 ```powershell
-./scripts/test-local-postgres.ps1
+./scripts/test-tailscale-postgres.ps1
 ```
 
-默认流程只读取现有本地数据，并在事务临时表中执行 SQL 边界测试，不持久化测试数据。
+默认流程只读取现有业务数据，并在事务临时表中执行 SQL 边界测试，不持久化测试数据。
 需要显式应用迁移时执行：
 
 ```powershell
-./scripts/test-local-postgres.ps1 -ApplyMigrations
+./scripts/test-tailscale-postgres.ps1 -ApplyMigrations
 ```
 
 非交互执行时可提前设置仅存在于当前终端进程的
-`DAMUMU_LOCAL_POSTGRES_PASSWORD`。不要把密码写入 Git 配置或脚本。
+`DAMUMU_POSTGRES_PASSWORD`。不要把密码写入 Git 配置或脚本。
 
 ## 用户认证与头像
 

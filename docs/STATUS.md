@@ -4,16 +4,17 @@
 
 ## 正在进行
 
-- REST API 集成测试暂时统一使用电脑现有的 `localhost:5432/muda` PostgreSQL，不连接远端 PostgreSQL。
+- REST API 与集成测试统一通过 Tailscale 使用 `100.66.109.44:5432/damumu` PostgreSQL。
 - 完成真实、数据库驱动的活动参与闭环；优先处理真实 UUID、详情、加入/退出及组织者成员管理。
 - 统一 Flutter 内容加载错误状态，覆盖 HTTP 400/500、超时、断网、空响应及非 JSON 响应。
 
 ## 最近完成
 
-- 新增 Windows PowerShell 开发启动器 `dev.ps1`，一次启动 REST API、Admin 和 Flutter；默认安全读取 `localhost:5432/muda` 的密码。Windows 使用 `.\dev.ps1 -d chrome --web-port 3000`，`dev.sh` 保留给 Bash 环境。
-- 新增 `scripts/test-local-postgres.ps1`：固定连接 `127.0.0.1:5432`，从隐藏输入或本机环境变量读取密码，默认只读启动临时 API 并执行 Cursor 数据库及 HTTP 集成测试；迁移必须通过 `-ApplyMigrations` 明确启用。
-- 已确认本机 PostgreSQL 17 服务正在运行且要求密码认证，现有业务测试库名为 `muda`。误建的 Docker `55432` 测试容器及专用 volume 已删除。
-- `localhost:5432/muda` 验证通过：API 与测试项目构建成功；Cursor 编解码、真实查询 SQL 的同时间戳排序、翻页期间插入/删除、`limit+1`、末页/空页及 HTTP 非法游标检查全部通过。SQL 样本仅存在于事务临时表并已回滚，本机业务表没有写入测试数据。
+- 新增兼容 Windows PowerShell 5.1 的开发启动器 `dev.ps1`，一次启动 REST API、Admin 和 Flutter；默认安全读取 Tailscale 数据库密码。Windows 使用 `.\dev.ps1 -d chrome --web-port 3000`，`dev.sh` 保留给 Bash 环境。
+- 集成测试脚本恢复为 `scripts/test-tailscale-postgres.ps1`：连接 `100.66.109.44:5432/damumu`，从隐藏输入或本机环境变量读取密码，默认启动临时 API 并执行 Cursor 数据库及 HTTP 集成测试；迁移必须通过 `-ApplyMigrations` 明确启用。
+- Windows PowerShell 5.1 启动验证通过：Tailscale 数据库健康、Admin HTTP 200，停止后开发端口正常释放。远端 Cursor 集成测试通过，实际读取 1 条公开活动；SQL 样本仅存在于事务临时表并已回滚。
+- REST API 的版本库基础配置已指向 `100.66.109.44:5432/damumu`，真实连接字符串使用本机 .NET User Secrets 覆盖；Admin 继续通过本地 REST API 读取同一远端数据库，不保存独立数据库凭据。
+- 直接启动 REST API 的验证通过：数据库健康；Admin dashboard 从远端库读取到 1 个用户、1 个活动，其中 1 个活动处于上架状态。
 - 追加 Flutter 构建异常友好兜底：MaterialApp 配置 `ErrorWidget.builder`，不把异常文本/堆栈呈现在用户页面，开发诊断保留；重试重新挂载页面树。
 - 截图中的 `Null is not a subtype of bool` 缺少运行时堆栈，尚不能确认具体字段；热重载保留旧状态是待核实原因。真实运行环境已增加构建异常友好兜底，开发诊断仍写入控制台；发布新字段后应执行 Hot Restart。
 
@@ -36,7 +37,7 @@
 
 ## 下一步
 
-1. 在本机设置 `DAMUMU_LOCAL_POSTGRES_PASSWORD` 或运行脚本时隐藏输入密码，然后执行 `./scripts/test-local-postgres.ps1`；远端部署仍需单独应用 `010_activity_cursor_index.sql`。
+1. 设置 `DAMUMU_POSTGRES_PASSWORD` 或运行脚本时隐藏输入密码，然后执行 `./scripts/test-tailscale-postgres.ps1`；远端部署仍需单独应用 `010_activity_cursor_index.sql`。
 2. 将 Flutter 的 `EventItem.id` 从整数/hash 改为数据库 UUID 字符串并保持 list → detail → join/leave 全链路一致。
 3. 使用 `GET /events/{id}` 加载真实活动详情。
 4. 接入真实加入、退出、候补及完整组织者成员管理。

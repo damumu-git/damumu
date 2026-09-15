@@ -30,8 +30,8 @@ Windows PowerShell 在项目根目录执行：
 .\dev.ps1 -d chrome --web-port 3000
 ```
 
-脚本默认连接 `localhost:5432/muda`，并隐藏输入 PostgreSQL 密码。也可以先在当前终端设置
-`DAMUMU_LOCAL_POSTGRES_PASSWORD`，避免每次输入；密码不会写入仓库。
+脚本默认通过 Tailscale 连接 `100.66.109.44:5432/damumu`，并隐藏输入 PostgreSQL 密码。
+也可以先在当前终端设置 `DAMUMU_POSTGRES_PASSWORD`，避免每次输入；密码不会写入仓库。
 
 Linux、macOS 或已经安装 Bash 的环境执行：
 

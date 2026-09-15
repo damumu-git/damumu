@@ -7,7 +7,21 @@ LOG_DIR="$ROOT_DIR/.dev-logs"
 API_PORT="${API_PORT:-8080}"
 ADMIN_PORT="${ADMIN_PORT:-5173}"
 API_BASE_URL="${API_BASE_URL:-http://localhost:${API_PORT}/api/v1}"
+POSTGRES_HOST="${DAMUMU_POSTGRES_HOST:-100.66.109.44}"
+POSTGRES_DATABASE="${DAMUMU_POSTGRES_DATABASE:-damumu}"
+POSTGRES_USERNAME="${DAMUMU_POSTGRES_USERNAME:-postgres}"
+POSTGRES_PASSWORD="${DAMUMU_POSTGRES_PASSWORD:-}"
 SERVICES_ONLY=false
+
+if [[ -z "$POSTGRES_PASSWORD" ]]; then
+  read -r -s -p "$POSTGRES_HOST:5432/$POSTGRES_DATABASE PostgreSQL password: " POSTGRES_PASSWORD
+  printf '\n'
+fi
+[[ -n "$POSTGRES_PASSWORD" ]] || {
+  echo "错误：PostgreSQL 密码不能为空。" >&2
+  exit 1
+}
+DATABASE_CONNECTION="Host=${POSTGRES_HOST};Port=5432;Database=${POSTGRES_DATABASE};Username=${POSTGRES_USERNAME};Password=${POSTGRES_PASSWORD};SSL Mode=Disable"
 
 if [[ "${1:-}" == "--services" ]]; then
   SERVICES_ONLY=true
@@ -87,6 +101,7 @@ echo "启动 REST API：http://localhost:${API_PORT}/api/v1"
   cd "$ROOT_DIR/restapi"
   exec env ASPNETCORE_ENVIRONMENT=Development \
     ASPNETCORE_URLS="http://localhost:${API_PORT}" \
+    ConnectionStrings__Muda="$DATABASE_CONNECTION" \
     "$DOTNET" run --no-launch-profile
 ) >"$LOG_DIR/restapi.log" 2>&1 &
 api_pid=$!
