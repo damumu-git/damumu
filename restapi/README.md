@@ -56,6 +56,25 @@ done
 docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 ```
 
+## 本地 PostgreSQL 集成测试
+
+当前测试默认使用本机 `127.0.0.1:55432` 的独立 `damumu_test` 数据库，不连接远端数据库。
+在 Windows PowerShell 中从仓库根目录执行：
+
+```powershell
+./scripts/test-local-postgres.ps1
+```
+
+脚本会启动 `damumu-postgres-test` PostGIS 容器、依次应用迁移、写入 25 条幂等测试活动，
+然后启动临时 API 并验证 Cursor 分页。测试数据只存在于本地 Docker volume。
+需要测试后停止数据库容器时执行：
+
+```powershell
+./scripts/test-local-postgres.ps1 -StopDatabase
+```
+
+本地测试连接配置位于 `appsettings.Testing.json`，只包含开发用固定凭据。生产和远端连接仍必须通过环境变量提供。
+
 ## 用户认证与头像
 
 从旧版基础数据库升级时执行：

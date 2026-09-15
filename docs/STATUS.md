@@ -1,14 +1,18 @@
 # DAMUMU 当前项目状态
 
-最后更新：2026-09-14（Asia/Seoul）
+最后更新：2026-09-15（Asia/Seoul）
 
 ## 正在进行
 
+- REST API 集成测试暂时统一使用本地 PostGIS `damumu_test` 数据库，不连接远端 PostgreSQL。
 - 完成真实、数据库驱动的活动参与闭环；优先处理真实 UUID、详情、加入/退出及组织者成员管理。
 - 统一 Flutter 内容加载错误状态，覆盖 HTTP 400/500、超时、断网、空响应及非 JSON 响应。
 
 ## 最近完成
 
+- 本地 PostgreSQL 测试环境已切换到 `127.0.0.1:55432/damumu_test`，使用独立 `damumu-postgres-test` PostGIS 容器，不读取远端数据库。
+- 新增 `scripts/test-local-postgres.ps1`：等待 PostGIS 完成初始化、依序应用迁移、写入 25 条幂等活动数据、启动临时 API，并执行 Cursor 数据库及 HTTP 集成测试。
+- 本地数据库流程连续执行两次均通过：API/测试项目 0 警告、0 错误；真实活动流共 13 页/25 条，顺序、去重、页边界、位置隐私及非法游标检查全部通过。
 - 追加 Flutter 构建异常友好兜底：MaterialApp 配置 `ErrorWidget.builder`，不把异常文本/堆栈呈现在用户页面，开发诊断保留；重试重新挂载页面树。
 - 截图中的 `Null is not a subtype of bool` 缺少运行时堆栈，尚不能确认具体字段；热重载保留旧状态是待核实原因。真实运行环境已增加构建异常友好兜底，开发诊断仍写入控制台；发布新字段后应执行 Hot Restart。
 
@@ -31,7 +35,7 @@
 
 ## 下一步
 
-1. 部署新 API 并按迁移顺序执行 `010_activity_cursor_index.sql`，重启/热重启 APP 后验证 `/activities`；随后处理注册快照测试的跨平台字体依赖。
+1. 开发期间使用 `./scripts/test-local-postgres.ps1` 维护本地测试库；需要停止容器时使用 `-StopDatabase`。远端部署仍需单独应用 `010_activity_cursor_index.sql`。
 2. 将 Flutter 的 `EventItem.id` 从整数/hash 改为数据库 UUID 字符串并保持 list → detail → join/leave 全链路一致。
 3. 使用 `GET /events/{id}` 加载真实活动详情。
 4. 接入真实加入、退出、候补及完整组织者成员管理。
