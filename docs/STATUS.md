@@ -10,6 +10,7 @@
 
 ## 最近完成
 
+- 新增 Windows PowerShell 开发启动器 `dev.ps1`，一次启动 REST API、Admin 和 Flutter；默认安全读取 `localhost:5432/muda` 的密码。Windows 使用 `.\dev.ps1 -d chrome --web-port 3000`，`dev.sh` 保留给 Bash 环境。
 - 新增 `scripts/test-local-postgres.ps1`：固定连接 `127.0.0.1:5432`，从隐藏输入或本机环境变量读取密码，默认只读启动临时 API 并执行 Cursor 数据库及 HTTP 集成测试；迁移必须通过 `-ApplyMigrations` 明确启用。
 - 已确认本机 PostgreSQL 17 服务正在运行且要求密码认证，现有业务测试库名为 `muda`。误建的 Docker `55432` 测试容器及专用 volume 已删除。
 - `localhost:5432/muda` 验证通过：API 与测试项目构建成功；Cursor 编解码、真实查询 SQL 的同时间戳排序、翻页期间插入/删除、`limit+1`、末页/空页及 HTTP 非法游标检查全部通过。SQL 样本仅存在于事务临时表并已回滚，本机业务表没有写入测试数据。

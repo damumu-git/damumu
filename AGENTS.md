@@ -116,6 +116,15 @@ At task completion:
 
 From the repository root:
 
+Windows PowerShell:
+
+```powershell
+.\dev.ps1 -d chrome --web-port 3000
+.\dev.ps1 --services
+```
+
+Linux, macOS, or an environment with Bash:
+
 ```bash
 ./dev.sh -d chrome --web-port 3000
 ./dev.sh --services

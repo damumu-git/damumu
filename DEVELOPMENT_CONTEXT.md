@@ -24,7 +24,16 @@ DAMUMU（界面名称目前主要为“搭慕慕”）是在韩国使用的线�
 
 ## 2. 快速启动
 
-在项目根目录执行：
+Windows PowerShell 在项目根目录执行：
+
+```powershell
+.\dev.ps1 -d chrome --web-port 3000
+```
+
+脚本默认连接 `localhost:5432/muda`，并隐藏输入 PostgreSQL 密码。也可以先在当前终端设置
+`DAMUMU_LOCAL_POSTGRES_PASSWORD`，避免每次输入；密码不会写入仓库。
+
+Linux、macOS 或已经安装 Bash 的环境执行：
 
 ```bash
 ./dev.sh -d chrome --web-port 3000
@@ -37,7 +46,13 @@ DAMUMU（界面名称目前主要为“搭慕慕”）是在韩国使用的线�
 - API：`http://localhost:8080/api/v1`
 - OpenAPI：`http://localhost:8080/openapi/v1.json`
 
-只启动 API 和 Admin：
+Windows 下只启动 API 和 Admin：
+
+```powershell
+.\dev.ps1 --services
+```
+
+Linux、macOS 下只启动 API 和 Admin：
 
 ```bash
 ./dev.sh --services
