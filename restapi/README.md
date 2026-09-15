@@ -58,22 +58,23 @@ docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 
 ## 本地 PostgreSQL 集成测试
 
-当前测试默认使用本机 `127.0.0.1:55432` 的独立 `damumu_test` 数据库，不连接远端数据库。
-在 Windows PowerShell 中从仓库根目录执行：
+当前测试直接使用电脑上已经运行的 `localhost:5432` PostgreSQL，不启动 Docker，
+也不连接远端数据库。当前本机数据库名为 `muda`，默认用户为 `postgres`。
+在 Windows PowerShell 中从仓库根目录执行，脚本会隐藏输入本地数据库密码：
 
 ```powershell
 ./scripts/test-local-postgres.ps1
 ```
 
-脚本会启动 `damumu-postgres-test` PostGIS 容器、依次应用迁移、写入 25 条幂等测试活动，
-然后启动临时 API 并验证 Cursor 分页。测试数据只存在于本地 Docker volume。
-需要测试后停止数据库容器时执行：
+默认流程只读取现有本地数据，并在事务临时表中执行 SQL 边界测试，不持久化测试数据。
+需要显式应用迁移时执行：
 
 ```powershell
-./scripts/test-local-postgres.ps1 -StopDatabase
+./scripts/test-local-postgres.ps1 -ApplyMigrations
 ```
 
-本地测试连接配置位于 `appsettings.Testing.json`，只包含开发用固定凭据。生产和远端连接仍必须通过环境变量提供。
+非交互执行时可提前设置仅存在于当前终端进程的
+`DAMUMU_LOCAL_POSTGRES_PASSWORD`。不要把密码写入 Git 配置或脚本。
 
 ## 用户认证与头像
 

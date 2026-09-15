@@ -16,22 +16,36 @@ internal static class DatabaseChecks
             await using var command = new NpgsqlCommand(sql, connection, transaction);
             await command.ExecuteNonQueryAsync();
         }
-        // A session-local table shadows the real event table. No persistent rows
-        // or schema are modified; even the temporary index is rolled back.
-        await Execute("CREATE TEMP TABLE event ON COMMIT DROP AS SELECT * FROM public.event WITH NO DATA");
+        // Session-local tables shadow every table used by the feed query. This
+        // keeps the SQL check independent from, and isolated from, local data.
+        foreach (var table in new[]
+        {
+            "event", "category", "app_user", "user_profile", "trust_snapshot",
+            "place", "administrative_region", "event_schedule", "event_tag", "interest"
+        })
+        {
+            await Execute($"CREATE TEMP TABLE {table} ON COMMIT DROP AS SELECT * FROM public.{table} WITH NO DATA");
+        }
+        var organizerId = Guid.Parse("10000000-0000-0000-0000-000000000001");
+        var categoryId = Guid.Parse("20000000-0000-0000-0000-000000000001");
+        await Execute($"INSERT INTO app_user (id) VALUES ('{organizerId}')");
+        await Execute($"INSERT INTO category (id, name_zh_cn) VALUES ('{categoryId}', '测试')");
         var time = new DateTime(2026, 9, 11, 10, 0, 0, DateTimeKind.Utc).AddTicks(1234560);
         async Task Seed(int number, DateTime created)
         {
             await using var command = new NpgsqlCommand("""
-                INSERT INTO event
-                SELECT (jsonb_populate_record(NULL::public.event, to_jsonb(seed) ||
-                    jsonb_build_object('id', @id::text, 'created_at', @created,
-                        'deleted_at', NULL, 'visibility', 'public', 'status', 'published'))).*
-                FROM public.event seed LIMIT 1
+                INSERT INTO event (
+                    id, organizer_user_id, category_id, title, description,
+                    status, visibility, created_at, deleted_at)
+                VALUES (
+                    @id, @organizerId, @categoryId, '分页测试', '临时测试数据',
+                    'published', 'public', @created, NULL)
                 """, connection, transaction);
             command.Parameters.AddWithValue("id", Guid.Parse($"00000000-0000-0000-0000-{number:D12}"));
+            command.Parameters.AddWithValue("organizerId", organizerId);
+            command.Parameters.AddWithValue("categoryId", categoryId);
             command.Parameters.AddWithValue("created", created);
-            if (await command.ExecuteNonQueryAsync() != 1) throw new Exception("A seed event is required for temporary SQL fixtures");
+            if (await command.ExecuteNonQueryAsync() != 1) throw new Exception("Could not create temporary SQL fixture");
         }
         foreach (var number in new[] { 1, 2, 3, 4, 5 }) await Seed(number, time);
         await Execute("CREATE INDEX ix_cursor_test ON event (created_at DESC, id DESC) WHERE deleted_at IS NULL AND visibility='public' AND status IN ('published', 'full')");
