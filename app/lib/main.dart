@@ -178,6 +178,7 @@ class EventItem {
     this.isJoined = false,
     this.isOwned = false,
     this.startsAt,
+    this.endsAt,
     this.beginnerFriendly = false,
   });
 
@@ -199,6 +200,8 @@ class EventItem {
   bool isJoined;
   final bool isOwned;
   final DateTime? startsAt;
+  final DateTime? endsAt;
+  bool get isPast => endsAt != null && !endsAt!.isAfter(DateTime.now());
   final bool beginnerFriendly;
 }
 
@@ -427,6 +430,7 @@ class _AppShellState extends State<AppShell> {
           '${json['organizer_user_id']}' == currentUserId,
       description: '${json['description'] ?? ''}',
       startsAt: startsAt,
+      endsAt: DateTime.tryParse('${json["ends_at"]}')?.toLocal(),
       beginnerFriendly:
           '${json['title'] ?? ''}'.contains('新手') ||
           '${json['description'] ?? ''}'.contains('新手') ||
@@ -1301,6 +1305,7 @@ class EventCard extends StatelessWidget {
                         const Icon(Icons.check_circle, color: _green, size: 19),
                     ],
                   ),
+                  if (event.isPast) _Pill(context.tr('pastActivity')),
                   if (event.isOwned) ...[
                     const SizedBox(height: 7),
                     const Align(
@@ -1686,6 +1691,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     spacing: 8,
                     children: [
                       _Pill(e.category),
+                      if (e.isPast) _Pill(context.tr('pastActivity')),
                       if (e.isOwned) const _Pill('我发布的', green: true),
                       if (e.approval) const _Pill('需组织者审核'),
                       if (e.isJoined && !e.isOwned)
@@ -1836,7 +1842,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton(
-                  onPressed: _joining
+                  onPressed: _joining || (e.isPast && !e.isOwned)
                       ? null
                       : e.isOwned
                       ? widget.onOpenMyActivities
@@ -1854,6 +1860,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
                       : Text(
                           e.isOwned
                               ? '查看我的活动'
+                              : e.isPast
+                              ? context.tr('pastActivity')
                               : e.isJoined
                               ? '退出活动'
                               : full
@@ -2539,6 +2547,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         approval: _approval,
         isOwned: true,
         startsAt: _startsAt,
+        endsAt: _endsAt,
         beginnerFriendly:
             _title.text.contains('新手') || _description.text.contains('新手'),
         description: _description.text.trim().isEmpty
@@ -3371,6 +3380,8 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
         itemBuilder: (context, index) {
           final row = rows[index];
           final startsAt = DateTime.tryParse('${row['starts_at']}')?.toLocal();
+          final endsAt = DateTime.tryParse('${row['ends_at']}');
+          final isPast = endsAt != null && !endsAt.isAfter(DateTime.now());
           final price = (row['price_amount'] as num?)?.toInt() ?? 0;
           return Card(
             child: ListTile(
@@ -3380,7 +3391,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                 child: Text('${row['category_icon'] ?? '✨'}'),
               ),
               title: Text(
-                '${row['title'] ?? ''}',
+                '${isPast ? '${context.tr('pastActivity')} · ' : ''}${row['title'] ?? ''}',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               subtitle: Text(

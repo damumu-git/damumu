@@ -42,6 +42,7 @@ const languageLabels = {'zh': '中文', 'en': 'English', 'ko': '한국어'};
 
 const _strings = <String, Map<String, String>>{
   'zh': {
+    'pastActivity': '过去活动',
     'buildErrorTitle': '页面暂时无法显示',
     'buildErrorMessage': '请重试以重新打开页面。若仍未恢复，请重新启动应用。',
     'loadMore': '加载更多',
@@ -114,6 +115,7 @@ const _strings = <String, Map<String, String>>{
     'retry': '再试一次',
   },
   'en': {
+    'pastActivity': 'Past event',
     'buildErrorTitle': 'This page could not be displayed',
     'buildErrorMessage':
         'Try reopening the page. If the problem persists, restart the app.',
@@ -188,6 +190,7 @@ const _strings = <String, Map<String, String>>{
     'retry': 'Try again',
   },
   'ko': {
+    'pastActivity': '지난 활동',
     'buildErrorTitle': '페이지를 표시할 수 없어요',
     'buildErrorMessage': '다시 시도해 주세요. 문제가 계속되면 앱을 다시 시작해 주세요.',
     'loadMore': '더 보기',

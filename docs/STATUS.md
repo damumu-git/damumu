@@ -10,6 +10,8 @@
 
 ## 最近完成
 
+- 活动列表（首页、发现、我的活动）和详情按 API `ends_at` 标注“过去活动”；结束时间已到即过期，进行中和没有结束时间的记录不会误标。过期活动详情停用参与按钮，组织者仍可打开管理入口。新增中英韩文案及 3 项过期回归测试；原有 11 项核心测试通过。用户取消重复需求，创建保持单次，未修改 API 或数据库。Flutter analyze 无问题，格式化及 diff 检查通过。下一步：刷新 App，在真实活动列表确认标记。
+
 - `dev.sh` 改为读取 Git 忽略的本机 `dev.local.sh` 中的 `DAMUMU_POSTGRES_PASSWORD`，已有环境变量优先；移除启动时密码输入，缺少密码时直接报错。本机密码已写入被 Git 忽略的脚本；Bash 语法、缺少密码退出及关闭标准输入时自动加载密码检查通过。下一步：在 Bash 开发环境运行完整服务启动，数据库连接尚未验证。
 - 新增兼容 Windows PowerShell 5.1 的开发启动器 `dev.ps1`，一次启动 REST API、Admin 和 Flutter；默认安全读取 Tailscale 数据库密码。Windows 使用 `.\dev.ps1 -d chrome --web-port 3000`，`dev.sh` 保留给 Bash 环境。
 - 集成测试脚本恢复为 `scripts/test-tailscale-postgres.ps1`：连接 `100.66.109.44:5432/damumu`，从隐藏输入或本机环境变量读取密码，默认启动临时 API 并执行 Cursor 数据库及 HTTP 集成测试；迁移必须通过 `-ApplyMigrations` 明确启用。
