@@ -10,7 +10,8 @@ public static class CatalogEndpoints
             ApiSupport.Ok(await db.QueryAsync(
                 """
                 SELECT id, code, parent_id, level, name_zh_cn, name_en_us,
-                       name_ko_kr, description_zh_cn, icon, color, sort_order
+                       name_ko_kr, description_zh_cn, icon, icon_key,
+                       is_featured, color, sort_order
                 FROM category
                 WHERE is_active
                 ORDER BY level, parent_id NULLS FIRST, sort_order, name_zh_cn

@@ -2108,6 +2108,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
   bool get _hasDraft =>
       _title.text.trim().isNotEmpty ||
       _description.text.trim().isNotEmpty ||
+      _customSubcategory.text.trim().isNotEmpty ||
       _meetingPoint.text.trim().isNotEmpty ||
       _price.text != '0' ||
       _startsAt != null ||
@@ -2179,6 +2180,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         _description.text = data['description'] as String? ?? '';
         _leafCategoryId = category.isEmpty ? null : category.first.id;
         _majorCategoryId = category.isEmpty ? null : category.first.parentId;
+        _customSubcategory.text = data['custom_subcategory'] as String? ?? '';
         _cityCode = regions.any((r) => r.code == data['city_code'])
             ? data['city_code'] as String
             : null;
@@ -2215,11 +2217,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
   int _step = 0;
   final _title = TextEditingController();
   final _description = TextEditingController();
+  final _customSubcategory = TextEditingController();
   String _category = '户外';
   late Future<List<ActivityCategory>> _categoryFuture;
   late Future<List<AdministrativeRegion>> _regionFuture;
   String? _majorCategoryId;
   String? _leafCategoryId;
+  bool _showMoreCategories = false;
+  bool _otherSelected = false;
   int _capacity = 6;
   bool _approval = true;
   bool _publishing = false;
@@ -2236,7 +2241,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
   void initState() {
     super.initState();
     if (widget.sourceEventId != null) _activeRouteDraft = this;
-    for (final controller in [_title, _description, _meetingPoint, _price]) {
+    for (final controller in [
+      _title,
+      _description,
+      _customSubcategory,
+      _meetingPoint,
+      _price,
+    ]) {
       controller.addListener(_refreshLeaveGuard);
     }
     _categoryFuture = widget.loadRemoteData
@@ -2256,6 +2267,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
     if (identical(_activeRouteDraft, this)) _activeRouteDraft = null;
     _title.dispose();
     _description.dispose();
+    _customSubcategory.dispose();
     _meetingPoint.dispose();
     _price.dispose();
     super.dispose();
@@ -2392,74 +2404,124 @@ class _CreateEventPageState extends State<CreateEventPage> {
           if (!majors.any((item) => item.id == _majorCategoryId)) {
             _majorCategoryId = majors.first.id;
           }
-          var leaves = categories
+          final selectedMajor = majors.firstWhere(
+            (item) => item.id == _majorCategoryId,
+          );
+          _otherSelected = selectedMajor.code == 'other';
+          final leaves = categories
               .where((item) => item.parentId == _majorCategoryId)
               .toList();
           if (!leaves.any((item) => item.id == _leafCategoryId)) {
-            _leafCategoryId = leaves.isEmpty ? null : leaves.first.id;
+            _leafCategoryId = leaves.isEmpty
+                ? null
+                : _otherSelected
+                ? leaves
+                      .where((item) => item.code == 'other_custom')
+                      .firstOrNull
+                      ?.id
+                : leaves.first.id;
           }
           final selected = leaves.where((item) => item.id == _leafCategoryId);
-          if (selected.isNotEmpty) _category = selected.first.name;
+          if (selected.isNotEmpty) {
+            _category = _otherSelected
+                ? _customSubcategory.text.trim()
+                : selected.first.name;
+          }
+          final featured = majors
+              .where((item) => item.isFeatured && item.code != 'other')
+              .take(6)
+              .toList();
+          final defaultMajors = featured.isEmpty
+              ? majors.where((item) => item.code != 'other').take(6).toList()
+              : featured;
+          final extras = majors
+              .where(
+                (item) =>
+                    item.code != 'other' &&
+                    !defaultMajors.any((shown) => shown.id == item.id),
+              )
+              .toList();
+          final other = majors.where((item) => item.code == 'other').toList();
+          final visibleMajors = [
+            ...defaultMajors,
+            ...other,
+            ...extras.where(
+              (item) => _showMoreCategories || item.id == _majorCategoryId,
+            ),
+          ];
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               LayoutBuilder(
                 builder: (context, constraints) {
                   const spacing = 8.0;
-                  final columns = constraints.maxWidth >= 600 ? 4 : 2;
+                  final columns = constraints.maxWidth >= 600 ? 4 : 3;
                   final width =
                       (constraints.maxWidth - spacing * (columns - 1)) /
                       columns;
                   return Wrap(
                     spacing: spacing,
                     runSpacing: spacing,
-                    children: majors.map((major) {
+                    children: visibleMajors.map((major) {
                       final isSelected = major.id == _majorCategoryId;
                       return SizedBox(
                         width: width,
-                        child: Semantics(
-                          button: true,
-                          selected: isSelected,
-                          child: Material(
-                            color: isSelected ? _mint : Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              side: BorderSide(
-                                color: isSelected
-                                    ? _green
-                                    : const Color(0xFFE7E5DF),
-                                width: isSelected ? 1.5 : 1,
-                              ),
-                            ),
-                            child: InkWell(
-                              key: ValueKey('major-category-${major.id}'),
-                              borderRadius: BorderRadius.circular(14),
-                              onTap: () => setState(() {
-                                _selectionEdited = true;
-                                _majorCategoryId = major.id;
-                                _leafCategoryId = null;
-                              }),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 16,
+                        child: AspectRatio(
+                          aspectRatio: 0.92,
+                          child: Semantics(
+                            button: true,
+                            selected: isSelected,
+                            child: Material(
+                              color: isSelected ? _mint : Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                side: BorderSide(
+                                  color: isSelected
+                                      ? _green
+                                      : const Color(0xFFE7E5DF),
+                                  width: isSelected ? 1.5 : 1,
                                 ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(major.icon),
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
+                              ),
+                              child: InkWell(
+                                key: ValueKey('major-category-${major.id}'),
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: () {
+                                  if (major.code != 'other') {
+                                    _customSubcategory.clear();
+                                  }
+                                  setState(() {
+                                    _selectionEdited = true;
+                                    _majorCategoryId = major.id;
+                                    _leafCategoryId = null;
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    4,
+                                    6,
+                                    4,
+                                    8,
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: _categoryIllustration(major),
+                                      ),
+                                      Text(
                                         major.name,
+                                        maxLines: 1,
+                                        textAlign: TextAlign.center,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
+                                          fontSize: 12,
                                           color: isSelected ? _green : _ink,
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -2471,16 +2533,48 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 },
               ),
               const SizedBox(height: 10),
-              _CategoryDropdown(
-                key: ValueKey('leaf-category-$_majorCategoryId'),
-                label: '小分类',
-                value: _leafCategoryId,
-                items: leaves,
-                onChanged: (value) => setState(() {
-                  _selectionEdited = true;
-                  _leafCategoryId = value;
-                }),
-              ),
+              if (extras.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () => setState(
+                    () => _showMoreCategories = !_showMoreCategories,
+                  ),
+                  icon: Icon(
+                    _showMoreCategories ? Icons.expand_less : Icons.expand_more,
+                  ),
+                  label: Text(
+                    context.tr(
+                      _showMoreCategories
+                          ? 'showFewerCategories'
+                          : 'showMoreCategories',
+                    ),
+                  ),
+                ),
+              if (_otherSelected)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const FieldLabel('小分类'),
+                    TextField(
+                      key: const ValueKey('custom-subcategory'),
+                      controller: _customSubcategory,
+                      maxLength: 15,
+                      decoration: InputDecoration(
+                        hintText: context.tr('customSubcategoryHint'),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                _CategoryDropdown(
+                  key: ValueKey('leaf-category-$_majorCategoryId'),
+                  label: '小分类',
+                  value: _leafCategoryId,
+                  items: leaves,
+                  onChanged: (value) => setState(() {
+                    _selectionEdited = true;
+                    _leafCategoryId = value;
+                  }),
+                ),
             ],
           );
         },
@@ -2494,6 +2588,30 @@ class _CreateEventPageState extends State<CreateEventPage> {
       ),
     ],
   );
+
+  Widget _categoryIllustration(ActivityCategory category) {
+    const illustrated = {
+      'food',
+      'sports',
+      'culture',
+      'outdoors',
+      'study',
+      'social',
+      'other',
+    };
+    if (illustrated.contains(category.iconKey)) {
+      return Image.asset(
+        'assets/category_illustrations/${category.iconKey}.png',
+        fit: BoxFit.contain,
+        errorBuilder: (_, error, stackTrace) => Center(
+          child: Text(category.icon, style: const TextStyle(fontSize: 34)),
+        ),
+      );
+    }
+    return Center(
+      child: Text(category.icon, style: const TextStyle(fontSize: 34)),
+    );
+  }
 
   Widget _schedule() => Column(
     key: const ValueKey(1),
@@ -2756,6 +2874,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
       ).showSnackBar(const SnackBar(content: Text('请选择大分类和小分类')));
       return;
     }
+    if (_step == 0 &&
+        _otherSelected &&
+        _customSubcategory.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('customSubcategoryRequired'))),
+      );
+      return;
+    }
     if (_step == 1 && (_startsAt == null || _endsAt == null)) {
       ScaffoldMessenger.of(
         context,
@@ -2792,6 +2918,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
       await EventService.create(
         token: token,
         categoryId: _leafCategoryId!,
+        customSubcategory: _otherSelected
+            ? _customSubcategory.text.trim()
+            : null,
         title: _title.text.trim(),
         description: _description.text.trim().isEmpty
             ? '一起度过轻松愉快的时间，欢迎第一次参加的新朋友。'
@@ -2821,7 +2950,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         id: DateTime.now().millisecondsSinceEpoch,
         emoji: '✨',
         title: _title.text.trim(),
-        category: _category,
+        category: _otherSelected ? _customSubcategory.text.trim() : _category,
         time: _formatDateTime(_startsAt!),
         area: '$_city · $_district',
         distance: '你发布的',

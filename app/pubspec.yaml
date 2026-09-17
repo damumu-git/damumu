@@ -25,6 +25,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/category_illustrations/
   fonts:
     - family: Noto Sans SC
       fonts:

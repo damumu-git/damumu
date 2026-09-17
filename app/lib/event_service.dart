@@ -257,6 +257,7 @@ class EventService {
     required int priceAmount,
     required bool approvalRequired,
     String? meetingPoint,
+    String? customSubcategory,
   }) async {
     final response = await http
         .post(
@@ -267,6 +268,8 @@ class EventService {
           },
           body: jsonEncode({
             'categoryId': categoryId,
+            if (customSubcategory != null)
+              'customSubcategory': customSubcategory.trim(),
             'title': title,
             'description': description,
             'cityCode': cityCode,

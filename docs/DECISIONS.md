@@ -10,7 +10,8 @@
 | ADR-004 | 平台不处理活动支付 | 已采用 | 2026-08-29 |
 | ADR-005 | 精确集合地点受审批状态保护 | 已采用 | 2026-08-29 |
 | ADR-006 | 分类和行政区域由数据库驱动 | 已采用 | 2026-08-29 |
-| ADR-007 | 图标迁移前保留现有 emoji | 已采用 | 2026-08-29 |
+| ADR-007 | 插画键与 emoji 回退 | 已采用 | 2026-08-29 |
+| ADR-014 | 其它分类的小分类单独存储 | 已采用 | 2026-09-17 |
 | ADR-008 | 用户位置标签跟随 App 语言 | 已采用 | 2026-09-07 |
 | ADR-009 | 活动容量包含组织者 | 已采用 | 2026-09-08 |
 | ADR-010 | 远端业务数据库使用 damumu 名称 | 已采用 | 2026-09-11 |
@@ -192,14 +193,14 @@ Flutter 从 API 加载活动分类和行政区域，并使用稳定行政代码�
 - `restapi/Migrations/004_category_hierarchy.sql`
 - `restapi/Migrations/008_administrative_regions.sql`
 
-## ADR-007：图标迁移前保留现有 emoji
+## ADR-007：插画键与 emoji 回退
 
 状态：已采用  
 日期：2026-08-29
 
 ### 决定
 
-现有数据库 emoji 图标继续有效；未来优先迁移到稳定 `icon_key`，并保留兼容回退。
+现有数据库 emoji 图标继续有效。一级分类通过稳定的 `icon_key` 匹配 App 内置插画资源；找不到对应资源时显示原有 emoji。新增分类仍由数据库/API 提供，App 不维护分类目录。
 
 ### 原因
 
@@ -215,7 +216,27 @@ Flutter 从 API 加载活动分类和行政区域，并使用稳定行政代码�
 
 ### 相关位置
 
-- `restapi/Migrations/004_category_hierarchy.sql`
+- `restapi/Migrations/011_illustrated_other_category.sql`
+- `app/assets/category_illustrations/`
+
+## ADR-014：其它分类的小分类单独存储
+
+状态：已采用
+日期：2026-09-17
+
+### 决定
+
+“其它”是固定一级分类，发布时选择固定二级分类 `other_custom`，用户填写的小分类名称另存于 `event.custom_subcategory`，去除首尾空白后限 1 至 15 字。常规分类不得填写此字段。活动列表和详情显示用户填写的名称；管理员仍能按固定分类 ID 查询和统计。发布页默认展示六个精选一级分类及“其它”，其余一级分类通过“显示更多分类”展开。
+
+### 原因
+
+每次发布都创建新的全局分类会让目录迅速膨胀，也会把用户输入误当成管理员维护的分类。固定 ID 保留筛选和统计能力，独立字段保留每场活动的原始描述。
+
+### 相关位置
+
+- `restapi/Migrations/011_illustrated_other_category.sql`
+- `restapi/Endpoints/EventEndpoints.cs`
+- `app/lib/main.dart`
 
 ## ADR-008：用户位置标签跟随 App 语言
 

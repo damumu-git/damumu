@@ -1,4 +1,5 @@
 using Muda.Api.Infrastructure;
+using System.Text;
 
 namespace Muda.Api.Endpoints;
 
@@ -32,7 +33,9 @@ public static class EventEndpoints
                        e.price_min, e.price_max, e.price_amount,
                        e.price_currency, e.city_code, e.district_code, e.language_codes,
                        e.cover_media_id, e.published_at,
-                       c.id AS category_id, c.name_zh_cn AS category_name, c.icon AS category_icon,
+                       c.id AS category_id,
+                       COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
+                       c.icon AS category_icon,
                        city_region.name_zh_cn AS city_name,
                        district_region.name_zh_cn AS district_name,
                        NULL::text AS place_name, NULL::text AS address_public,
@@ -111,7 +114,8 @@ public static class EventEndpoints
             var viewerId = ApiSupport.GetOptionalUserId(context);
             var item = await db.QueryOneAsync(
                 """
-                SELECT e.*, c.name_zh_cn AS category_name, c.icon AS category_icon,
+                SELECT e.*, COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
+                       c.icon AS category_icon,
                        CASE WHEN e.organizer_user_id=@viewerId OR EXISTS (
                            SELECT 1 FROM event_member viewer_member
                            WHERE viewer_member.event_id=e.id AND viewer_member.user_id=@viewerId
@@ -182,6 +186,18 @@ public static class EventEndpoints
                 new { request.CategoryId }, ct);
             if (categorySelectable == 0)
                 throw new ApiException(400, "category_not_selectable", "请选择有效的细分类");
+            var isOther = await db.ScalarAsync<int>(
+                """
+                SELECT count(*) FROM category child
+                JOIN category parent ON parent.id=child.parent_id
+                WHERE child.id=@categoryId AND child.code='other_custom' AND parent.code='other'
+                """, new { request.CategoryId }, ct) > 0;
+            var customSubcategory = request.CustomSubcategory?.Trim();
+            if (isOther && (string.IsNullOrWhiteSpace(customSubcategory) ||
+                            customSubcategory.EnumerateRunes().Count() > 15))
+                throw new ApiException(400, "custom_subcategory_invalid", "请填写 1 至 15 字的小分类");
+            if (!isOther && !string.IsNullOrEmpty(customSubcategory))
+                throw new ApiException(400, "custom_subcategory_unexpected", "该分类不支持自定义小分类");
             var regionValid = await db.ScalarAsync<int>(
                 """
                 SELECT count(*) FROM administrative_region district
@@ -226,14 +242,14 @@ public static class EventEndpoints
                 """
                 WITH inserted_event AS (
                     INSERT INTO event (
-                        id, organizer_user_id, category_id, place_id, title, description,
+                        id, organizer_user_id, category_id, custom_subcategory, place_id, title, description,
                         city_code, district_code, status, published_at, visibility, approval_mode,
                         min_participants, capacity, approved_count, min_age, max_age,
                         price_min, price_max, price_amount, price_currency, language_codes,
                         announcement, organizer_note, review_status
                     )
                     VALUES (
-                        @eventId, @userId, @categoryId, @placeId, @title, @description,
+                        @eventId, @userId, @categoryId, @customSubcategory, @placeId, @title, @description,
                         @cityCode, @districtCode, 'published', now(), @visibility, @approvalMode,
                         @minParticipants, @capacity, 1, @minAge, @maxAge,
                         @priceMin, @priceMax, @priceMin, @priceCurrency, @languageCodes,
@@ -251,6 +267,7 @@ public static class EventEndpoints
                     eventId,
                     userId,
                     request.CategoryId,
+                    customSubcategory = isOther ? customSubcategory : null,
                     placeId,
                     title = request.Title.Trim(),
                     description = request.Description.Trim(),
@@ -289,12 +306,37 @@ public static class EventEndpoints
             Guid id, HttpContext context, UpdateEventRequest request, Db db, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
+            string? customSubcategory = null;
+            if (request.CategoryId is not null)
+            {
+                var categorySelectable = await db.ScalarAsync<int>(
+                    "SELECT count(*) FROM category WHERE id=@categoryId AND level=2 AND is_active",
+                    new { request.CategoryId }, ct);
+                if (categorySelectable == 0)
+                    throw new ApiException(400, "category_not_selectable", "请选择有效的细分类");
+                var isOther = await db.ScalarAsync<int>(
+                    """
+                    SELECT count(*) FROM category child
+                    JOIN category parent ON parent.id=child.parent_id
+                    WHERE child.id=@categoryId AND child.code='other_custom' AND parent.code='other'
+                    """, new { request.CategoryId }, ct) > 0;
+                customSubcategory = request.CustomSubcategory?.Trim();
+                if (isOther && (string.IsNullOrWhiteSpace(customSubcategory) ||
+                                customSubcategory.EnumerateRunes().Count() > 15))
+                    throw new ApiException(400, "custom_subcategory_invalid", "请填写 1 至 15 字的小分类");
+                if (!isOther && !string.IsNullOrEmpty(customSubcategory))
+                    throw new ApiException(400, "custom_subcategory_unexpected", "该分类不支持自定义小分类");
+            }
+            else if (request.CustomSubcategory is not null)
+                throw new ApiException(400, "category_required", "修改小分类时请同时选择分类");
             var item = await db.QueryOneAsync(
                 """
                 UPDATE event
                 SET title=COALESCE(@title, title),
                     description=COALESCE(@description, description),
                     category_id=COALESCE(@categoryId, category_id),
+                    custom_subcategory=CASE WHEN @categoryId IS NULL THEN custom_subcategory
+                                            ELSE @customSubcategory END,
                     capacity=COALESCE(@capacity, capacity),
                     approval_mode=COALESCE(@approvalMode, approval_mode),
                     visibility=COALESCE(@visibility, visibility),
@@ -310,6 +352,7 @@ public static class EventEndpoints
                     request.Title,
                     request.Description,
                     request.CategoryId,
+                    customSubcategory,
                     request.Capacity,
                     request.ApprovalMode,
                     request.Visibility,
@@ -456,7 +499,8 @@ public sealed record CreateEventRequest(
     string? OrganizerNote,
     string[]? LanguageCodes,
     Guid[]? InterestIds,
-    PlaceRequest? Place);
+    PlaceRequest? Place,
+    string? CustomSubcategory);
 public sealed record UpdateEventRequest(
     string? Title,
     string? Description,
@@ -464,7 +508,8 @@ public sealed record UpdateEventRequest(
     short? Capacity,
     string? ApprovalMode,
     string? Visibility,
-    long RowVersion);
+    long RowVersion,
+    string? CustomSubcategory);
 public sealed record CancelEventRequest(string Reason);
 public sealed record JoinEventRequest(short PartySize, string? Note, bool ShareContact);
 public sealed record RejectApplicationRequest(string? Reason);

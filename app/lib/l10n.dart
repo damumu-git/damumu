@@ -42,6 +42,10 @@ const languageLabels = {'zh': '中文', 'en': 'English', 'ko': '한국어'};
 
 const _strings = <String, Map<String, String>>{
   'zh': {
+    'showMoreCategories': '显示更多分类',
+    'showFewerCategories': '收起更多分类',
+    'customSubcategoryHint': '输入小分类（最多 15 字）',
+    'customSubcategoryRequired': '请输入小分类（最多 15 字）',
     'createFromPrevious': '从过往活动中发布',
     'publishSimilar': '发布同类活动',
     'copyEventHint': '复用活动内容，开始和结束日期时间需重新选择。',
@@ -124,6 +128,10 @@ const _strings = <String, Map<String, String>>{
     'retry': '再试一次',
   },
   'en': {
+    'showMoreCategories': 'Show more categories',
+    'showFewerCategories': 'Show fewer categories',
+    'customSubcategoryHint': 'Enter a subcategory (up to 15 characters)',
+    'customSubcategoryRequired': 'Enter a subcategory (up to 15 characters)',
     'createFromPrevious': 'Create from a previous event',
     'publishSimilar': 'Publish similar event',
     'copyEventHint':
@@ -209,6 +217,10 @@ const _strings = <String, Map<String, String>>{
     'retry': 'Try again',
   },
   'ko': {
+    'showMoreCategories': '카테고리 더 보기',
+    'showFewerCategories': '카테고리 접기',
+    'customSubcategoryHint': '소분류 입력 (최대 15자)',
+    'customSubcategoryRequired': '소분류를 입력해 주세요 (최대 15자)',
     'createFromPrevious': '이전 활동으로 만들기',
     'publishSimilar': '비슷한 활동 게시',
     'copyEventHint': '활동 내용을 가져오고 시작 및 종료 날짜와 시간을 새로 선택하세요.',
