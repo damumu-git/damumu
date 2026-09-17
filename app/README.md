@@ -28,9 +28,6 @@ Debug 构建在没有有效登录态时会自动登录固定测试账号：
 Release 构建不会启用自动登录。需要显式关闭时传入
 `--dart-define=DEV_AUTO_LOGIN=false`。
 
-A new Flutter project.
-
-
 ## 活动列表分页
 
 首页和发现列表使用 `/activities` Cursor 接口，每页 20 条。接近列表底部自动加载，

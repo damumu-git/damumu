@@ -1,73 +1,28 @@
 # DAMUMU 当前项目状态
 
-最后更新：2026-09-17（Asia/Seoul）
+最后核对：2026-09-17（Asia/Seoul）。本页只记当前事实、下一步和阻塞；完成历史见 Git。代码、迁移和测试结果优先于本页。
 
-## 正在进行
+## 当前已接通
 
-- REST API 与集成测试统一通过 Tailscale 使用 `100.66.109.44:5432/damumu` PostgreSQL。
-- 完成真实、数据库驱动的活动参与闭环；优先处理真实 UUID、详情、加入/退出及组织者成员管理。
-- 统一 Flutter 内容加载错误状态，覆盖 HTTP 400/500、超时、断网、空响应及非 JSON 响应。
+- Flutter 可通过 API 完成账号登录、资料与头像、分类和地区加载、单次活动发布、首页及发现活动列表，以及“我的活动”和组织者对待处理申请的批准／拒绝。
+- 首页和发现使用 `/activities` Cursor 分页，按创建时间与 UUID 排序；搜索和筛选仅针对已经加载的活动。活动结束时间已过时，App 标注“过去活动”并停用详情报名按钮。
+- API 提供活动详情、加入、退出、签到、成员管理等接口，但对应 Flutter 流程尚未完整接通。Admin 通过 API 工作。
+- 当前数据库经 Tailscale 访问；开发启动和集成测试脚本使用外部提供的密码。`010_activity_cursor_index.sql` 已在仓库，尚未确认应用到持久数据库。
 
-## 最近完成
+## 接下来做什么
 
-- 活动列表（首页、发现、我的活动）和详情按 API `ends_at` 标注“过去活动”；结束时间已到即过期，进行中和没有结束时间的记录不会误标。过期活动详情停用参与按钮，组织者仍可打开管理入口。新增中英韩文案及 3 项过期回归测试；原有 11 项核心测试通过。用户取消重复需求，创建保持单次，未修改 API 或数据库。Flutter analyze 无问题，格式化及 diff 检查通过。下一步：刷新 App，在真实活动列表确认标记。
+1. 在真实活动列表中刷新 App，确认“过去活动”标记和报名按钮状态；对 API 与数据库运行 `scripts/test-tailscale-postgres.ps1`，需要应用 `010` 时显式使用 `-ApplyMigrations`。
+2. 将 Flutter 的 `EventItem.id` 从整数/hash 改成数据库 UUID 字符串，贯通列表、详情、加入和退出。
+3. 以 `GET /events/{id}` 加载真实详情，再接通加入、退出、候补和完整组织者成员管理。
+4. 接通通知与活动聊天，随后完成举报、屏蔽、评价和安全会面流程。
 
-- `dev.sh` 改为读取 Git 忽略的本机 `dev.local.sh` 中的 `DAMUMU_POSTGRES_PASSWORD`，已有环境变量优先；移除启动时密码输入，缺少密码时直接报错。本机密码已写入被 Git 忽略的脚本；Bash 语法、缺少密码退出及关闭标准输入时自动加载密码检查通过。下一步：在 Bash 开发环境运行完整服务启动，数据库连接尚未验证。
-- 新增兼容 Windows PowerShell 5.1 的开发启动器 `dev.ps1`，一次启动 REST API、Admin 和 Flutter；默认安全读取 Tailscale 数据库密码。Windows 使用 `.\dev.ps1 -d chrome --web-port 3000`，`dev.sh` 保留给 Bash 环境。
-- 集成测试脚本恢复为 `scripts/test-tailscale-postgres.ps1`：连接 `100.66.109.44:5432/damumu`，从隐藏输入或本机环境变量读取密码，默认启动临时 API 并执行 Cursor 数据库及 HTTP 集成测试；迁移必须通过 `-ApplyMigrations` 明确启用。
-- Windows PowerShell 5.1 启动验证通过：Tailscale 数据库健康、Admin HTTP 200，停止后开发端口正常释放。远端 Cursor 集成测试通过，实际读取 1 条公开活动；SQL 样本仅存在于事务临时表并已回滚。
-- REST API 的版本库基础配置已指向 `100.66.109.44:5432/damumu`，真实连接字符串使用本机 .NET User Secrets 覆盖；Admin 继续通过本地 REST API 读取同一远端数据库，不保存独立数据库凭据。
-- 直接启动 REST API 的验证通过：数据库健康；Admin dashboard 从远端库读取到 1 个用户、1 个活动，其中 1 个活动处于上架状态。
-- 追加 Flutter 构建异常友好兜底：MaterialApp 配置 `ErrorWidget.builder`，不把异常文本/堆栈呈现在用户页面，开发诊断保留；重试重新挂载页面树。
-- 截图中的 `Null is not a subtype of bool` 缺少运行时堆栈，尚不能确认具体字段；热重载保留旧状态是待核实原因。真实运行环境已增加构建异常友好兜底，开发诊断仍写入控制台；发布新字段后应执行 Hot Restart。
+## 已知缺口与验证边界
 
-- APP 首页/发现活动流已改为 Cursor 分页，每页 20 条：滚动加载、手动加载更多、下拉刷新、失败重试、UUID 去重及请求代次隔离。
-- 新增 `GET /api/v1/activities`，`data={items,nextCursor,hasMore}`；按 `event.created_at DESC, event.id DESC` 使用 keyset SQL 和 `limit+1`，非法游标安全返回 400。原 `/events` 与后台分页保留。
-- 新增 `010_activity_cursor_index.sql`（尚未应用到持久数据库）以及 ADR-012。
-- 本次验证：Dart 格式化、Flutter analyze 无问题；错误兜底、分页服务/界面和现有 widget 核心测试共 11 项通过；API 和测试程序构建 0 警告/错误。
-- 游标校验测试、真实 API 只读检查（当前 1 条公开活动）和数据库临时表测试通过；临时表验证同时间戳 UUID 顺序、头部新增、边界删除、多页/末页/空页，事务已回滚。
-- 全量 Flutter 测试另有 1 项原有注册快照测试失败：硬编码 macOS 字体路径在 Windows 不存在，Golden 差异 83.85%；未修改快照基线。
-
-- 远端 PostgreSQL 业务数据库已从 `muda` 重命名为 `damumu`，项目连接配置已同步，连接验证通过。
-- Flutter Web 启动遮罩会等待字体和首帧稳定，避免 CanvasKit 缺字方框闪现。
-- 首页活动加载、我的活动、分类、地区及报名申请已接入统一内容区错误页，不再直接呈现解析或数据库异常。
-- 首页筛选使用原始开始时间、定位结果和服务端新手友好标识。
-- 组织者活动记录可以加载、批准和拒绝待处理报名申请。
-- 活动容量包含组织者；迁移 `009_count_organizer_in_capacity.sql` 用于修复历史计数。
-- 独立静态产品介绍网站已放在 `website/`。
-- 已建立 `AGENTS.md`、`docs/PROJECT.md`、`docs/STATUS.md`、
-  `docs/DECISIONS.md` 四文件项目上下文体系。
-
-## 下一步
-
-1. 设置 `DAMUMU_POSTGRES_PASSWORD` 或运行脚本时隐藏输入密码，然后执行 `./scripts/test-tailscale-postgres.ps1`；远端部署仍需单独应用 `010_activity_cursor_index.sql`。
-2. 将 Flutter 的 `EventItem.id` 从整数/hash 改为数据库 UUID 字符串并保持 list → detail → join/leave 全链路一致。
-3. 使用 `GET /events/{id}` 加载真实活动详情。
-4. 接入真实加入、退出、候补及完整组织者成员管理。
-5. 接入通知和活动聊天，再完成举报、屏蔽、评价与安全会面流程。
-
-## 已知问题
-
-- APP 搜索、分类和日期筛选仍针对已加载活动，尚非服务端全量筛选；有后续页时 UI 已标注该范围。
-
-- Flutter `EventItem.id` 仍有旧的整数/hash 行为。
-- 活动与地点创建尚未合并成单个数据库事务。
-- 用户令牌和管理员静态 API Key 仍是开发阶段机制。
-- `app/lib/main.dart` 和 `admin/src/App.jsx` 体积较大，但当前不应为拆分而进行无关重构。
-- 消息、通知、统计和部分治理页面仍有演示数据或说明性占位内容。
-- 头像文件仍依赖 API 本地目录，生产对象存储方案未确定。
-- 数据库连接秘密目前存在本地配置风险，应改用环境变量并轮换已暴露凭据。
-
-## 当前阻塞
-
-- Flutter SDK 锁文件和 Dart 分析缓存需要用户目录写权限；本次使用 SDK 内 Dart/Flutter 工具并允许缓存写入，格式化、分析和 11 项核心测试已完成。
-- 原有注册 Golden 测试仍受 macOS 专属字体路径阻塞。
-- Cursor 索引迁移及正常开发服务重新部署尚未执行；验证使用独立临时 API 端口，未替换正在运行的开发服务。
-
-## 最近重要变更
-
-- 仓库任务默认在修改前自动创建按任务命名的分支，验证完成后执行秘密检查、创建 conventional commit，并将任务分支推送到 `origin`；用户明确要求留在当前分支或仅保留本地时除外。规则记录于 `AGENTS.md`。
-- 新任务应读取 `AGENTS.md`、`docs/PROJECT.md`、`docs/STATUS.md`，涉及长期约束时读取 `docs/DECISIONS.md`。
-- `docs/` 下文件是新任务的规范上下文；根目录旧文档暂时保留为历史参考。
-- 远端数据库标准名称为 `damumu`。
-- 用户可见的服务器错误必须经过清洗，并使用统一、可重试的内容区状态呈现。
+- 活动和地点创建尚未处于同一个数据库事务；失败时可能留下孤立地点。
+- 搜索、分类和日期筛选仍仅覆盖已加载页面，尚不是服务端全量筛选。
+- Flutter 的活动 ID 仍有旧整数/hash 行为；详情及参与 UI 不能据此宣称真实闭环。
+- 用户令牌和管理员静态 API Key 仍属开发阶段方案；头像文件使用 API 本地目录。
+- 消息、通知、统计和部分安全治理 UI 仍含演示数据或占位说明。
+- 原有注册 Golden 测试引用 macOS 专用字体路径，在 Windows 上不能通过；不要仅为通过测试更新快照。
+- Flutter SDK 锁文件与分析缓存位于用户目录，受限环境运行检查时可能需要允许缓存写入。
+- `010` 迁移和新版本开发服务重新部署尚未确认；此前验证使用临时 API 端口与回滚的数据库临时表。

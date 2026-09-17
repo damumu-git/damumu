@@ -62,7 +62,6 @@ At task completion:
 - `admin/`: React 19/Vite operations console.
 - `restapi/Migrations/`: ordered SQL migrations.
 - `docs/`: canonical long-term project context, status, and ADRs.
-- `DEVELOPMENT_CONTEXT.md`: detailed legacy handoff and implementation notes.
 - `MVP.md`: MVP scope and acceptance criteria.
 - `FIRST_RELEASE_FLOWS.md`: detailed first-release flow analysis.
 
@@ -85,8 +84,10 @@ At task completion:
    output, or generated logs. Local example credentials are development-only.
 9. Before using a database container, run `docker ps` and confirm its actual name;
    historical documentation contains more than one container name.
-10. When completing a task, record important lasting choices in
-    `docs/DECISIONS.md` and leave an exact next action in `docs/STATUS.md`.
+10. Use one source for each kind of information: working rules in this file,
+    stable project facts in `docs/PROJECT.md`, current work in `docs/STATUS.md`,
+    and accepted durable decisions in `docs/DECISIONS.md`. Avoid copying
+    implementation status into multiple documents.
 
 ## Technology baseline
 
@@ -167,5 +168,6 @@ pass; inspect the rendered difference first.
 - `docs/STATUS.md` reflects the resulting state and does not claim unverified
   work.
 
-The former root-level `PROJECT.md`, `HANDOFF.md`, and `DECISIONS.md` are retained
-as historical references. The files under `docs/` are canonical for new tasks.
+Use `docs/PROJECT.md`, `docs/STATUS.md`, and `docs/DECISIONS.md` as the canonical
+context. `FIRST_RELEASE_FLOWS.md` defines the intended release scope; `MVP.md`
+is an earlier proposal. Git history retains superseded handoff documents.

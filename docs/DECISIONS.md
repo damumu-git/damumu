@@ -16,6 +16,7 @@
 | ADR-010 | 远端业务数据库使用 damumu 名称 | 已采用 | 2026-09-11 |
 | ADR-011 | 客户端统一隐藏服务器技术异常 | 已采用 | 2026-09-11 |
 | ADR-012 | APP 活动流使用 Cursor 分页 | 已采用 | 2026-09-11 |
+| ADR-013 | 项目文档按职责维护单一入口 | 已采用 | 2026-09-17 |
 
 ---
 
@@ -359,3 +360,21 @@ offset 会随列表头部插入/删除发生位置偏移；创建时间与 UUID 
 - `restapi/Infrastructure/ActivityQueries.cs`
 - `restapi/Migrations/010_activity_cursor_index.sql`
 - `app/lib/event_service.dart`、`app/lib/main.dart`
+
+## ADR-013：项目文档按职责维护单一入口
+
+状态：已采用
+
+日期：2026-09-17
+
+### 决定
+
+`AGENTS.md` 规定工作规则，`docs/PROJECT.md` 保存稳定的产品和系统事实，`docs/STATUS.md` 只记录当前实现状态、待办和阻塞，`docs/DECISIONS.md` 保存长期决策及原因。模块操作写在各自的 `README.md`。`FIRST_RELEASE_FLOWS.md` 表示目标范围，`MVP.md` 是早期方案；二者都不是实现状态。实际代码、迁移和验证结果优先于文档。
+
+### 原因
+
+旧根目录的项目、交接、决策和开发上下文文档与当前文档重复，且包含过期迁移编号与接手步骤。多份“当前状态”容易产生矛盾。旧内容保留在 Git 历史中，必要时可追溯。
+
+### 影响
+
+只在对应文档维护新事实，不把完成日志持续堆入 `docs/STATUS.md`；判断功能是否完成时要核对真实数据路径。

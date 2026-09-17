@@ -53,4 +53,5 @@ DAMUMU（中文 UI 名称“搭慕慕”）是一款面向韩国本地生活场�
 - `docs/STATUS.md`：当前实现状态与下一步。
 - `docs/DECISIONS.md`：已采用的长期架构和产品决策。
 - `MVP.md`、`FIRST_RELEASE_FLOWS.md`：首发范围与验收流程。
-- `DEVELOPMENT_CONTEXT.md`：详细历史背景，仅作参考。
+- `AGENTS.md`：仓库工作规则与不可破坏的约束；模块运行方式见各模块 `README.md`。
+- 已删除的旧版项目、交接及开发上下文文档可在 Git 历史查阅，不作为当前事实。

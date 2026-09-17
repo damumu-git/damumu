@@ -13,7 +13,9 @@ dotnet user-secrets set "ConnectionStrings:Muda" "Host=100.66.109.44;Port=5432;D
 Admin 不直接连接 PostgreSQL；它通过 `http://localhost:8080/api/v1` 使用同一个 REST API，
 所以 REST API 的连接配置同时决定用户 App 和 Admin 读取的数据库。
 
-## 使用 Docker 启动
+## 可选：独立的本地 Docker 环境
+
+以下 `muda` 数据库和容器名是隔离的本地示例，不是当前 Tailscale `damumu` 数据库。运行前先用 `docker ps` 核对实际容器。
 
 数据库容器已运行在宿主机 `127.0.0.1:5432` 时：
 
@@ -94,12 +96,7 @@ docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 
 ## 用户认证与头像
 
-从旧版基础数据库升级时执行：
-
-```bash
-psql "$DAMUMU_DATABASE_URL" -f Migrations/002_user_auth.sql
-psql "$DAMUMU_DATABASE_URL" -f Migrations/003_system_avatar.sql
-```
+已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `010`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
 
 正式用户接口包括：
 
