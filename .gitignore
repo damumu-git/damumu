@@ -9,6 +9,7 @@
 .env.*
 !.env.example
 .dev-logs/
+/dev.local.sh
 *.log
 
 # Flutter / Dart generated files

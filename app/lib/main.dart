@@ -5,6 +5,7 @@ import 'auth.dart';
 import 'category_service.dart';
 import 'event_service.dart';
 import 'l10n.dart';
+import 'build_failure.dart';
 import 'location_service.dart';
 
 void main() => runApp(const DaziApp());
@@ -25,13 +26,27 @@ class DaziApp extends StatefulWidget {
 
 class _DaziAppState extends State<DaziApp> {
   Locale _locale = const Locale('zh');
+  Key? _recoveryKey;
+  ErrorWidgetBuilder? _previousErrorBuilder;
+  ErrorWidgetBuilder? _installedErrorBuilder;
+  static const _isTestEnvironment = bool.fromEnvironment('FLUTTER_TEST');
 
   @override
   void initState() {
     super.initState();
+    if (!_isTestEnvironment) _previousErrorBuilder = ErrorWidget.builder;
     AppLocaleScope.restore().then((value) {
       if (mounted) setState(() => _locale = value);
     });
+  }
+
+  @override
+  void dispose() {
+    if (identical(ErrorWidget.builder, _installedErrorBuilder) &&
+        _previousErrorBuilder != null) {
+      ErrorWidget.builder = _previousErrorBuilder!;
+    }
+    super.dispose();
   }
 
   Future<void> _setLocale(Locale locale) async {
@@ -48,7 +63,25 @@ class _DaziAppState extends State<DaziApp> {
       locale: _locale,
       onChanged: _setLocale,
       child: MaterialApp(
+        key: _recoveryKey,
         debugShowCheckedModeBanner: false,
+        builder: (context, child) {
+          // Flutter still reports the full exception to developer diagnostics.
+          // Only the widget presented to the user is replaced.
+          if (!_isTestEnvironment) {
+            _previousErrorBuilder ??= ErrorWidget.builder;
+            _installedErrorBuilder = (_) => BuildFailure(
+              title: context.tr('buildErrorTitle'),
+              message: context.tr('buildErrorMessage'),
+              retryLabel: context.tr('retry'),
+              onRetry: () {
+                if (mounted) setState(() => _recoveryKey = UniqueKey());
+              },
+            );
+            ErrorWidget.builder = _installedErrorBuilder!;
+          }
+          return child!;
+        },
         title: '搭慕慕',
         locale: _locale,
         supportedLocales: const [Locale('zh'), Locale('en'), Locale('ko')],
@@ -144,6 +177,9 @@ class EventItem {
     this.approval = false,
     this.isJoined = false,
     this.isOwned = false,
+    this.startsAt,
+    this.endsAt,
+    this.beginnerFriendly = false,
   });
 
   final int id;
@@ -163,6 +199,10 @@ class EventItem {
   final bool approval;
   bool isJoined;
   final bool isOwned;
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+  bool get isPast => endsAt != null && !endsAt!.isAfter(DateTime.now());
+  final bool beginnerFriendly;
 }
 
 final demoEvents = <EventItem>[
@@ -231,11 +271,25 @@ final demoEvents = <EventItem>[
   ),
 ];
 
+typedef ActivityPageLoader =
+    Future<ActivityPage> Function({
+      double? latitude,
+      double? longitude,
+      required int limit,
+      String? cursor,
+    });
+
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, this.initialEvents, this.loadRemoteEvents = true});
+  const AppShell({
+    super.key,
+    this.initialEvents,
+    this.loadRemoteEvents = true,
+    this.eventLoader,
+  });
 
   final List<EventItem>? initialEvents;
   final bool loadRemoteEvents;
+  final ActivityPageLoader? eventLoader;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -246,32 +300,102 @@ class _AppShellState extends State<AppShell> {
   int _unread = 3;
   List<EventItem> _events = [];
   bool _eventsLoading = true;
+  bool _eventsLoadFailed = false;
+  static const _pageSize = 20;
+  String? _nextEventCursor;
+  bool _eventsRefreshing = false;
+  int _eventGeneration = 0;
+  bool _hasMoreEvents = false;
+  bool _loadingMoreEvents = false;
+  bool _moreEventsFailed = false;
+  final Set<String> _loadedEventIds = {};
+  double? _latitude;
+  double? _longitude;
 
   @override
   void initState() {
     super.initState();
     _events = List<EventItem>.of(widget.initialEvents ?? const []);
     _eventsLoading = widget.loadRemoteEvents;
-    if (widget.loadRemoteEvents) _loadEvents();
+    if (widget.loadRemoteEvents || widget.eventLoader != null) _loadEvents();
   }
 
   Future<void> _loadEvents() async {
+    final generation = ++_eventGeneration;
+    setState(() {
+      _eventsRefreshing = _events.isNotEmpty;
+      _eventsLoading = !_eventsRefreshing;
+      _eventsLoadFailed = false;
+      _loadingMoreEvents = false;
+      _moreEventsFailed = false;
+      _hasMoreEvents = false;
+      _nextEventCursor = null;
+      _loadedEventIds.clear();
+    });
+    await _fetchEventPage(generation, append: false);
+  }
+
+  Future<void> _loadMoreEvents() async {
+    if (_eventsLoading ||
+        _eventsRefreshing ||
+        _loadingMoreEvents ||
+        !_hasMoreEvents) {
+      return;
+    }
+    setState(() {
+      _loadingMoreEvents = true;
+      _moreEventsFailed = false;
+    });
+    await _fetchEventPage(_eventGeneration, append: true);
+  }
+
+  Future<void> _fetchEventPage(int generation, {required bool append}) async {
     try {
-      final rows = await EventService.list();
-      if (!mounted) return;
+      final page = await (widget.eventLoader ?? EventService.list)(
+        latitude: _latitude,
+        longitude: _longitude,
+        limit: _pageSize,
+        cursor: _nextEventCursor,
+      );
+      if (!mounted || generation != _eventGeneration) return;
+      final rows = page.items;
+      // Convert before mutating the cursor or deduplication state so retries
+      // request the same page if a response cannot be rendered.
+      final items = rows.map(_eventFromApi).toList();
       setState(() {
-        _events = rows.map(_eventFromApi).toList();
+        if (!append) _events = [];
+        for (var i = 0; i < rows.length; i++) {
+          if (_loadedEventIds.add(rows[i]['id'].toString())) {
+            _events.add(items[i]);
+          }
+        }
+        _nextEventCursor = page.nextCursor;
+        _hasMoreEvents = page.hasMore;
         _eventsLoading = false;
+        _loadingMoreEvents = false;
+        _eventsRefreshing = false;
       });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _eventsLoading = false);
-      final message = error.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted || generation != _eventGeneration) return;
+      setState(() {
+        _eventsLoading = false;
+        _loadingMoreEvents = false;
+        _eventsRefreshing = false;
+        if (append) {
+          _moreEventsFailed = true;
+        } else {
+          _eventsLoadFailed = true;
+        }
+      });
     }
   }
+
+  Widget _paginationFooter() => _EventPaginationFooter(
+    hasMore: _hasMoreEvents,
+    loading: _loadingMoreEvents || _eventsRefreshing,
+    failed: _moreEventsFailed,
+    onLoadMore: _loadMoreEvents,
+  );
 
   EventItem _eventFromApi(Map<String, dynamic> json) {
     final rawId = json['id'].toString();
@@ -305,6 +429,12 @@ class _AppShellState extends State<AppShell> {
           currentUserId != null &&
           '${json['organizer_user_id']}' == currentUserId,
       description: '${json['description'] ?? ''}',
+      startsAt: startsAt,
+      endsAt: DateTime.tryParse('${json["ends_at"]}')?.toLocal(),
+      beginnerFriendly:
+          '${json['title'] ?? ''}'.contains('新手') ||
+          '${json['description'] ?? ''}'.contains('新手') ||
+          json['beginner_friendly'] == true,
       tags: [
         '${json['category_name'] ?? ''}',
         json['approval_mode'] == 'manual' ? '需审核' : '直接加入',
@@ -322,9 +452,7 @@ class _AppShellState extends State<AppShell> {
             final token = AuthScope.of(context).token;
             if (token == null) return;
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => MyActivitiesPage(token: token),
-              ),
+              MaterialPageRoute(builder: (_) => MyActivitiesPage(token: token)),
             );
           },
         ),
@@ -344,11 +472,44 @@ class _AppShellState extends State<AppShell> {
     ).showSnackBar(const SnackBar(content: Text('活动发布成功，已生成活动群聊')));
   }
 
+  void _locationChanged(AppLocation location) {
+    final changed =
+        _latitude == null ||
+        _longitude == null ||
+        (_latitude! - location.latitude).abs() > .0001 ||
+        (_longitude! - location.longitude).abs() > .0001;
+    if (!changed) return;
+    _latitude = location.latitude;
+    _longitude = location.longitude;
+    _loadEvents();
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
-      HomePage(events: _events, onOpen: _openEvent, loading: _eventsLoading),
-      DiscoverPage(events: _events, onOpen: _openEvent),
+      HomePage(
+        events: _events,
+        onOpen: _openEvent,
+        onLocationChanged: _locationChanged,
+        loading: _eventsLoading,
+        loadFailed: _eventsLoadFailed,
+        onRetry: _loadEvents,
+        onRefresh: _loadEvents,
+        footer: widget.loadRemoteEvents || widget.eventLoader != null
+            ? _paginationFooter()
+            : null,
+      ),
+      DiscoverPage(
+        events: _events,
+        onOpen: _openEvent,
+        loading: _eventsLoading,
+        loadFailed: _eventsLoadFailed,
+        onRetry: _loadEvents,
+        onRefresh: _loadEvents,
+        footer: widget.loadRemoteEvents || widget.eventLoader != null
+            ? _paginationFooter()
+            : null,
+      ),
       CreateEventPage(
         onCreated: _created,
         loadRemoteData: widget.loadRemoteEvents,
@@ -359,7 +520,20 @@ class _AppShellState extends State<AppShell> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: IndexedStack(index: _index, children: pages),
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if ((_index == 0 || _index == 1) &&
+                notification.depth == 0 &&
+                notification is ScrollUpdateNotification &&
+                (notification.scrollDelta ?? 0) > 0 &&
+                notification.metrics.extentAfter < 240 &&
+                !_moreEventsFailed) {
+              _loadMoreEvents();
+            }
+            return false;
+          },
+          child: IndexedStack(index: _index, children: pages),
+        ),
       ),
       bottomNavigationBar: _FloatingDock(
         selectedIndex: _index,
@@ -525,12 +699,22 @@ class HomePage extends StatefulWidget {
   const HomePage({
     required this.events,
     required this.onOpen,
+    required this.onRetry,
+    this.footer,
+    this.onRefresh,
+    this.onLocationChanged,
     this.loading = false,
+    this.loadFailed = false,
     super.key,
   });
   final List<EventItem> events;
   final ValueChanged<EventItem> onOpen;
+  final VoidCallback onRetry;
+  final Future<void> Function()? onRefresh;
+  final Widget? footer;
+  final ValueChanged<AppLocation>? onLocationChanged;
   final bool loading;
+  final bool loadFailed;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -542,6 +726,7 @@ class _HomePageState extends State<HomePage> {
   final Set<String> _selectedFilters = {'附近热门'};
   String _locationLabel = '正在定位…';
   bool _locating = true;
+  bool _hasResolvedLocation = false;
   String? _locationLanguage;
 
   @override
@@ -571,38 +756,57 @@ class _HomePageState extends State<HomePage> {
         ...event.tags,
       ].join(' ').toLowerCase();
       if (query.isNotEmpty && !searchable.contains(query)) return false;
-      if (_selectedFilters.contains('今天') && !event.time.startsWith('今天')) {
+      if (_selectedFilters.contains('今天') && !_isToday(event)) {
         return false;
       }
-      if (_selectedFilters.contains('周末') &&
-          !event.time.startsWith('周六') &&
-          !event.time.startsWith('周日')) {
+      if (_selectedFilters.contains('周末') && !_isWeekend(event)) {
         return false;
       }
       if (_selectedFilters.contains('新手友好') &&
-          !event.tags.contains('新手友好') &&
-          !event.description.contains('新手')) {
+          !event.beginnerFriendly &&
+          !event.tags.contains('新手友好')) {
         return false;
       }
-      if (_selectedFilters.contains('附近热门') &&
-          _distanceKilometers(event.distance) > 10) {
+      if (_selectedFilters.contains('附近热门') && !_isNearby(event)) {
         return false;
       }
       return true;
     }).toList();
-    if (_selectedFilters.contains('附近热门')) {
-      events.sort(
-        (a, b) => _distanceKilometers(
-          a.distance,
-        ).compareTo(_distanceKilometers(b.distance)),
-      );
-    }
     return events;
   }
 
   double _distanceKilometers(String value) =>
       double.tryParse(RegExp(r'[\d.]+').firstMatch(value)?.group(0) ?? '') ??
       double.infinity;
+
+  bool _isToday(EventItem event) {
+    final startsAt = event.startsAt;
+    if (startsAt == null) return event.time.startsWith('今天');
+    final now = DateTime.now();
+    return startsAt.year == now.year &&
+        startsAt.month == now.month &&
+        startsAt.day == now.day;
+  }
+
+  bool _isWeekend(EventItem event) {
+    final startsAt = event.startsAt;
+    if (startsAt == null) {
+      return event.time.startsWith('周六') || event.time.startsWith('周日');
+    }
+    return startsAt.weekday == DateTime.saturday ||
+        startsAt.weekday == DateTime.sunday;
+  }
+
+  bool _isNearby(EventItem event) {
+    if (_locating || !_hasResolvedLocation) return true;
+    final distance = _distanceKilometers(event.distance);
+    if (distance.isFinite) return distance <= 10;
+    final locationParts = _locationLabel
+        .split(' · ')
+        .map((part) => part.trim())
+        .where((part) => part.length >= 2);
+    return locationParts.any(event.area.contains);
+  }
 
   void _toggleFilter(String filter) {
     setState(() {
@@ -618,7 +822,10 @@ class _HomePageState extends State<HomePage> {
   Future<void> _locate({bool forceRefresh = false}) async {
     setState(() {
       _locating = true;
-      if (forceRefresh) _locationLabel = '正在定位…';
+      if (forceRefresh) {
+        _locationLabel = '正在定位…';
+        _hasResolvedLocation = false;
+      }
     });
     try {
       final location = await _locationService.locate(
@@ -626,7 +833,11 @@ class _HomePageState extends State<HomePage> {
         forceRefresh: forceRefresh,
       );
       if (!mounted) return;
-      setState(() => _locationLabel = location.label);
+      setState(() {
+        _locationLabel = location.label;
+        _hasResolvedLocation = true;
+      });
+      widget.onLocationChanged?.call(location);
     } on LocationFailure catch (error) {
       if (!mounted) return;
       setState(() => _locationLabel = error.message);
@@ -640,7 +851,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
+    final list = CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         SliverToBoxAdapter(
           child: PagePadding(
@@ -869,6 +1081,8 @@ class _HomePageState extends State<HomePage> {
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
           sliver: widget.loading
               ? const SliverToBoxAdapter(child: _EventListSkeleton())
+              : widget.loadFailed
+              ? SliverToBoxAdapter(child: _LoadFailure(onRetry: widget.onRetry))
               : _visibleEvents.isEmpty
               ? SliverToBoxAdapter(child: _EmptySearch(onClear: _clearFilters))
               : SliverList.separated(
@@ -880,8 +1094,13 @@ class _HomePageState extends State<HomePage> {
                   separatorBuilder: (_, _) => const SizedBox(height: 14),
                 ),
         ),
+        if (!widget.loading && !widget.loadFailed && widget.footer != null)
+          SliverToBoxAdapter(child: widget.footer!),
       ],
     );
+    return widget.onRefresh == null
+        ? list
+        : RefreshIndicator(onRefresh: widget.onRefresh!, child: list);
   }
 
   void _showNotice(BuildContext context) {
@@ -1086,6 +1305,7 @@ class EventCard extends StatelessWidget {
                         const Icon(Icons.check_circle, color: _green, size: 19),
                     ],
                   ),
+                  if (event.isPast) _Pill(context.tr('pastActivity')),
                   if (event.isOwned) ...[
                     const SizedBox(height: 7),
                     const Align(
@@ -1133,7 +1353,21 @@ class EventCard extends StatelessWidget {
 }
 
 class DiscoverPage extends StatefulWidget {
-  const DiscoverPage({required this.events, required this.onOpen, super.key});
+  const DiscoverPage({
+    required this.events,
+    required this.onOpen,
+    this.footer,
+    this.loading = false,
+    this.loadFailed = false,
+    this.onRetry,
+    this.onRefresh,
+    super.key,
+  });
+  final Future<void> Function()? onRefresh;
+  final Widget? footer;
+  final bool loading;
+  final bool loadFailed;
+  final VoidCallback? onRetry;
   final List<EventItem> events;
   final ValueChanged<EventItem> onOpen;
 
@@ -1145,6 +1379,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
   bool _map = false;
   String _category = '全部';
   final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1213,21 +1453,69 @@ class _DiscoverPageState extends State<DiscoverPage> {
           ),
         ),
         Expanded(
-          child: _map
+          child: widget.loading
+              ? const _EventListSkeleton()
+              : widget.loadFailed
+              ? _LoadFailure(onRetry: widget.onRetry ?? () {})
+              : _map
               ? MapPlaceholder(events: visible, onOpen: widget.onOpen)
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  itemCount: visible.length,
-                  itemBuilder: (_, i) => EventCard(
-                    event: visible[i],
-                    onTap: () => widget.onOpen(visible[i]),
+              : RefreshIndicator(
+                  onRefresh: widget.onRefresh ?? () async {},
+                  child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    itemCount: visible.length + (widget.footer == null ? 0 : 1),
+                    itemBuilder: (_, i) => i == visible.length
+                        ? widget.footer!
+                        : EventCard(
+                            event: visible[i],
+                            onTap: () => widget.onOpen(visible[i]),
+                          ),
+                    separatorBuilder: (_, _) => const SizedBox(height: 14),
                   ),
-                  separatorBuilder: (_, _) => const SizedBox(height: 14),
                 ),
         ),
       ],
     );
   }
+}
+
+class _EventPaginationFooter extends StatelessWidget {
+  const _EventPaginationFooter({
+    required this.hasMore,
+    required this.loading,
+    required this.failed,
+    required this.onLoadMore,
+  });
+  final bool hasMore;
+  final bool loading;
+  final bool failed;
+  final VoidCallback onLoadMore;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+    child: Column(
+      children: [
+        if (hasMore)
+          Text(context.tr('paginationFilterHint'), textAlign: TextAlign.center),
+        if (failed)
+          Text(context.tr('paginationFailed'), textAlign: TextAlign.center),
+        if (loading)
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: CircularProgressIndicator(),
+          )
+        else if (hasMore)
+          OutlinedButton(
+            onPressed: onLoadMore,
+            child: Text(context.tr(failed ? 'retry' : 'loadMore')),
+          )
+        else
+          Text(context.tr('paginationEnd')),
+      ],
+    ),
+  );
 }
 
 class MapPlaceholder extends StatelessWidget {
@@ -1403,6 +1691,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     spacing: 8,
                     children: [
                       _Pill(e.category),
+                      if (e.isPast) _Pill(context.tr('pastActivity')),
                       if (e.isOwned) const _Pill('我发布的', green: true),
                       if (e.approval) const _Pill('需组织者审核'),
                       if (e.isJoined && !e.isOwned)
@@ -1553,7 +1842,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton(
-                  onPressed: _joining
+                  onPressed: _joining || (e.isPast && !e.isOwned)
                       ? null
                       : e.isOwned
                       ? widget.onOpenMyActivities
@@ -1571,6 +1860,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
                       : Text(
                           e.isOwned
                               ? '查看我的活动'
+                              : e.isPast
+                              ? context.tr('pastActivity')
                               : e.isJoined
                               ? '退出活动'
                               : full
@@ -1734,8 +2025,10 @@ class CreateEventPage extends StatefulWidget {
   const CreateEventPage({
     required this.onCreated,
     this.loadRemoteData = true,
+    this.sourceEventId,
     super.key,
   });
+  final String? sourceEventId;
   final ValueChanged<EventItem> onCreated;
   final bool loadRemoteData;
 
@@ -1744,6 +2037,74 @@ class CreateEventPage extends StatefulWidget {
 }
 
 class _CreateEventPageState extends State<CreateEventPage> {
+  bool _loadingSource = false;
+  bool _sourceFailed = false;
+  bool _sourceInitialized = false;
+  String? _sourceId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_sourceInitialized) {
+      _sourceInitialized = true;
+      if (widget.sourceEventId != null) _loadSource(widget.sourceEventId!);
+    }
+  }
+
+  Future<void> _loadSource(String id) async {
+    setState(() {
+      _sourceId = id;
+      _loadingSource = true;
+      _sourceFailed = false;
+    });
+    try {
+      final auth = AuthScope.of(context);
+      final data = await EventService.detail(auth.token!, id);
+      final categories = await _categoryFuture;
+      final regions = await _regionFuture;
+      if (!mounted) return;
+      if (data['organizer_user_id'] != auth.user?.id) {
+        throw const EventServiceException('');
+      }
+      final category = categories.where((c) => c.id == data['category_id']);
+      setState(() {
+        _title.text = data['title'] as String? ?? '';
+        _description.text = data['description'] as String? ?? '';
+        _leafCategoryId = category.isEmpty ? null : category.first.id;
+        _majorCategoryId = category.isEmpty ? null : category.first.parentId;
+        _cityCode = regions.any((r) => r.code == data['city_code'])
+            ? data['city_code'] as String
+            : null;
+        _districtCode = regions.any((r) => r.code == data['district_code'])
+            ? data['district_code'] as String
+            : null;
+        _meetingPoint.text = data['place_name'] as String? ?? '';
+        _price.text = '${data['price_amount'] ?? 0}';
+        _capacity = (data['capacity'] as num).toInt();
+        _approval = data['approval_mode'] == 'manual';
+        _startsAt = null;
+        _endsAt = null;
+        _step = 0;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _sourceFailed = true);
+    } finally {
+      if (mounted) setState(() => _loadingSource = false);
+    }
+  }
+
+  Future<void> _chooseSource() async {
+    final id = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => MyActivitiesPage(
+          token: AuthScope.of(context).token!,
+          selectSource: true,
+        ),
+      ),
+    );
+    if (id != null && mounted) await _loadSource(id);
+  }
+
   int _step = 0;
   final _title = TextEditingController();
   final _description = TextEditingController();
@@ -1785,71 +2146,93 @@ class _CreateEventPageState extends State<CreateEventPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      PagePadding(
-        child: Row(
+  Widget build(BuildContext context) => _loadingSource
+      ? const Center(child: CircularProgressIndicator())
+      : _sourceFailed
+      ? _LoadFailure(
+          onRetry: () {
+            _categoryFuture = CategoryService.load();
+            _regionFuture = RegionService.load();
+            if (_sourceId != null) {
+              _loadSource(_sourceId!);
+            } else {
+              setState(() => _sourceFailed = false);
+              _chooseSource();
+            }
+          },
+        )
+      : Column(
           children: [
-            Expanded(
-              child: Text(
-                '发布活动',
-                style: Theme.of(context).textTheme.headlineLarge,
+            PagePadding(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '发布活动',
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                  ),
+                  Text(
+                    '${_step + 1}/3',
+                    style: const TextStyle(
+                      color: _green,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Text(
-              '${_step + 1}/3',
-              style: const TextStyle(
-                color: _green,
-                fontWeight: FontWeight.w800,
+            LinearProgressIndicator(value: (_step + 1) / 3, minHeight: 3),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: [_basic(), _schedule(), _rules()][_step],
+                ),
+              ),
+            ),
+            SafeArea(
+              child: Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                child: Row(
+                  children: [
+                    if (_step > 0)
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => setState(() => _step--),
+                          child: const Text('上一步'),
+                        ),
+                      ),
+                    if (_step > 0) const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        onPressed: _publishing ? null : _next,
+                        child: _publishing
+                            ? const _ButtonProgress(label: '发布中…')
+                            : Text(_step == 2 ? '确认发布' : '下一步'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
-        ),
-      ),
-      LinearProgressIndicator(value: (_step + 1) / 3, minHeight: 3),
-      Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: [_basic(), _schedule(), _rules()][_step],
-          ),
-        ),
-      ),
-      SafeArea(
-        child: Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-          child: Row(
-            children: [
-              if (_step > 0)
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => setState(() => _step--),
-                    child: const Text('上一步'),
-                  ),
-                ),
-              if (_step > 0) const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: FilledButton(
-                  onPressed: _publishing ? null : _next,
-                  child: _publishing
-                      ? const _ButtonProgress(label: '发布中…')
-                      : Text(_step == 2 ? '确认发布' : '下一步'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ],
-  );
+        );
 
   Widget _basic() => Column(
     key: const ValueKey(0),
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
+      OutlinedButton.icon(
+        onPressed: _chooseSource,
+        icon: const Icon(Icons.copy_outlined),
+        label: Text(context.tr('createFromPrevious')),
+      ),
+      Text(context.tr('copyEventHint')),
+      const SizedBox(height: 20),
       const Text(
         '先介绍一下活动',
         style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
@@ -1872,7 +2255,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
           }
           if (snapshot.hasError) {
             return _LoadFailure(
-              message: '分类加载失败，请检查网络或 API 服务',
               onRetry: () => setState(() {
                 _categoryFuture = CategoryService.load();
               }),
@@ -1883,7 +2265,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
             return const Text('暂时无法加载分类，请确认 API 已启动');
           }
           final majors = categories.where((item) => item.level == 1).toList();
-          _majorCategoryId ??= majors.first.id;
+          if (!majors.any((item) => item.id == _majorCategoryId)) {
+            _majorCategoryId = majors.first.id;
+          }
           var leaves = categories
               .where((item) => item.parentId == _majorCategoryId)
               .toList();
@@ -1969,7 +2353,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
           }
           if (snapshot.hasError) {
             return _LoadFailure(
-              message: '地区加载失败，请检查 API 或数据库迁移',
               onRetry: () => setState(() {
                 _regionFuture = RegionService.load();
               }),
@@ -2257,6 +2640,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
         price: priceAmount == 0 ? '免费' : '预计 ₩$priceAmount/人',
         approval: _approval,
         isOwned: true,
+        startsAt: _startsAt,
+        endsAt: _endsAt,
+        beginnerFriendly:
+            _title.text.contains('新手') || _description.text.contains('新手'),
         description: _description.text.trim().isEmpty
             ? '一起度过轻松愉快的时间，欢迎第一次参加的新朋友。'
             : _description.text.trim(),
@@ -2318,24 +2705,45 @@ class _InlineLoading extends StatelessWidget {
 }
 
 class _LoadFailure extends StatelessWidget {
-  const _LoadFailure({required this.message, required this.onRetry});
-  final String message;
+  const _LoadFailure({required this.onRetry});
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFFECE9),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Row(
-      children: [
-        const Icon(Icons.cloud_off_rounded, color: _orange),
-        const SizedBox(width: 10),
-        Expanded(child: Text(message)),
-        TextButton(onPressed: onRetry, child: const Text('重试')),
-      ],
+  Widget build(BuildContext context) => Center(
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              color: _mint,
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: const Icon(Icons.cloud_off_rounded, size: 42, color: _green),
+          ),
+          const SizedBox(height: 22),
+          Text(
+            context.tr('loadErrorTitle'),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            context.tr('loadErrorMessage'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade600, height: 1.5),
+          ),
+          const SizedBox(height: 22),
+          FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(context.tr('retry')),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -2980,8 +3388,32 @@ class ProfilePage extends StatelessWidget {
   }
 }
 
+Future<void> _openSimilarEvent(BuildContext context, String eventId) async {
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (routeContext) => Scaffold(
+        appBar: AppBar(title: Text(routeContext.tr('publishSimilar'))),
+        body: CreateEventPage(
+          sourceEventId: eventId,
+          onCreated: (_) {
+            Navigator.of(routeContext).pop();
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(context.tr('eventCreated'))));
+          },
+        ),
+      ),
+    ),
+  );
+}
+
 class MyActivitiesPage extends StatefulWidget {
-  const MyActivitiesPage({required this.token, super.key});
+  const MyActivitiesPage({
+    required this.token,
+    this.selectSource = false,
+    super.key,
+  });
+  final bool selectSource;
   final String token;
 
   @override
@@ -3008,14 +3440,18 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('我的活动'),
-      bottom: TabBar(
-        controller: _tabs,
-        tabs: const [
-          Tab(text: '我发布的'),
-          Tab(text: '我参加的'),
-        ],
+      title: Text(
+        widget.selectSource ? context.tr('createFromPrevious') : '我的活动',
       ),
+      bottom: widget.selectSource
+          ? null
+          : TabBar(
+              controller: _tabs,
+              tabs: const [
+                Tab(text: '我发布的'),
+                Tab(text: '我参加的'),
+              ],
+            ),
     ),
     body: FutureBuilder<List<Map<String, dynamic>>>(
       future: _future,
@@ -3025,7 +3461,6 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
         }
         if (snapshot.hasError) {
           return _LoadFailure(
-            message: snapshot.error.toString().replaceFirst('Exception: ', ''),
             onRetry: () => setState(() {
               _future = EventService.myActivities(widget.token);
             }),
@@ -3038,10 +3473,17 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
         final joined = rows
             .where((row) => row['member_role'] != 'organizer')
             .toList();
+        if (widget.selectSource) {
+          return _activityList(
+            organized,
+            context.tr('noPreviousEvents'),
+            isOrganizer: true,
+          );
+        }
         return TabBarView(
           controller: _tabs,
           children: [
-            _activityList(organized, '你还没有发布活动'),
+            _activityList(organized, '你还没有发布活动', isOrganizer: true),
             _activityList(joined, '你还没有参加活动'),
           ],
         );
@@ -3049,7 +3491,11 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
     ),
   );
 
-  Widget _activityList(List<Map<String, dynamic>> rows, String emptyText) {
+  Widget _activityList(
+    List<Map<String, dynamic>> rows,
+    String emptyText, {
+    bool isOrganizer = false,
+  }) {
     if (rows.isEmpty) return Center(child: Text(emptyText));
     return RefreshIndicator(
       onRefresh: () async {
@@ -3063,6 +3509,8 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
         itemBuilder: (context, index) {
           final row = rows[index];
           final startsAt = DateTime.tryParse('${row['starts_at']}')?.toLocal();
+          final endsAt = DateTime.tryParse('${row['ends_at']}');
+          final isPast = endsAt != null && !endsAt.isAfter(DateTime.now());
           final price = (row['price_amount'] as num?)?.toInt() ?? 0;
           return Card(
             child: ListTile(
@@ -3072,7 +3520,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                 child: Text('${row['category_icon'] ?? '✨'}'),
               ),
               title: Text(
-                '${row['title'] ?? ''}',
+                '${isPast ? '${context.tr('pastActivity')} · ' : ''}${row['title'] ?? ''}',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               subtitle: Text(
@@ -3080,12 +3528,28 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                 '${_formatActivityDate(startsAt)} · ${price == 0 ? '免费' : '预计 ₩$price/人'}',
               ),
               isThreeLine: true,
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => _MyActivityRecordPage(activity: row),
-                ),
-              ),
+              trailing: isOrganizer && !widget.selectSource
+                  ? TextButton(
+                      onPressed: () =>
+                          _openSimilarEvent(context, '${row['id']}'),
+                      child: Text(context.tr('publishSimilar')),
+                    )
+                  : const Icon(Icons.chevron_right),
+              onTap: () {
+                if (widget.selectSource) {
+                  Navigator.of(context).pop('${row['id']}');
+                  return;
+                }
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => _MyActivityRecordPage(
+                      activity: row,
+                      token: widget.token,
+                      isOrganizer: isOrganizer,
+                    ),
+                  ),
+                );
+              },
             ),
           );
         },
@@ -3101,14 +3565,22 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
 }
 
 class _MyActivityRecordPage extends StatelessWidget {
-  const _MyActivityRecordPage({required this.activity});
+  const _MyActivityRecordPage({
+    required this.activity,
+    required this.token,
+    required this.isOrganizer,
+  });
   final Map<String, dynamic> activity;
+  final String token;
+  final bool isOrganizer;
 
   @override
   Widget build(BuildContext context) {
     final price = (activity['price_amount'] as num?)?.toInt() ?? 0;
     return Scaffold(
-      appBar: AppBar(title: const Text('活动记录')),
+      appBar: AppBar(
+        title: Text(isOrganizer ? context.tr('activityManagement') : '活动记录'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -3138,9 +3610,231 @@ class _MyActivityRecordPage extends StatelessWidget {
               '${activity['event_status']} · 报名状态 ${activity['membership_status']}',
             ),
           ),
+          if (isOrganizer) ...[
+            FilledButton.icon(
+              onPressed: () => _openSimilarEvent(context, '${activity['id']}'),
+              icon: const Icon(Icons.copy_outlined),
+              label: Text(context.tr('publishSimilar')),
+            ),
+            const Divider(height: 34),
+            _OrganizerApplications(token: token, eventId: '${activity['id']}'),
+          ],
         ],
       ),
     );
+  }
+}
+
+class _OrganizerApplications extends StatefulWidget {
+  const _OrganizerApplications({required this.token, required this.eventId});
+
+  final String token;
+  final String eventId;
+
+  @override
+  State<_OrganizerApplications> createState() => _OrganizerApplicationsState();
+}
+
+class _OrganizerApplicationsState extends State<_OrganizerApplications> {
+  late Future<List<Map<String, dynamic>>> _future = _load();
+  final Set<String> _processing = {};
+
+  Future<List<Map<String, dynamic>>> _load() =>
+      EventService.applications(widget.token, widget.eventId);
+
+  void _reload() => setState(() => _future = _load());
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _future,
+      builder: (context, snapshot) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  context.tr('applications'),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const Spacer(),
+                IconButton(
+                  tooltip: context.tr('refresh'),
+                  onPressed: snapshot.connectionState == ConnectionState.waiting
+                      ? null
+                      : _reload,
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (snapshot.connectionState == ConnectionState.waiting)
+              const Center(child: CircularProgressIndicator())
+            else if (snapshot.hasError)
+              _LoadFailure(onRetry: _reload)
+            else if ((snapshot.data ?? const []).isEmpty)
+              _InfoBox(text: context.tr('noPendingApplications'))
+            else
+              ...(snapshot.data ?? const <Map<String, dynamic>>[]).map(
+                _applicationCard,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _applicationCard(Map<String, dynamic> application) {
+    final userId = '${application['user_id']}';
+    final processing = _processing.contains(userId);
+    final partySize = (application['party_size'] as num?)?.toInt() ?? 1;
+    final note = '${application['application_note'] ?? ''}'.trim();
+    final trustScore = application['trust_score'] ?? 0;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const CircleAvatar(child: Icon(Icons.person_outline)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${application['nickname'] ?? context.tr('applicant')}',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      Text(
+                        '${context.tr('partySize')}: $partySize · '
+                        '${context.tr('trust')}: $trustScore',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (note.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text('${context.tr('applicationNote')}: $note'),
+            ],
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: processing
+                        ? null
+                        : () => _decide(application, approve: false),
+                    child: Text(context.tr('reject')),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: processing
+                        ? null
+                        : () => _decide(application, approve: true),
+                    child: processing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(context.tr('approve')),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _decide(
+    Map<String, dynamic> application, {
+    required bool approve,
+  }) async {
+    final userId = '${application['user_id']}';
+    String? reason;
+    if (!approve) {
+      reason = await _requestRejectionReason();
+      if (reason == null) return;
+    }
+    setState(() => _processing.add(userId));
+    try {
+      if (approve) {
+        await EventService.approveApplication(
+          widget.token,
+          widget.eventId,
+          userId,
+        );
+      } else {
+        await EventService.rejectApplication(
+          widget.token,
+          widget.eventId,
+          userId,
+          reason!,
+        );
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('applicationUpdated'))));
+      _reload();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _processing.remove(userId));
+    }
+  }
+
+  Future<String?> _requestRejectionReason() async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.tr('rejectionReason')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 4,
+          decoration: InputDecoration(
+            hintText: context.tr('rejectionReasonHint'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(context.tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.length >= 2) Navigator.pop(dialogContext, value);
+            },
+            child: Text(context.tr('confirmReject')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return reason;
   }
 }
 

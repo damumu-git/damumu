@@ -72,6 +72,7 @@ api.MapGet("/health", async (Db db, CancellationToken ct) =>
 api.MapCatalogEndpoints();
 api.MapUserEndpoints();
 api.MapEventEndpoints();
+api.MapActivityEndpoints();
 api.MapSocialEndpoints();
 api.MapSafetyEndpoints();
 api.MapGovernanceEndpoints();

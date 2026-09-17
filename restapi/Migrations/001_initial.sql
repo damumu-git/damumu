@@ -1,4 +1,4 @@
--- MUDA base schema. Safe to run repeatedly on an empty or partially initialized database.
+-- DAMUMU base schema. Safe to run repeatedly on an empty or partially initialized database.
 -- Requires PostgreSQL with PostGIS (for place.public_geo) and pgcrypto.
 
 BEGIN;

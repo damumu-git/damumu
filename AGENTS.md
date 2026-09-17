@@ -1,11 +1,45 @@
-# MUDA Repository Instructions
+# DAMUMU Repository Instructions
 
 These instructions apply to the entire repository. Read this file before making
-changes, then read `PROJECT.md`, `HANDOFF.md`, and the relevant module README.
+changes, then read `docs/PROJECT.md`, `docs/STATUS.md`, and the relevant module
+README. Read the relevant entries in `docs/DECISIONS.md` for work involving
+architecture, databases, authentication, concurrency, communication, deployment,
+storage, security, or cross-module contracts.
+
+## Required task workflow
+
+Before changing code:
+
+1. Read `docs/PROJECT.md` and `docs/STATUS.md`.
+2. Inspect the actual code, configuration, tests, and current Git status.
+3. Unless the user explicitly requests the current branch, create a new branch
+   before editing. Choose a concise task-based name using `feature/`, `fix/`,
+   `docs/`, or `chore/`; do not ask the user to supply the name. If task changes
+   already exist in the working tree, create the branch from that state without
+   discarding or rewriting those changes.
+4. State the task outcome, applicable constraints, intended edit scope, and
+   validation plan.
+
+While working, keep edits within the requested task, preserve unrelated user
+changes, and surface conflicts with an accepted ADR instead of silently replacing
+the decision.
+
+At task completion:
+
+1. Run relevant formatting, analysis, builds, and tests.
+2. Update `docs/STATUS.md` with current facts, the next action, and blockers.
+3. Add or update an ADR only for a durable architectural decision.
+4. Update `docs/PROJECT.md` only when product boundaries, system composition,
+   technology, or long-term business rules change.
+5. Review the final diff and secret scan, then create a focused conventional Git
+   commit for the completed task without waiting for another instruction. Push
+   the task branch to `origin` when a remote is configured, unless the user asks
+   to keep the work local. Never commit or push credentials, local configuration,
+   build output, generated logs, or unrelated user changes.
 
 ## Product invariants
 
-- MUDA (current UI name: 搭慕慕) is a Korea-focused offline activity and
+- DAMUMU (current UI name: 搭慕慕) is a Korea-focused offline activity and
   companion-finding app.
 - The platform does not collect activity fees, provide payments, guarantee
   transfers, or act as an escrow service. Amounts shown are estimated offline
@@ -27,7 +61,7 @@ changes, then read `PROJECT.md`, `HANDOFF.md`, and the relevant module README.
 - `restapi/`: ASP.NET Core 10 API backed by PostgreSQL/PostGIS.
 - `admin/`: React 19/Vite operations console.
 - `restapi/Migrations/`: ordered SQL migrations.
-- `DEVELOPMENT_CONTEXT.md`: detailed legacy handoff and implementation notes.
+- `docs/`: canonical long-term project context, status, and ADRs.
 - `MVP.md`: MVP scope and acceptance criteria.
 - `FIRST_RELEASE_FLOWS.md`: detailed first-release flow analysis.
 
@@ -38,7 +72,7 @@ changes, then read `PROJECT.md`, `HANDOFF.md`, and the relevant module README.
 2. Preserve user changes. Check `git status --short` and the relevant diff before
    editing; never discard unrelated work.
 3. Treat source code, migrations, Git state, and test results as more current than
-   documentation. Update `HANDOFF.md` when implementation status changes.
+   documentation. Update `docs/STATUS.md` when implementation status changes.
 4. Database changes require a new sequential, preferably idempotent migration.
    Do not rewrite an already-applied migration to represent a new change.
 5. Keep API responses in the existing `{ data, meta, error, traceId }` envelope.
@@ -50,8 +84,20 @@ changes, then read `PROJECT.md`, `HANDOFF.md`, and the relevant module README.
    output, or generated logs. Local example credentials are development-only.
 9. Before using a database container, run `docker ps` and confirm its actual name;
    historical documentation contains more than one container name.
-10. When completing a task, record important lasting choices in `DECISIONS.md`
-    and leave an exact next action in `HANDOFF.md`.
+10. Use one source for each kind of information: working rules in this file,
+    stable project facts in `docs/PROJECT.md`, current work in `docs/STATUS.md`,
+    and accepted durable decisions in `docs/DECISIONS.md`. Avoid copying
+    implementation status into multiple documents.
+
+## Technology baseline
+
+- Backend: ASP.NET Core 10 minimal API with Npgsql.
+- Database: PostgreSQL with PostGIS and ordered SQL migrations.
+- App: Flutter/Dart for Web, Android, and iOS.
+- Admin: React 19 with Vite.
+- Marketing site: standalone static site under `website/`.
+- Object storage, push notifications, and realtime messaging: not yet selected;
+  do not present them as implemented infrastructure.
 
 ## Important implementation constraints
 
@@ -70,6 +116,15 @@ changes, then read `PROJECT.md`, `HANDOFF.md`, and the relevant module README.
 ## Common commands
 
 From the repository root:
+
+Windows PowerShell:
+
+```powershell
+.\dev.ps1 -d chrome --web-port 3000
+.\dev.ps1 --services
+```
+
+Linux, macOS, or an environment with Bash:
 
 ```bash
 ./dev.sh -d chrome --web-port 3000
@@ -110,5 +165,9 @@ pass; inspect the rendered difference first.
 - Relevant formatters, analyzers, builds, and tests have run, or the handoff names
   exactly what could not run and why.
 - Privacy, activity-cost, localization, and authorization invariants remain true.
-- `HANDOFF.md` reflects the resulting state and does not claim unverified work.
+- `docs/STATUS.md` reflects the resulting state and does not claim unverified
+  work.
 
+Use `docs/PROJECT.md`, `docs/STATUS.md`, and `docs/DECISIONS.md` as the canonical
+context. `FIRST_RELEASE_FLOWS.md` defines the intended release scope; `MVP.md`
+is an earlier proposal. Git history retains superseded handoff documents.

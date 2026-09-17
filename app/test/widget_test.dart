@@ -121,6 +121,51 @@ void main() {
     expect(find.text('周六清晨北汉山轻徒步'), findsOneWidget);
   });
 
+  testWidgets('首页时间和新手筛选使用结构化活动字段', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    final now = DateTime.now();
+    final events = [
+      EventItem(
+        id: 101,
+        emoji: '☕',
+        title: '结构化筛选测试活动',
+        category: '语言',
+        time: '${now.month}月${now.day}日 18:30',
+        startsAt: now,
+        area: '首尔',
+        distance: '2.0 km',
+        host: '测试组织者',
+        hostScore: 4.8,
+        joined: 1,
+        capacity: 6,
+        beginnerFriendly: true,
+      ),
+    ];
+    final auth = AuthController()
+      ..user = const AuthUser(
+        id: 'test-user',
+        nickname: '林夏',
+        email: 'linxia@example.com',
+      );
+    await tester.pumpWidget(
+      DaziApp(
+        home: AuthScope(
+          controller: auth,
+          child: AppShell(initialEvents: events, loadRemoteEvents: false),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('今天'));
+    await tester.pumpAndSettle();
+    expect(find.text('结构化筛选测试活动'), findsOneWidget);
+
+    await tester.tap(find.text('新手友好'));
+    await tester.pumpAndSettle();
+    expect(find.text('结构化筛选测试活动'), findsOneWidget);
+  });
+
   testWidgets('可以恢复英文和韩文界面语言', (tester) async {
     SharedPreferences.setMockInitialValues({'app_locale': 'ko'});
     await tester.pumpWidget(

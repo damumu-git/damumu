@@ -93,7 +93,7 @@ class LocationService {
       final response = await _client
           .get(
             uri,
-            headers: const {'User-Agent': 'MUDA/0.1 (location@muda.app)'},
+            headers: const {'User-Agent': 'DAMUMU/0.1 (location@muda.app)'},
           )
           .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return '当前位置';
@@ -153,10 +153,7 @@ class LocationService {
     return AppLocation(latitude: latitude, longitude: longitude, label: label);
   }
 
-  Future<void> _writeCache(
-    AppLocation location,
-    String languageCode,
-  ) async {
+  Future<void> _writeCache(AppLocation location, String languageCode) async {
     final preferences = await SharedPreferences.getInstance();
     await Future.wait([
       preferences.setDouble(

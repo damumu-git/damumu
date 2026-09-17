@@ -7,7 +7,20 @@ LOG_DIR="$ROOT_DIR/.dev-logs"
 API_PORT="${API_PORT:-8080}"
 ADMIN_PORT="${ADMIN_PORT:-5173}"
 API_BASE_URL="${API_BASE_URL:-http://localhost:${API_PORT}/api/v1}"
+POSTGRES_HOST="${DAMUMU_POSTGRES_HOST:-100.66.109.44}"
+POSTGRES_DATABASE="${DAMUMU_POSTGRES_DATABASE:-damumu}"
+POSTGRES_USERNAME="${DAMUMU_POSTGRES_USERNAME:-postgres}"
+if [[ -z "${DAMUMU_POSTGRES_PASSWORD:-}" && -f "$ROOT_DIR/dev.local.sh" ]]; then
+  source "$ROOT_DIR/dev.local.sh"
+fi
+POSTGRES_PASSWORD="${DAMUMU_POSTGRES_PASSWORD:-}"
 SERVICES_ONLY=false
+
+[[ -n "$POSTGRES_PASSWORD" ]] || {
+  echo "错误：请在 dev.local.sh 中设置 DAMUMU_POSTGRES_PASSWORD，或设置同名环境变量。" >&2
+  exit 1
+}
+DATABASE_CONNECTION="Host=${POSTGRES_HOST};Port=5432;Database=${POSTGRES_DATABASE};Username=${POSTGRES_USERNAME};Password=${POSTGRES_PASSWORD};SSL Mode=Disable"
 
 if [[ "${1:-}" == "--services" ]]; then
   SERVICES_ONLY=true
@@ -73,7 +86,7 @@ admin_pid=""
 cleanup() {
   trap - EXIT INT TERM
   echo
-  echo "正在停止 MUDA 开发服务…"
+  echo "正在停止 DAMUMU 开发服务…"
   [[ -n "$api_pid" ]] && pkill -TERM -P "$api_pid" 2>/dev/null || true
   [[ -n "$admin_pid" ]] && pkill -TERM -P "$admin_pid" 2>/dev/null || true
   [[ -n "$api_pid" ]] && kill "$api_pid" 2>/dev/null || true
@@ -87,6 +100,7 @@ echo "启动 REST API：http://localhost:${API_PORT}/api/v1"
   cd "$ROOT_DIR/restapi"
   exec env ASPNETCORE_ENVIRONMENT=Development \
     ASPNETCORE_URLS="http://localhost:${API_PORT}" \
+    ConnectionStrings__Muda="$DATABASE_CONNECTION" \
     "$DOTNET" run --no-launch-profile
 ) >"$LOG_DIR/restapi.log" 2>&1 &
 api_pid=$!

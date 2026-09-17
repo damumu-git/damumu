@@ -1,8 +1,8 @@
-# MUDA 首发功能与全链路 Flow
+# DAMUMU 首发功能与全链路 Flow
 
-> 文档目标：定义 MUDA 首次公开发布所需的产品闭环，并明确 App、REST API、Admin 三端职责、交叉依赖、状态、权限、异常和验收标准。
+> 文档目标：定义 DAMUMU 首次公开发布所需的产品闭环，并明确 App、REST API、Admin 三端职责、交叉依赖、状态、权限、异常和验收标准。
 >
-> 本文是首发范围的主文档；`MVP.md` 保留为早期方案参考。实现发生冲突时，以本文后续确认的版本为准。
+> 本文定义计划中的首发范围，并非当前实现状态；当前事实见 `docs/STATUS.md`，长期已采用决策见 `docs/DECISIONS.md`，实际代码和验证结果优先。`MVP.md` 保留为早期方案参考。
 
 ## 0. 首发目标与边界
 
@@ -233,7 +233,7 @@ POST /admin/regions/sync
 首页打开
 → 说明用途并请求前台定位权限
 → 手机系统返回经纬度
-→ 调用 MUDA location/resolve
+→ 调用 DAMUMU location/resolve
 → API 将坐标解析为标准 region_code
 → 首页显示“首尔 · 麻浦区”
 → 用户可刷新或改为手选区域
@@ -250,7 +250,7 @@ POST /admin/regions/sync
 #### 当前整改
 
 - 当前 App 直接调用 Nominatim，只缓存经纬度和中文地名，尚未关联数据库区域。
-- 首发改为 App 只取坐标，区域解析由 MUDA API 完成。
+- 首发改为 App 只取坐标，区域解析由 DAMUMU API 完成。
 
 ### 4.3 手动选择浏览区域（P0，缺失）
 
