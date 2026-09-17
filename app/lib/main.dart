@@ -16,6 +16,29 @@ const _mint = Color(0xFFEDEAFF);
 const _cream = Color(0xFFF3F5FA);
 const _orange = Color(0xFFFF6B57);
 
+_AppShellState? _activeShell;
+_CreateEventPageState? _activeRouteDraft;
+
+Future<void> _goHome(BuildContext context) async {
+  final draft = _activeRouteDraft;
+  if (draft != null && !await draft._confirmLeave()) return;
+  if (!context.mounted) return;
+  if (await _activeShell?._selectHome() == false) return;
+  if (!context.mounted) return;
+  Navigator.of(context).popUntil((route) => route.isFirst);
+}
+
+class _HomeAction extends StatelessWidget {
+  const _HomeAction();
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: context.tr('returnHome'),
+    onPressed: () => _goHome(context),
+    icon: const Icon(Icons.home_outlined),
+  );
+}
+
 class DaziApp extends StatefulWidget {
   const DaziApp({super.key, this.home});
   final Widget? home;
@@ -312,12 +335,52 @@ class _AppShellState extends State<AppShell> {
   double? _latitude;
   double? _longitude;
 
+  Future<bool> _selectHome() async {
+    if (_index == 2 && !await _createKey.currentState!._confirmLeave()) {
+      return false;
+    }
+    if (mounted) {
+      setState(() {
+        if (_index == 2) _createKey = GlobalKey<_CreateEventPageState>();
+        _index = 0;
+      });
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    return true;
+  }
+
+  Future<void> _selectTab(int value) async {
+    if (_index == 2 &&
+        value != 2 &&
+        !await _createKey.currentState!._confirmLeave()) {
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        if (_index == 2 && value != 2) {
+          _createKey = GlobalKey<_CreateEventPageState>();
+        }
+        _index = value;
+      });
+    }
+  }
+
+  GlobalKey<_CreateEventPageState> _createKey =
+      GlobalKey<_CreateEventPageState>();
+
   @override
   void initState() {
     super.initState();
+    _activeShell = this;
     _events = List<EventItem>.of(widget.initialEvents ?? const []);
     _eventsLoading = widget.loadRemoteEvents;
     if (widget.loadRemoteEvents || widget.eventLoader != null) _loadEvents();
+  }
+
+  @override
+  void dispose() {
+    if (identical(_activeShell, this)) _activeShell = null;
+    super.dispose();
   }
 
   Future<void> _loadEvents() async {
@@ -511,6 +574,7 @@ class _AppShellState extends State<AppShell> {
             : null,
       ),
       CreateEventPage(
+        key: _createKey,
         onCreated: _created,
         loadRemoteData: widget.loadRemoteEvents,
       ),
@@ -545,7 +609,7 @@ class _AppShellState extends State<AppShell> {
           context.tr('messages'),
           context.tr('profile'),
         ],
-        onSelected: (value) => setState(() => _index = value),
+        onSelected: _selectTab,
       ),
     );
   }
@@ -1658,17 +1722,18 @@ class _EventDetailPageState extends State<EventDetailPage> {
             expandedHeight: 235,
             pinned: true,
             backgroundColor: _mint,
-            leading: IconButton.filledTonal(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back),
-            ),
             actions: [
               IconButton.filledTonal(
                 onPressed: () => setState(() => _saved = !_saved),
                 icon: Icon(_saved ? Icons.bookmark : Icons.bookmark_border),
               ),
+              const _HomeAction(),
               const SizedBox(width: 12),
             ],
+            leading: IconButton.filledTonal(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back),
+            ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 alignment: Alignment.center,
@@ -2037,6 +2102,48 @@ class CreateEventPage extends StatefulWidget {
 }
 
 class _CreateEventPageState extends State<CreateEventPage> {
+  bool _allowLeave = false;
+  bool _selectionEdited = false;
+
+  bool get _hasDraft =>
+      _title.text.trim().isNotEmpty ||
+      _description.text.trim().isNotEmpty ||
+      _meetingPoint.text.trim().isNotEmpty ||
+      _price.text != '0' ||
+      _startsAt != null ||
+      _endsAt != null ||
+      _step != 0 ||
+      _capacity != 6 ||
+      !_approval ||
+      _selectionEdited ||
+      _sourceId != null;
+
+  Future<bool> _confirmLeave() async {
+    if (_allowLeave || !_hasDraft) return true;
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(dialogContext.tr('discardDraftTitle')),
+        content: Text(dialogContext.tr('discardDraftMessage')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(dialogContext.tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(dialogContext.tr('discardDraft')),
+          ),
+        ],
+      ),
+    );
+    if (leave == true && mounted) {
+      setState(() => _allowLeave = true);
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    return leave == true;
+  }
+
   bool _loadingSource = false;
   bool _sourceFailed = false;
   bool _sourceInitialized = false;
@@ -2128,6 +2235,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.sourceEventId != null) _activeRouteDraft = this;
+    for (final controller in [_title, _description, _meetingPoint, _price]) {
+      controller.addListener(_refreshLeaveGuard);
+    }
     _categoryFuture = widget.loadRemoteData
         ? CategoryService.load()
         : Future.value(const []);
@@ -2136,8 +2247,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
         : Future.value(const []);
   }
 
+  void _refreshLeaveGuard() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    if (identical(_activeRouteDraft, this)) _activeRouteDraft = null;
     _title.dispose();
     _description.dispose();
     _meetingPoint.dispose();
@@ -2146,81 +2262,89 @@ class _CreateEventPageState extends State<CreateEventPage> {
   }
 
   @override
-  Widget build(BuildContext context) => _loadingSource
-      ? const Center(child: CircularProgressIndicator())
-      : _sourceFailed
-      ? _LoadFailure(
-          onRetry: () {
-            _categoryFuture = CategoryService.load();
-            _regionFuture = RegionService.load();
-            if (_sourceId != null) {
-              _loadSource(_sourceId!);
-            } else {
-              setState(() => _sourceFailed = false);
-              _chooseSource();
-            }
-          },
-        )
-      : Column(
-          children: [
-            PagePadding(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '发布活动',
-                      style: Theme.of(context).textTheme.headlineLarge,
-                    ),
-                  ),
-                  Text(
-                    '${_step + 1}/3',
-                    style: const TextStyle(
-                      color: _green,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            LinearProgressIndicator(value: (_step + 1) / 3, minHeight: 3),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  child: [_basic(), _schedule(), _rules()][_step],
-                ),
-              ),
-            ),
-            SafeArea(
-              child: Container(
-                color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+  Widget build(BuildContext context) => PopScope(
+    canPop: _allowLeave || !_hasDraft,
+    onPopInvokedWithResult: (didPop, _) async {
+      if (didPop || _allowLeave || !_hasDraft) return;
+      if (!await _confirmLeave() || !context.mounted) return;
+      Navigator.of(context).pop();
+    },
+    child: _loadingSource
+        ? const Center(child: CircularProgressIndicator())
+        : _sourceFailed
+        ? _LoadFailure(
+            onRetry: () {
+              _categoryFuture = CategoryService.load();
+              _regionFuture = RegionService.load();
+              if (_sourceId != null) {
+                _loadSource(_sourceId!);
+              } else {
+                setState(() => _sourceFailed = false);
+                _chooseSource();
+              }
+            },
+          )
+        : Column(
+            children: [
+              PagePadding(
                 child: Row(
                   children: [
-                    if (_step > 0)
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => setState(() => _step--),
-                          child: const Text('上一步'),
-                        ),
-                      ),
-                    if (_step > 0) const SizedBox(width: 12),
                     Expanded(
-                      flex: 2,
-                      child: FilledButton(
-                        onPressed: _publishing ? null : _next,
-                        child: _publishing
-                            ? const _ButtonProgress(label: '发布中…')
-                            : Text(_step == 2 ? '确认发布' : '下一步'),
+                      child: Text(
+                        '发布活动',
+                        style: Theme.of(context).textTheme.headlineLarge,
+                      ),
+                    ),
+                    Text(
+                      '${_step + 1}/3',
+                      style: const TextStyle(
+                        color: _green,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
-        );
+              LinearProgressIndicator(value: (_step + 1) / 3, minHeight: 3),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: [_basic(), _schedule(), _rules()][_step],
+                  ),
+                ),
+              ),
+              SafeArea(
+                child: Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                  child: Row(
+                    children: [
+                      if (_step > 0)
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => setState(() => _step--),
+                            child: const Text('上一步'),
+                          ),
+                        ),
+                      if (_step > 0) const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          onPressed: _publishing ? null : _next,
+                          child: _publishing
+                              ? const _ButtonProgress(label: '发布中…')
+                              : Text(_step == 2 ? '确认发布' : '下一步'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+  );
 
   Widget _basic() => Column(
     key: const ValueKey(0),
@@ -2283,6 +2407,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 value: _majorCategoryId,
                 items: majors,
                 onChanged: (value) => setState(() {
+                  _selectionEdited = true;
                   _majorCategoryId = value;
                   _leafCategoryId = null;
                 }),
@@ -2292,7 +2417,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 label: '小分类',
                 value: _leafCategoryId,
                 items: leaves,
-                onChanged: (value) => setState(() => _leafCategoryId = value),
+                onChanged: (value) => setState(() {
+                  _selectionEdited = true;
+                  _leafCategoryId = value;
+                }),
               ),
             ],
           );
@@ -2396,6 +2524,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     )
                     .toList(),
                 onChanged: (code) => setState(() {
+                  _selectionEdited = true;
                   _cityCode = code;
                   _districtCode = null;
                 }),
@@ -2416,7 +2545,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       ),
                     )
                     .toList(),
-                onChanged: (code) => setState(() => _districtCode = code),
+                onChanged: (code) => setState(() {
+                  _selectionEdited = true;
+                  _districtCode = code;
+                }),
               ),
             ],
           );
@@ -2624,6 +2756,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
       return;
     }
     if (!mounted) return;
+    _allowLeave = true;
     widget.onCreated(
       EventItem(
         id: DateTime.now().millisecondsSinceEpoch,
@@ -2659,6 +2792,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
       _step = 0;
       _startsAt = null;
       _endsAt = null;
+      _selectionEdited = false;
     });
   }
 }
@@ -3042,6 +3176,7 @@ class _ChatPageState extends State<ChatPage> {
       ),
       actions: [
         IconButton(onPressed: () {}, icon: const Icon(Icons.more_horiz)),
+        const _HomeAction(),
       ],
     ),
     body: Column(
@@ -3392,7 +3527,10 @@ Future<void> _openSimilarEvent(BuildContext context, String eventId) async {
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (routeContext) => Scaffold(
-        appBar: AppBar(title: Text(routeContext.tr('publishSimilar'))),
+        appBar: AppBar(
+          title: Text(routeContext.tr('publishSimilar')),
+          actions: const [_HomeAction()],
+        ),
         body: CreateEventPage(
           sourceEventId: eventId,
           onCreated: (_) {
@@ -3443,6 +3581,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
       title: Text(
         widget.selectSource ? context.tr('createFromPrevious') : '我的活动',
       ),
+      actions: const [_HomeAction()],
       bottom: widget.selectSource
           ? null
           : TabBar(
@@ -3580,6 +3719,7 @@ class _MyActivityRecordPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(isOrganizer ? context.tr('activityManagement') : '活动记录'),
+        actions: const [_HomeAction()],
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -3845,7 +3985,7 @@ class _ProfileInfoPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(title)),
+    appBar: AppBar(title: Text(title), actions: const [_HomeAction()]),
     body: Padding(
       padding: const EdgeInsets.all(20),
       child: _InfoBox(text: message),
@@ -3943,7 +4083,7 @@ class _SafetyCenterPageState extends State<SafetyCenterPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('安全中心')),
+    appBar: AppBar(title: const Text('安全中心'), actions: const [_HomeAction()]),
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: [
