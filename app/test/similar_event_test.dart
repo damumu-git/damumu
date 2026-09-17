@@ -40,6 +40,19 @@ void main() {
                 'parent_id': 'major',
                 'name_zh_cn': 'Leaf',
               },
+              {
+                'id': 'other-major',
+                'code': 'other-major',
+                'level': 1,
+                'name_zh_cn': 'Other major',
+              },
+              {
+                'id': 'other-leaf',
+                'code': 'other-leaf',
+                'level': 2,
+                'parent_id': 'other-major',
+                'name_zh_cn': 'Other leaf',
+              },
             ];
           case '/api/v1/regions':
             data = [
@@ -92,6 +105,31 @@ void main() {
         expect(find.text('Previous title'), findsOneWidget);
         expect(find.text('Previous description'), findsOneWidget);
         expect(find.textContaining('Leaf'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('major-category-major')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('major-category-other-major')),
+          findsOneWidget,
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('major-category-other-major')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Other leaf'), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('major-category-major')));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Leaf'), findsOneWidget);
+        await tester.binding.setSurfaceSize(const Size(390, 844));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('major-category-other-major')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.binding.setSurfaceSize(const Size(800, 1200));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('下一步'));
         await tester.pumpAndSettle();
         expect(find.text('Private meeting point'), findsOneWidget);

@@ -2401,19 +2401,78 @@ class _CreateEventPageState extends State<CreateEventPage> {
           final selected = leaves.where((item) => item.id == _leafCategoryId);
           if (selected.isNotEmpty) _category = selected.first.name;
           return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _CategoryDropdown(
-                label: '大分类',
-                value: _majorCategoryId,
-                items: majors,
-                onChanged: (value) => setState(() {
-                  _selectionEdited = true;
-                  _majorCategoryId = value;
-                  _leafCategoryId = null;
-                }),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  const spacing = 8.0;
+                  final columns = constraints.maxWidth >= 600 ? 4 : 2;
+                  final width =
+                      (constraints.maxWidth - spacing * (columns - 1)) /
+                      columns;
+                  return Wrap(
+                    spacing: spacing,
+                    runSpacing: spacing,
+                    children: majors.map((major) {
+                      final isSelected = major.id == _majorCategoryId;
+                      return SizedBox(
+                        width: width,
+                        child: Semantics(
+                          button: true,
+                          selected: isSelected,
+                          child: Material(
+                            color: isSelected ? _mint : Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              side: BorderSide(
+                                color: isSelected
+                                    ? _green
+                                    : const Color(0xFFE7E5DF),
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                            ),
+                            child: InkWell(
+                              key: ValueKey('major-category-${major.id}'),
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () => setState(() {
+                                _selectionEdited = true;
+                                _majorCategoryId = major.id;
+                                _leafCategoryId = null;
+                              }),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 16,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(major.icon),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        major.name,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: isSelected ? _green : _ink,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
               ),
               const SizedBox(height: 10),
               _CategoryDropdown(
+                key: ValueKey('leaf-category-$_majorCategoryId'),
                 label: '小分类',
                 value: _leafCategoryId,
                 items: leaves,
@@ -2899,6 +2958,7 @@ class _CategoryDropdown extends StatelessWidget {
     required this.value,
     required this.items,
     required this.onChanged,
+    super.key,
   });
 
   final String label;
