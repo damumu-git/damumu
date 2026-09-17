@@ -108,6 +108,20 @@ class ActivityPage {
 }
 
 class EventService {
+  static Future<Map<String, dynamic>> detail(
+    String token,
+    String eventId,
+  ) async {
+    final response = await http
+        .get(
+          Uri.parse('$_apiBase/events/$eventId'),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 10));
+    final data = _decodeResponse(response, '活动暂时无法加载，请稍后再试')['data'];
+    return (data['item'] as Map).cast<String, dynamic>();
+  }
+
   static Future<ActivityPage> list({
     double? latitude,
     double? longitude,

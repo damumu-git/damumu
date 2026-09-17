@@ -2025,8 +2025,10 @@ class CreateEventPage extends StatefulWidget {
   const CreateEventPage({
     required this.onCreated,
     this.loadRemoteData = true,
+    this.sourceEventId,
     super.key,
   });
+  final String? sourceEventId;
   final ValueChanged<EventItem> onCreated;
   final bool loadRemoteData;
 
@@ -2035,6 +2037,74 @@ class CreateEventPage extends StatefulWidget {
 }
 
 class _CreateEventPageState extends State<CreateEventPage> {
+  bool _loadingSource = false;
+  bool _sourceFailed = false;
+  bool _sourceInitialized = false;
+  String? _sourceId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_sourceInitialized) {
+      _sourceInitialized = true;
+      if (widget.sourceEventId != null) _loadSource(widget.sourceEventId!);
+    }
+  }
+
+  Future<void> _loadSource(String id) async {
+    setState(() {
+      _sourceId = id;
+      _loadingSource = true;
+      _sourceFailed = false;
+    });
+    try {
+      final auth = AuthScope.of(context);
+      final data = await EventService.detail(auth.token!, id);
+      final categories = await _categoryFuture;
+      final regions = await _regionFuture;
+      if (!mounted) return;
+      if (data['organizer_user_id'] != auth.user?.id) {
+        throw const EventServiceException('');
+      }
+      final category = categories.where((c) => c.id == data['category_id']);
+      setState(() {
+        _title.text = data['title'] as String? ?? '';
+        _description.text = data['description'] as String? ?? '';
+        _leafCategoryId = category.isEmpty ? null : category.first.id;
+        _majorCategoryId = category.isEmpty ? null : category.first.parentId;
+        _cityCode = regions.any((r) => r.code == data['city_code'])
+            ? data['city_code'] as String
+            : null;
+        _districtCode = regions.any((r) => r.code == data['district_code'])
+            ? data['district_code'] as String
+            : null;
+        _meetingPoint.text = data['place_name'] as String? ?? '';
+        _price.text = '${data['price_amount'] ?? 0}';
+        _capacity = (data['capacity'] as num).toInt();
+        _approval = data['approval_mode'] == 'manual';
+        _startsAt = null;
+        _endsAt = null;
+        _step = 0;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _sourceFailed = true);
+    } finally {
+      if (mounted) setState(() => _loadingSource = false);
+    }
+  }
+
+  Future<void> _chooseSource() async {
+    final id = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => MyActivitiesPage(
+          token: AuthScope.of(context).token!,
+          selectSource: true,
+        ),
+      ),
+    );
+    if (id != null && mounted) await _loadSource(id);
+  }
+
   int _step = 0;
   final _title = TextEditingController();
   final _description = TextEditingController();
@@ -2076,71 +2146,93 @@ class _CreateEventPageState extends State<CreateEventPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      PagePadding(
-        child: Row(
+  Widget build(BuildContext context) => _loadingSource
+      ? const Center(child: CircularProgressIndicator())
+      : _sourceFailed
+      ? _LoadFailure(
+          onRetry: () {
+            _categoryFuture = CategoryService.load();
+            _regionFuture = RegionService.load();
+            if (_sourceId != null) {
+              _loadSource(_sourceId!);
+            } else {
+              setState(() => _sourceFailed = false);
+              _chooseSource();
+            }
+          },
+        )
+      : Column(
           children: [
-            Expanded(
-              child: Text(
-                '发布活动',
-                style: Theme.of(context).textTheme.headlineLarge,
+            PagePadding(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '发布活动',
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                  ),
+                  Text(
+                    '${_step + 1}/3',
+                    style: const TextStyle(
+                      color: _green,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Text(
-              '${_step + 1}/3',
-              style: const TextStyle(
-                color: _green,
-                fontWeight: FontWeight.w800,
+            LinearProgressIndicator(value: (_step + 1) / 3, minHeight: 3),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: [_basic(), _schedule(), _rules()][_step],
+                ),
+              ),
+            ),
+            SafeArea(
+              child: Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                child: Row(
+                  children: [
+                    if (_step > 0)
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => setState(() => _step--),
+                          child: const Text('上一步'),
+                        ),
+                      ),
+                    if (_step > 0) const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        onPressed: _publishing ? null : _next,
+                        child: _publishing
+                            ? const _ButtonProgress(label: '发布中…')
+                            : Text(_step == 2 ? '确认发布' : '下一步'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
-        ),
-      ),
-      LinearProgressIndicator(value: (_step + 1) / 3, minHeight: 3),
-      Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: [_basic(), _schedule(), _rules()][_step],
-          ),
-        ),
-      ),
-      SafeArea(
-        child: Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-          child: Row(
-            children: [
-              if (_step > 0)
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => setState(() => _step--),
-                    child: const Text('上一步'),
-                  ),
-                ),
-              if (_step > 0) const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: FilledButton(
-                  onPressed: _publishing ? null : _next,
-                  child: _publishing
-                      ? const _ButtonProgress(label: '发布中…')
-                      : Text(_step == 2 ? '确认发布' : '下一步'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ],
-  );
+        );
 
   Widget _basic() => Column(
     key: const ValueKey(0),
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
+      OutlinedButton.icon(
+        onPressed: _chooseSource,
+        icon: const Icon(Icons.copy_outlined),
+        label: Text(context.tr('createFromPrevious')),
+      ),
+      Text(context.tr('copyEventHint')),
+      const SizedBox(height: 20),
       const Text(
         '先介绍一下活动',
         style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
@@ -2173,7 +2265,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
             return const Text('暂时无法加载分类，请确认 API 已启动');
           }
           final majors = categories.where((item) => item.level == 1).toList();
-          _majorCategoryId ??= majors.first.id;
+          if (!majors.any((item) => item.id == _majorCategoryId)) {
+            _majorCategoryId = majors.first.id;
+          }
           var leaves = categories
               .where((item) => item.parentId == _majorCategoryId)
               .toList();
@@ -3294,8 +3388,32 @@ class ProfilePage extends StatelessWidget {
   }
 }
 
+Future<void> _openSimilarEvent(BuildContext context, String eventId) async {
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (routeContext) => Scaffold(
+        appBar: AppBar(title: Text(routeContext.tr('publishSimilar'))),
+        body: CreateEventPage(
+          sourceEventId: eventId,
+          onCreated: (_) {
+            Navigator.of(routeContext).pop();
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(context.tr('eventCreated'))));
+          },
+        ),
+      ),
+    ),
+  );
+}
+
 class MyActivitiesPage extends StatefulWidget {
-  const MyActivitiesPage({required this.token, super.key});
+  const MyActivitiesPage({
+    required this.token,
+    this.selectSource = false,
+    super.key,
+  });
+  final bool selectSource;
   final String token;
 
   @override
@@ -3322,14 +3440,18 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('我的活动'),
-      bottom: TabBar(
-        controller: _tabs,
-        tabs: const [
-          Tab(text: '我发布的'),
-          Tab(text: '我参加的'),
-        ],
+      title: Text(
+        widget.selectSource ? context.tr('createFromPrevious') : '我的活动',
       ),
+      bottom: widget.selectSource
+          ? null
+          : TabBar(
+              controller: _tabs,
+              tabs: const [
+                Tab(text: '我发布的'),
+                Tab(text: '我参加的'),
+              ],
+            ),
     ),
     body: FutureBuilder<List<Map<String, dynamic>>>(
       future: _future,
@@ -3351,6 +3473,13 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
         final joined = rows
             .where((row) => row['member_role'] != 'organizer')
             .toList();
+        if (widget.selectSource) {
+          return _activityList(
+            organized,
+            context.tr('noPreviousEvents'),
+            isOrganizer: true,
+          );
+        }
         return TabBarView(
           controller: _tabs,
           children: [
@@ -3399,16 +3528,28 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                 '${_formatActivityDate(startsAt)} · ${price == 0 ? '免费' : '预计 ₩$price/人'}',
               ),
               isThreeLine: true,
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => _MyActivityRecordPage(
-                    activity: row,
-                    token: widget.token,
-                    isOrganizer: isOrganizer,
+              trailing: isOrganizer && !widget.selectSource
+                  ? TextButton(
+                      onPressed: () =>
+                          _openSimilarEvent(context, '${row['id']}'),
+                      child: Text(context.tr('publishSimilar')),
+                    )
+                  : const Icon(Icons.chevron_right),
+              onTap: () {
+                if (widget.selectSource) {
+                  Navigator.of(context).pop('${row['id']}');
+                  return;
+                }
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => _MyActivityRecordPage(
+                      activity: row,
+                      token: widget.token,
+                      isOrganizer: isOrganizer,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           );
         },
@@ -3470,6 +3611,11 @@ class _MyActivityRecordPage extends StatelessWidget {
             ),
           ),
           if (isOrganizer) ...[
+            FilledButton.icon(
+              onPressed: () => _openSimilarEvent(context, '${activity['id']}'),
+              icon: const Icon(Icons.copy_outlined),
+              label: Text(context.tr('publishSimilar')),
+            ),
             const Divider(height: 34),
             _OrganizerApplications(token: token, eventId: '${activity['id']}'),
           ],

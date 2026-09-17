@@ -42,6 +42,11 @@ const languageLabels = {'zh': '中文', 'en': 'English', 'ko': '한국어'};
 
 const _strings = <String, Map<String, String>>{
   'zh': {
+    'createFromPrevious': '从过往活动中发布',
+    'publishSimilar': '发布同类活动',
+    'copyEventHint': '复用活动内容，开始和结束日期时间需重新选择。',
+    'noPreviousEvents': '暂无已发布的活动',
+    'eventCreated': '活动发布成功',
     'pastActivity': '过去活动',
     'buildErrorTitle': '页面暂时无法显示',
     'buildErrorMessage': '请重试以重新打开页面。若仍未恢复，请重新启动应用。',
@@ -115,6 +120,12 @@ const _strings = <String, Map<String, String>>{
     'retry': '再试一次',
   },
   'en': {
+    'createFromPrevious': 'Create from a previous event',
+    'publishSimilar': 'Publish similar event',
+    'copyEventHint':
+        'Reuse event details and select new start and end dates and times.',
+    'noPreviousEvents': 'No previously published events',
+    'eventCreated': 'Event published',
     'pastActivity': 'Past event',
     'buildErrorTitle': 'This page could not be displayed',
     'buildErrorMessage':
@@ -190,6 +201,11 @@ const _strings = <String, Map<String, String>>{
     'retry': 'Try again',
   },
   'ko': {
+    'createFromPrevious': '이전 활동으로 만들기',
+    'publishSimilar': '비슷한 활동 게시',
+    'copyEventHint': '활동 내용을 가져오고 시작 및 종료 날짜와 시간을 새로 선택하세요.',
+    'noPreviousEvents': '게시한 활동이 없습니다',
+    'eventCreated': '활동이 게시되었습니다',
     'pastActivity': '지난 활동',
     'buildErrorTitle': '페이지를 표시할 수 없어요',
     'buildErrorMessage': '다시 시도해 주세요. 문제가 계속되면 앱을 다시 시작해 주세요.',
