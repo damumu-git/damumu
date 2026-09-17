@@ -10,15 +10,14 @@ API_BASE_URL="${API_BASE_URL:-http://localhost:${API_PORT}/api/v1}"
 POSTGRES_HOST="${DAMUMU_POSTGRES_HOST:-100.66.109.44}"
 POSTGRES_DATABASE="${DAMUMU_POSTGRES_DATABASE:-damumu}"
 POSTGRES_USERNAME="${DAMUMU_POSTGRES_USERNAME:-postgres}"
+if [[ -z "${DAMUMU_POSTGRES_PASSWORD:-}" && -f "$ROOT_DIR/dev.local.sh" ]]; then
+  source "$ROOT_DIR/dev.local.sh"
+fi
 POSTGRES_PASSWORD="${DAMUMU_POSTGRES_PASSWORD:-}"
 SERVICES_ONLY=false
 
-if [[ -z "$POSTGRES_PASSWORD" ]]; then
-  read -r -s -p "$POSTGRES_HOST:5432/$POSTGRES_DATABASE PostgreSQL password: " POSTGRES_PASSWORD
-  printf '\n'
-fi
 [[ -n "$POSTGRES_PASSWORD" ]] || {
-  echo "错误：PostgreSQL 密码不能为空。" >&2
+  echo "错误：请在 dev.local.sh 中设置 DAMUMU_POSTGRES_PASSWORD，或设置同名环境变量。" >&2
   exit 1
 }
 DATABASE_CONNECTION="Host=${POSTGRES_HOST};Port=5432;Database=${POSTGRES_DATABASE};Username=${POSTGRES_USERNAME};Password=${POSTGRES_PASSWORD};SSL Mode=Disable"

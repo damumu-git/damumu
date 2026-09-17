@@ -83,7 +83,14 @@ docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 ```
 
 非交互执行时可提前设置仅存在于当前终端进程的
-`DAMUMU_POSTGRES_PASSWORD`。不要把密码写入 Git 配置或脚本。
+`DAMUMU_POSTGRES_PASSWORD`。不要把密码写入 Git 配置或受版本控制的脚本。
+
+## Bash 开发启动
+
+`./dev.sh -d chrome --web-port 3000` 启动时不再询问密码；默认读取仓库根目录的
+`dev.local.sh`，其中设置 `DAMUMU_POSTGRES_PASSWORD='你的密码'`。
+该文件已被 Git 忽略，只在本机保存；换机器后需要重新配置。
+已有的同名环境变量优先。未配置密码时脚本会报错退出。
 
 ## 用户认证与头像
 
