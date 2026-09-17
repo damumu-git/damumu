@@ -1146,7 +1146,7 @@ class _HomePageState extends State<HomePage> {
           sliver: widget.loading
               ? const SliverToBoxAdapter(child: _EventListSkeleton())
               : widget.loadFailed
-              ? SliverToBoxAdapter(child: _LoadFailure(onRetry: widget.onRetry))
+              ? SliverToBoxAdapter(child: LoadFailure(onRetry: widget.onRetry))
               : _visibleEvents.isEmpty
               ? SliverToBoxAdapter(child: _EmptySearch(onClear: _clearFilters))
               : SliverList.separated(
@@ -1520,7 +1520,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
           child: widget.loading
               ? const _EventListSkeleton()
               : widget.loadFailed
-              ? _LoadFailure(onRetry: widget.onRetry ?? () {})
+              ? LoadFailure(onRetry: widget.onRetry ?? () {})
               : _map
               ? MapPlaceholder(events: visible, onOpen: widget.onOpen)
               : RefreshIndicator(
@@ -2284,7 +2284,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
     child: _loadingSource
         ? const Center(child: CircularProgressIndicator())
         : _sourceFailed
-        ? _LoadFailure(
+        ? LoadFailure(
             onRetry: () {
               _categoryFuture = CategoryService.load();
               _regionFuture = RegionService.load();
@@ -2390,7 +2390,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
             return const _InlineLoading(label: '正在加载活动分类…');
           }
           if (snapshot.hasError) {
-            return _LoadFailure(
+            return LoadFailure(
               onRetry: () => setState(() {
                 _categoryFuture = CategoryService.load();
               }),
@@ -2599,9 +2599,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
       'social',
       'other',
     };
-    if (illustrated.contains(category.iconKey)) {
+    // Older category API responses may not include icon_key yet.
+    final assetKey = illustrated.contains(category.iconKey)
+        ? category.iconKey
+        : category.code;
+    if (illustrated.contains(assetKey)) {
       return Image.asset(
-        'assets/category_illustrations/${category.iconKey}.png',
+        'assets/category_illustrations/$assetKey.png',
         fit: BoxFit.contain,
         errorBuilder: (_, error, stackTrace) => Center(
           child: Text(category.icon, style: const TextStyle(fontSize: 34)),
@@ -2657,7 +2661,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
             return const _InlineLoading(label: '正在加载地区…');
           }
           if (snapshot.hasError) {
-            return _LoadFailure(
+            return LoadFailure(
               onRetry: () => setState(() {
                 _regionFuture = RegionService.load();
               }),
@@ -3026,47 +3030,73 @@ class _InlineLoading extends StatelessWidget {
   );
 }
 
-class _LoadFailure extends StatelessWidget {
-  const _LoadFailure({required this.onRetry});
+class LoadFailure extends StatelessWidget {
+  const LoadFailure({required this.onRetry, super.key});
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              color: _mint,
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: const Icon(Icons.cloud_off_rounded, size: 42, color: _green),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final compact = constraints.maxWidth < 180;
+      return Center(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 4 : 32,
+            vertical: compact ? 8 : 28,
           ),
-          const SizedBox(height: 22),
-          Text(
-            context.tr('loadErrorTitle'),
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: compact ? 48 : 88,
+                height: compact ? 48 : 88,
+                decoration: BoxDecoration(
+                  color: _mint,
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Icon(
+                  Icons.cloud_off_rounded,
+                  size: compact ? 24 : 42,
+                  color: _green,
+                ),
+              ),
+              SizedBox(height: compact ? 8 : 22),
+              if (!compact)
+                Text(
+                  context.tr('loadErrorTitle'),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              if (!compact) const SizedBox(height: 8),
+              if (!compact)
+                Text(
+                  context.tr('loadErrorMessage'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey.shade600, height: 1.5),
+                ),
+              SizedBox(height: compact ? 8 : 22),
+              if (compact)
+                IconButton(
+                  onPressed: onRetry,
+                  tooltip: context.tr('retry'),
+                  icon: const Icon(Icons.refresh_rounded),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 24,
+                    minHeight: 24,
+                  ),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text(context.tr('retry')),
+                ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            context.tr('loadErrorMessage'),
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade600, height: 1.5),
-          ),
-          const SizedBox(height: 22),
-          FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: Text(context.tr('retry')),
-          ),
-        ],
-      ),
-    ),
+        ),
+      );
+    },
   );
 }
 
@@ -3788,7 +3818,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return _LoadFailure(
+          return LoadFailure(
             onRetry: () => setState(() {
               _future = EventService.myActivities(widget.token);
             }),
@@ -4001,7 +4031,7 @@ class _OrganizerApplicationsState extends State<_OrganizerApplications> {
             if (snapshot.connectionState == ConnectionState.waiting)
               const Center(child: CircularProgressIndicator())
             else if (snapshot.hasError)
-              _LoadFailure(onRetry: _reload)
+              LoadFailure(onRetry: _reload)
             else if ((snapshot.data ?? const []).isEmpty)
               _InfoBox(text: context.tr('noPendingApplications'))
             else

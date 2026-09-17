@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -8,6 +9,29 @@ import 'package:zaihandazi/auth.dart';
 import 'package:zaihandazi/main.dart';
 
 void main() {
+  testWidgets('retry state fits a narrow panel', (tester) async {
+    var retries = 0;
+    for (final width in [36.0, 70.0, 120.0, 179.0, 180.0, 240.0]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: width,
+                height: 180,
+                child: LoadFailure(onRetry: () => retries++),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'width $width');
+    }
+    await tester.tap(find.byIcon(Icons.refresh_rounded));
+    expect(retries, 1);
+  });
+
   testWidgets('shows six featured categories, more, and custom other input', (
     tester,
   ) async {
@@ -28,9 +52,10 @@ void main() {
           for (var index = 1; index <= 7; index++) ...[
             {
               'id': 'major$index',
-              'code': 'major$index',
+              'code': index == 1 ? 'food' : 'major$index',
               'level': 1,
               'name_zh_cn': '分类$index',
+              'icon': '🍜',
               'is_featured': index <= 6,
             },
             {
@@ -81,6 +106,20 @@ void main() {
         find.byKey(const ValueKey('major-category-major6')),
         findsOneWidget,
       );
+      final foodImage = tester.widget<Image>(
+        find.descendant(
+          of: find.byKey(const ValueKey('major-category-major1')),
+          matching: find.byType(Image),
+        ),
+      );
+      expect(
+        (foodImage.image as AssetImage).assetName,
+        'assets/category_illustrations/food.png',
+      );
+      final foodBytes = await rootBundle.load(
+        'assets/category_illustrations/food.png',
+      );
+      expect(foodBytes.lengthInBytes, greaterThan(1000));
       expect(find.byKey(const ValueKey('major-category-major7')), findsNothing);
       expect(
         find.byKey(const ValueKey('major-category-other')),
