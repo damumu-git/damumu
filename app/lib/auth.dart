@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' as parser;
 import 'package:image/image.dart' as img;
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
@@ -121,7 +122,12 @@ class AuthApi {
       Uri.parse('$_apiBase/me/avatar'),
     )..headers['Authorization'] = 'Bearer $token';
     request.files.add(
-      http.MultipartFile.fromBytes('avatar', jpeg, filename: 'avatar.jpg'),
+      http.MultipartFile.fromBytes(
+        'avatar',
+        jpeg,
+        filename: 'avatar.jpg',
+        contentType: parser.MediaType('image', 'jpeg'),
+      ),
     );
     final response = await http.Response.fromStream(await request.send());
     final decoded = jsonDecode(utf8.decode(response.bodyBytes));
@@ -726,9 +732,18 @@ Future<void> _pickAvatar(
   final invalidImage = sheetContext.tr('invalidImage');
   final avatarTooLarge = sheetContext.tr('avatarTooLarge');
   final networkUnavailable = sheetContext.tr('networkUnavailable');
+  var uploading = false;
   try {
-    final picked = await ImagePicker().pickImage(source: source);
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      maxWidth: 1536,
+      maxHeight: 1536,
+      imageQuality: 90,
+    );
     if (picked == null) return;
+    if (await picked.length() > 128 * 1024 * 1024) {
+      throw const FormatException('largePhotoProcessingFailed');
+    }
     if (!sheetContext.mounted) return;
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
@@ -752,6 +767,9 @@ Future<void> _pickAvatar(
         ),
         WebUiSettings(
           context: sheetContext,
+          viewwMode: WebViewMode.mode_1,
+          guides: true,
+          rotatable: true,
           size: CropperSize(
             width: MediaQuery.sizeOf(
               sheetContext,
@@ -773,18 +791,73 @@ Future<void> _pickAvatar(
     final decoded = img.decodeImage(await cropped.readAsBytes());
     if (decoded == null) throw Exception(invalidImage);
     final square = img.copyResizeCropSquare(decoded, size: 512);
-    final bytes = Uint8List.fromList(img.encodeJpg(square, quality: 86));
+    var bytes = Uint8List.fromList(img.encodeJpg(square, quality: 86));
     if (bytes.length > 1024 * 1024) {
       throw Exception(avatarTooLarge);
     }
-    await auth.updateAvatar(bytes);
+    if (!sheetContext.mounted) return;
+    final confirmed = await showDialog<Uint8List>(
+      context: sheetContext,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, updatePreview) => AlertDialog(
+          title: Text(dialogContext.tr('avatarPreview')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipOval(
+                child: Image.memory(
+                  bytes,
+                  width: 220,
+                  height: 220,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => updatePreview(() {
+                  final image = img.decodeJpg(bytes);
+                  if (image != null) {
+                    bytes = Uint8List.fromList(
+                      img.encodeJpg(img.flipHorizontal(image), quality: 86),
+                    );
+                  }
+                }),
+                icon: const Icon(Icons.flip),
+                label: Text(dialogContext.tr('flipPhoto')),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(dialogContext.tr('cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, bytes),
+              child: Text(dialogContext.tr('confirmPhoto')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed == null) return;
+    if (confirmed.length > 1024 * 1024) throw Exception(avatarTooLarge);
+    uploading = true;
+    await auth.updateAvatar(confirmed);
     if (sheetContext.mounted) Navigator.pop(sheetContext);
   } on SocketException {
     if (!sheetContext.mounted) return;
     _showError(sheetContext, networkUnavailable);
   } catch (error) {
     if (!sheetContext.mounted) return;
-    _showError(sheetContext, error.toString().replaceFirst('Exception: ', ''));
+    final message = error.toString().replaceFirst('Exception: ', '');
+    _showError(
+      sheetContext,
+      uploading
+          ? sheetContext.tr('avatarUploadFailed')
+          : message == invalidImage || message == avatarTooLarge
+          ? message
+          : sheetContext.tr('largePhotoProcessingFailed'),
+    );
   }
 }
 

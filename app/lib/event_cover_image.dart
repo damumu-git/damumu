@@ -14,6 +14,16 @@ Uint8List prepareEventCover(Uint8List source) {
     throw const FormatException('eventCoverInvalid');
   }
   if (decoded == null) throw const FormatException('eventCoverInvalid');
+  return _encodeCover(decoded);
+}
+
+Uint8List flipEventCover(Uint8List source) {
+  final decoded = img.decodeJpg(source);
+  if (decoded == null) throw const FormatException('eventCoverInvalid');
+  return _encodeCover(img.flipHorizontal(decoded));
+}
+
+Uint8List _encodeCover(img.Image decoded) {
   final resized = img.copyResize(
     decoded,
     width: eventCoverWidth,

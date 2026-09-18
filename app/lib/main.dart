@@ -2275,8 +2275,17 @@ class _CreateEventPageState extends State<CreateEventPage> {
     if (_coverBusy) return;
     setState(() => _coverBusy = true);
     try {
-      final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 92,
+      );
       if (picked == null || !mounted) return;
+      if (await picked.length() > 128 * 1024 * 1024) {
+        throw const FormatException('largePhotoProcessingFailed');
+      }
+      if (!mounted) return;
       final cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 4, ratioY: 3),
@@ -2298,6 +2307,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
           ),
           WebUiSettings(
             context: context,
+            viewwMode: WebViewMode.mode_1,
+            guides: true,
+            rotatable: true,
             size: CropperSize(
               width: MediaQuery.sizeOf(context).width.clamp(320, 720).round(),
               height: 520,
@@ -2323,7 +2335,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
             content: Text(
               error is FormatException
                   ? context.tr(error.message)
-                  : context.tr('eventCoverInvalid'),
+                  : context.tr('largePhotoProcessingFailed'),
             ),
           ),
         );
@@ -2493,6 +2505,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
           ),
         ),
         const SizedBox(height: 8),
+        Text(
+          context
+              .tr('eventCoverReady')
+              .replaceFirst('{size}', '${(_coverBytes!.length / 1024).ceil()}'),
+          style: TextStyle(color: Colors.grey.shade600),
+        ),
+        const SizedBox(height: 8),
       ],
       Wrap(
         spacing: 8,
@@ -2506,6 +2525,16 @@ class _CreateEventPageState extends State<CreateEventPage> {
               ),
             ),
           ),
+          if (_coverBytes != null)
+            TextButton.icon(
+              onPressed: _coverBusy
+                  ? null
+                  : () => setState(
+                      () => _coverBytes = flipEventCover(_coverBytes!),
+                    ),
+              icon: const Icon(Icons.flip),
+              label: Text(context.tr('flipPhoto')),
+            ),
           if (_coverBytes != null)
             TextButton(
               onPressed: _coverBusy
