@@ -399,10 +399,12 @@ const categoryPayload = (category, overrides = {}) => ({
   descriptionEnUs: category.description_en_us || null,
   descriptionKoKr: category.description_ko_kr || null,
   icon: category.icon || null,
+  iconKey: category.icon_key || null,
   color: category.color || null,
   parentId: category.parent_id || null,
   sortOrder: Number(category.sort_order || 0),
   isActive: Boolean(category.is_active),
+  isFeatured: Boolean(category.is_featured),
   ...overrides,
 })
 
@@ -410,7 +412,8 @@ function CategoryEditor({ category, rows, onClose, onSaved }) {
   const [form, setForm] = useState(category ? categoryPayload(category) : {
     code: '', nameZhCn: '', nameEnUs: '', nameKoKr: '',
     descriptionZhCn: '', descriptionEnUs: '', descriptionKoKr: '',
-    icon: '✨', color: '#1F7A55', parentId: null, sortOrder: 10, isActive: true,
+    icon: '✨', iconKey: null, color: '#1F7A55', parentId: null,
+    sortOrder: 10, isActive: true, isFeatured: false,
   })
   const [status, setStatus] = useState('')
   const parents = rows.filter((row) => row.level === 1 && row.id !== category?.id)
@@ -432,6 +435,7 @@ function CategoryEditor({ category, rows, onClose, onSaved }) {
           <label>父级分类<select value={form.parentId ?? ''} onChange={(e) => update('parentId', e.target.value || null)}><option value="">无（作为大分类）</option>{parents.map((row) => <option key={row.id} value={row.id}>{'　'.repeat(row.level - 1)}{row.full_path}</option>)}</select></label>
           <label>唯一代码<input required pattern="[a-z0-9_]+" value={form.code} onChange={(e) => update('code', e.target.value.toLowerCase())} placeholder="例如 outdoor_hiking" /></label>
           <label>图标 Emoji<input value={form.icon ?? ''} onChange={(e) => update('icon', e.target.value)} /></label>
+          <label>插画资源键<input value={form.iconKey ?? ''} onChange={(e) => update('iconKey', e.target.value || null)} placeholder="例如 food；未提供时显示 Emoji" /></label>
           <label>主题颜色<input type="color" value={form.color || '#1F7A55'} onChange={(e) => update('color', e.target.value)} /></label>
           <label>中文名称<input required value={form.nameZhCn} onChange={(e) => update('nameZhCn', e.target.value)} /></label>
           <label>English<input value={form.nameEnUs ?? ''} onChange={(e) => update('nameEnUs', e.target.value)} /></label>
@@ -444,6 +448,7 @@ function CategoryEditor({ category, rows, onClose, onSaved }) {
           <label>한국어 설명<textarea rows="2" value={form.descriptionKoKr ?? ''} onChange={(e) => update('descriptionKoKr', e.target.value)} /></label>
         </div>
         <label className="category-active"><input type="checkbox" checked={form.isActive} onChange={(e) => update('isActive', e.target.checked)} /> 在 App 中启用此分类</label>
+        {!form.parentId && <label className="category-active"><input type="checkbox" checked={form.isFeatured} onChange={(e) => update('isFeatured', e.target.checked)} /> 默认展示在发布页</label>}
         {status && <p className="dialog-status">{status}</p>}
         <div className="dialog-actions"><button type="button" className="button ghost" onClick={onClose}>取消</button><button className="button primary">保存分类</button></div>
       </form>

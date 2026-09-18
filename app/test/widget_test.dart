@@ -96,6 +96,47 @@ void main() {
     }
   });
 
+  testWidgets('子页面可直接回首页', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(authenticatedApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('main-nav-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('汉江日落野餐局').first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('回首页'));
+    await tester.pumpAndSettle();
+    expect(find.text('今天，找个搭子'), findsOneWidget);
+    expect(find.byKey(const Key('main-nav-0')), findsOneWidget);
+  });
+
+  testWidgets('发布草稿离开前提示并可取消', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(authenticatedApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('main-nav-2')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '未完成的活动');
+    await tester.tap(find.byKey(const Key('main-nav-4')));
+    await tester.pumpAndSettle();
+    expect(find.text('放弃未保存的活动？'), findsOneWidget);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('未完成的活动'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('main-nav-4')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('放弃并离开'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('main-nav-2')));
+    await tester.pumpAndSettle();
+    expect(find.text('未完成的活动'), findsNothing);
+  });
+
   testWidgets('首页可以搜索并组合筛选活动', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpWidget(authenticatedApp());

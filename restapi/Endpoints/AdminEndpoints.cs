@@ -154,7 +154,8 @@ public static class AdminEndpoints
                 SELECT e.id, e.title, e.status, e.visibility, e.city_code, e.district_code,
                        e.capacity, e.approved_count, e.waitlist_count, e.price_amount,
                        e.created_at, e.published_at, e.row_version,
-                       c.name_zh_cn AS category_name, c.icon AS category_icon,
+                       COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
+                       c.icon AS category_icon,
                        p.name AS place_name, up.nickname AS organizer_name,
                        s.starts_at, s.ends_at,
                        (SELECT count(*) FROM report r WHERE r.target_type='event' AND r.target_id=e.id) AS report_count
@@ -450,12 +451,12 @@ public static class AdminEndpoints
                 INSERT INTO category (
                     code, name_zh_cn, name_en_us, name_ko_kr,
                     description_zh_cn, description_en_us, description_ko_kr,
-                    icon, color, parent_id, sort_order, is_active
+                    icon, icon_key, color, parent_id, sort_order, is_active, is_featured
                 )
                 VALUES (
                     @code, @nameZhCn, @nameEnUs, @nameKoKr,
                     @descriptionZhCn, @descriptionEnUs, @descriptionKoKr,
-                    @icon, @color, @parentId, @sortOrder, @isActive
+                    @icon, @iconKey, @color, @parentId, @sortOrder, @isActive, @isFeatured
                 )
                 RETURNING *
                 """, new
@@ -468,10 +469,12 @@ public static class AdminEndpoints
                     request.DescriptionEnUs,
                     request.DescriptionKoKr,
                     request.Icon,
+                    request.IconKey,
                     request.Color,
                     request.ParentId,
                     request.SortOrder,
-                    request.IsActive
+                    request.IsActive,
+                    request.IsFeatured
                 }, ct);
             return ApiSupport.Created($"/api/v1/admin/categories/{item!["id"]}", item);
         });
@@ -485,8 +488,8 @@ public static class AdminEndpoints
                 SET code=@code, name_zh_cn=@nameZhCn, name_en_us=@nameEnUs,
                     name_ko_kr=@nameKoKr, description_zh_cn=@descriptionZhCn,
                     description_en_us=@descriptionEnUs, description_ko_kr=@descriptionKoKr,
-                    icon=@icon, color=@color, parent_id=@parentId,
-                    sort_order=@sortOrder, is_active=@isActive
+                    icon=@icon, icon_key=@iconKey, color=@color, parent_id=@parentId,
+                    sort_order=@sortOrder, is_active=@isActive, is_featured=@isFeatured
                 WHERE id=@id RETURNING *
                 """, new
                 {
@@ -499,10 +502,12 @@ public static class AdminEndpoints
                     request.DescriptionEnUs,
                     request.DescriptionKoKr,
                     request.Icon,
+                    request.IconKey,
                     request.Color,
                     request.ParentId,
                     request.SortOrder,
-                    request.IsActive
+                    request.IsActive,
+                    request.IsFeatured
                 }, ct);
             if (item is null) throw new ApiException(404, "category_not_found", "分类不存在");
             return ApiSupport.Ok(item);
@@ -735,10 +740,12 @@ public sealed record AdminCategoryRequest(
     string? DescriptionEnUs,
     string? DescriptionKoKr,
     string? Icon,
+    string? IconKey,
     string? Color,
     Guid? ParentId,
     int SortOrder,
-    bool IsActive);
+    bool IsActive,
+    bool IsFeatured);
 public sealed record AdminRegionRequest(
     string Code,
     string? ParentCode,

@@ -1,4 +1,5 @@
 using Muda.Api.Infrastructure;
+using System.Text;
 
 namespace Muda.Api.Endpoints;
 
@@ -31,8 +32,10 @@ public static class EventEndpoints
                        e.min_participants, e.capacity, e.approved_count, e.waitlist_count,
                        e.price_min, e.price_max, e.price_amount,
                        e.price_currency, e.city_code, e.district_code, e.language_codes,
-                       e.cover_media_id, e.published_at,
-                       c.id AS category_id, c.name_zh_cn AS category_name, c.icon AS category_icon,
+                       e.cover_media_id, CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || cover.storage_key END AS cover_url, e.published_at,
+                       c.id AS category_id,
+                       COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
+                       c.icon AS category_icon,
                        city_region.name_zh_cn AS city_name,
                        district_region.name_zh_cn AS district_name,
                        NULL::text AS place_name, NULL::text AS address_public,
@@ -57,6 +60,7 @@ public static class EventEndpoints
                             ELSE NULL END AS distance_meters
                 FROM event e
                 JOIN category c ON c.id=e.category_id
+                LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id
@@ -111,7 +115,9 @@ public static class EventEndpoints
             var viewerId = ApiSupport.GetOptionalUserId(context);
             var item = await db.QueryOneAsync(
                 """
-                SELECT e.*, c.name_zh_cn AS category_name, c.icon AS category_icon,
+                SELECT e.*, CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || cover.storage_key END AS cover_url,
+                       COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
+                       c.icon AS category_icon,
                        CASE WHEN e.organizer_user_id=@viewerId OR EXISTS (
                            SELECT 1 FROM event_member viewer_member
                            WHERE viewer_member.event_id=e.id AND viewer_member.user_id=@viewerId
@@ -137,6 +143,7 @@ public static class EventEndpoints
                        COALESCE(ts.review_count, 0) AS organizer_review_count
                 FROM event e
                 JOIN category c ON c.id=e.category_id
+                LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
                 LEFT JOIN place p ON p.id=e.place_id
                 LEFT JOIN user_profile up ON up.user_id=e.organizer_user_id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=e.organizer_user_id
@@ -167,6 +174,54 @@ public static class EventEndpoints
             return ApiSupport.Ok(new { item, schedules, tags, members });
         });
 
+        api.MapPost("/events/covers", async (
+            HttpContext context, IFormFile cover, Db db, IWebHostEnvironment environment,
+            CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            EventCoverImageValidator.Validate(cover);
+            var mediaId = Guid.NewGuid();
+            var storageKey = $"events/{userId:N}/{mediaId:N}.jpg";
+            var path = Path.Combine(environment.ContentRootPath, "uploads", "events",
+                userId.ToString("N"), $"{mediaId:N}.jpg");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            try
+            {
+                await using (var output = File.Create(path))
+                    await cover.CopyToAsync(output, ct);
+                await db.ExecuteAsync(
+                    """
+                    INSERT INTO media_asset (id, owner_user_id, storage_key, mime_type, byte_size, width, height, status)
+                    VALUES (@mediaId, @userId, @storageKey, 'image/jpeg', @byteSize, 1280, 960, 'ready')
+                    """, new { mediaId, userId, storageKey, byteSize = cover.Length }, ct);
+            }
+            catch
+            {
+                if (File.Exists(path)) File.Delete(path);
+                throw;
+            }
+            return ApiSupport.Ok(new { coverMediaId = mediaId, coverUrl = $"/uploads/{storageKey}" });
+        }).DisableAntiforgery();
+
+        api.MapDelete("/events/covers/{id:guid}", async (
+            Guid id, HttpContext context, Db db, IWebHostEnvironment environment,
+            CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var deleted = await db.ExecuteAsync(
+                """
+                UPDATE media_asset SET deleted_at=now()
+                WHERE id=@id AND owner_user_id=@userId AND deleted_at IS NULL
+                  AND NOT EXISTS (SELECT 1 FROM event WHERE cover_media_id=@id AND deleted_at IS NULL)
+                """, new { id, userId }, ct);
+            if (deleted == 0)
+                throw new ApiException(404, "cover_not_found", "图片不存在或已被活动使用");
+            var path = Path.Combine(environment.ContentRootPath, "uploads", "events",
+                userId.ToString("N"), $"{id:N}.jpg");
+            if (File.Exists(path)) File.Delete(path);
+            return ApiSupport.Ok(new { id });
+        });
+
         api.MapPost("/events", async (
             HttpContext context, CreateEventRequest request, Db db, CancellationToken ct) =>
         {
@@ -182,6 +237,19 @@ public static class EventEndpoints
                 new { request.CategoryId }, ct);
             if (categorySelectable == 0)
                 throw new ApiException(400, "category_not_selectable", "请选择有效的细分类");
+            var requiresCustomLabel = await db.ScalarAsync<int>(
+                "SELECT count(*) FROM category WHERE id=@categoryId AND requires_custom_label",
+                new { request.CategoryId }, ct) > 0;
+            var customSubcategory = request.CustomSubcategory?.Trim();
+            if (requiresCustomLabel && (string.IsNullOrWhiteSpace(customSubcategory) ||
+                            customSubcategory.EnumerateRunes().Count() > 15))
+                throw new ApiException(400, "custom_subcategory_invalid", "请填写 1 至 15 字的小分类");
+            if (!requiresCustomLabel && !string.IsNullOrEmpty(customSubcategory))
+                throw new ApiException(400, "custom_subcategory_unexpected", "该分类不支持自定义小分类");
+            if (request.CoverMediaId is Guid coverMediaId && await db.ScalarAsync<int>(
+                "SELECT count(*) FROM media_asset WHERE id=@coverMediaId AND owner_user_id=@userId AND mime_type='image/jpeg' AND status='ready' AND deleted_at IS NULL",
+                new { coverMediaId, userId }, ct) == 0)
+                throw new ApiException(400, "cover_invalid", "活动图片不存在或无权使用");
             var regionValid = await db.ScalarAsync<int>(
                 """
                 SELECT count(*) FROM administrative_region district
@@ -226,14 +294,14 @@ public static class EventEndpoints
                 """
                 WITH inserted_event AS (
                     INSERT INTO event (
-                        id, organizer_user_id, category_id, place_id, title, description,
+                        id, organizer_user_id, category_id, custom_subcategory, place_id, cover_media_id, title, description,
                         city_code, district_code, status, published_at, visibility, approval_mode,
                         min_participants, capacity, approved_count, min_age, max_age,
                         price_min, price_max, price_amount, price_currency, language_codes,
                         announcement, organizer_note, review_status
                     )
                     VALUES (
-                        @eventId, @userId, @categoryId, @placeId, @title, @description,
+                        @eventId, @userId, @categoryId, @customSubcategory, @placeId, @coverMediaId, @title, @description,
                         @cityCode, @districtCode, 'published', now(), @visibility, @approvalMode,
                         @minParticipants, @capacity, 1, @minAge, @maxAge,
                         @priceMin, @priceMax, @priceMin, @priceCurrency, @languageCodes,
@@ -251,6 +319,8 @@ public static class EventEndpoints
                     eventId,
                     userId,
                     request.CategoryId,
+                    customSubcategory = requiresCustomLabel ? customSubcategory : null,
+                    request.CoverMediaId,
                     placeId,
                     title = request.Title.Trim(),
                     description = request.Description.Trim(),
@@ -289,12 +359,34 @@ public static class EventEndpoints
             Guid id, HttpContext context, UpdateEventRequest request, Db db, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
+            string? customSubcategory = null;
+            if (request.CategoryId is not null)
+            {
+                var categorySelectable = await db.ScalarAsync<int>(
+                    "SELECT count(*) FROM category WHERE id=@categoryId AND level=2 AND is_active",
+                    new { request.CategoryId }, ct);
+                if (categorySelectable == 0)
+                    throw new ApiException(400, "category_not_selectable", "请选择有效的细分类");
+                var requiresCustomLabel = await db.ScalarAsync<int>(
+                    "SELECT count(*) FROM category WHERE id=@categoryId AND requires_custom_label",
+                    new { request.CategoryId }, ct) > 0;
+                customSubcategory = request.CustomSubcategory?.Trim();
+                if (requiresCustomLabel && (string.IsNullOrWhiteSpace(customSubcategory) ||
+                                customSubcategory.EnumerateRunes().Count() > 15))
+                    throw new ApiException(400, "custom_subcategory_invalid", "请填写 1 至 15 字的小分类");
+                if (!requiresCustomLabel && !string.IsNullOrEmpty(customSubcategory))
+                    throw new ApiException(400, "custom_subcategory_unexpected", "该分类不支持自定义小分类");
+            }
+            else if (request.CustomSubcategory is not null)
+                throw new ApiException(400, "category_required", "修改小分类时请同时选择分类");
             var item = await db.QueryOneAsync(
                 """
                 UPDATE event
                 SET title=COALESCE(@title, title),
                     description=COALESCE(@description, description),
                     category_id=COALESCE(@categoryId, category_id),
+                    custom_subcategory=CASE WHEN @categoryId IS NULL THEN custom_subcategory
+                                            ELSE @customSubcategory END,
                     capacity=COALESCE(@capacity, capacity),
                     approval_mode=COALESCE(@approvalMode, approval_mode),
                     visibility=COALESCE(@visibility, visibility),
@@ -310,6 +402,7 @@ public static class EventEndpoints
                     request.Title,
                     request.Description,
                     request.CategoryId,
+                    customSubcategory,
                     request.Capacity,
                     request.ApprovalMode,
                     request.Visibility,
@@ -456,7 +549,9 @@ public sealed record CreateEventRequest(
     string? OrganizerNote,
     string[]? LanguageCodes,
     Guid[]? InterestIds,
-    PlaceRequest? Place);
+    PlaceRequest? Place,
+    string? CustomSubcategory,
+    Guid? CoverMediaId);
 public sealed record UpdateEventRequest(
     string? Title,
     string? Description,
@@ -464,7 +559,8 @@ public sealed record UpdateEventRequest(
     short? Capacity,
     string? ApprovalMode,
     string? Visibility,
-    long RowVersion);
+    long RowVersion,
+    string? CustomSubcategory);
 public sealed record CancelEventRequest(string Reason);
 public sealed record JoinEventRequest(short PartySize, string? Note, bool ShareContact);
 public sealed record RejectApplicationRequest(string? Reason);
