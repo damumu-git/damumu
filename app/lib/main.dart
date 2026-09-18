@@ -2455,7 +2455,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
               LayoutBuilder(
                 builder: (context, constraints) {
                   const spacing = 8.0;
-                  final columns = constraints.maxWidth >= 600 ? 4 : 3;
+                  final columns = constraints.maxWidth >= 600 ? 4 : 2;
                   final width =
                       (constraints.maxWidth - spacing * (columns - 1)) /
                       columns;
@@ -2466,62 +2466,54 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       final isSelected = major.id == _majorCategoryId;
                       return SizedBox(
                         width: width,
-                        child: AspectRatio(
-                          aspectRatio: 0.92,
-                          child: Semantics(
-                            button: true,
-                            selected: isSelected,
-                            child: Material(
-                              color: isSelected ? _mint : Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                side: BorderSide(
-                                  color: isSelected
-                                      ? _green
-                                      : const Color(0xFFE7E5DF),
-                                  width: isSelected ? 1.5 : 1,
-                                ),
+                        child: Semantics(
+                          button: true,
+                          selected: isSelected,
+                          child: Material(
+                            color: isSelected ? _mint : Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              side: BorderSide(
+                                color: isSelected
+                                    ? _green
+                                    : const Color(0xFFE7E5DF),
+                                width: isSelected ? 1.5 : 1,
                               ),
-                              child: InkWell(
-                                key: ValueKey('major-category-${major.id}'),
-                                borderRadius: BorderRadius.circular(14),
-                                onTap: () {
-                                  if (major.code != 'other') {
-                                    _customSubcategory.clear();
-                                  }
-                                  setState(() {
-                                    _selectionEdited = true;
-                                    _majorCategoryId = major.id;
-                                    _leafCategoryId = null;
-                                  });
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    4,
-                                    6,
-                                    4,
-                                    8,
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(
-                                        child: _categoryIllustration(major),
-                                      ),
-                                      Text(
+                            ),
+                            child: InkWell(
+                              key: ValueKey('major-category-${major.id}'),
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () {
+                                if (major.code != 'other') {
+                                  _customSubcategory.clear();
+                                }
+                                setState(() {
+                                  _selectionEdited = true;
+                                  _majorCategoryId = major.id;
+                                  _leafCategoryId = null;
+                                });
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 16,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(major.icon),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
                                         major.name,
-                                        maxLines: 1,
-                                        textAlign: TextAlign.center,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          fontSize: 12,
                                           color: isSelected ? _green : _ink,
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -2588,34 +2580,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       ),
     ],
   );
-
-  Widget _categoryIllustration(ActivityCategory category) {
-    const illustrated = {
-      'food',
-      'sports',
-      'culture',
-      'outdoors',
-      'study',
-      'social',
-      'other',
-    };
-    // Older category API responses may not include icon_key yet.
-    final assetKey = illustrated.contains(category.iconKey)
-        ? category.iconKey
-        : category.code;
-    if (illustrated.contains(assetKey)) {
-      return Image.asset(
-        'assets/category_illustrations/$assetKey.png',
-        fit: BoxFit.contain,
-        errorBuilder: (_, error, stackTrace) => Center(
-          child: Text(category.icon, style: const TextStyle(fontSize: 34)),
-        ),
-      );
-    }
-    return Center(
-      child: Text(category.icon, style: const TextStyle(fontSize: 34)),
-    );
-  }
 
   Widget _schedule() => Column(
     key: const ValueKey(1),

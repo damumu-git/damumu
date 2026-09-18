@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -108,20 +107,17 @@ void main() {
         find.byKey(const ValueKey('major-category-major6')),
         findsOneWidget,
       );
-      final foodImage = tester.widget<Image>(
-        find.descendant(
-          of: find.byKey(const ValueKey('major-category-major1')),
-          matching: find.byType(Image),
-        ),
+      final foodTile = find.byKey(const ValueKey('major-category-major1'));
+      expect(
+        find.descendant(of: foodTile, matching: find.text('🍜')),
+        findsOneWidget,
       );
       expect(
-        (foodImage.image as AssetImage).assetName,
-        'assets/category_illustrations/food.png',
+        find.descendant(of: foodTile, matching: find.byType(Image)),
+        findsNothing,
       );
-      final foodBytes = await rootBundle.load(
-        'assets/category_illustrations/food.png',
-      );
-      expect(foodBytes.lengthInBytes, greaterThan(1000));
+      final tileSize = tester.getSize(foodTile);
+      expect(tileSize.width, greaterThan(tileSize.height));
       expect(find.byKey(const ValueKey('major-category-major7')), findsNothing);
       expect(
         find.byKey(const ValueKey('major-category-other')),

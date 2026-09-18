@@ -166,7 +166,7 @@ HTTP 400，`error.code=invalid_cursor`。活动列表永不返回精确集合点
 
 部署时按迁移顺序执行 `Migrations/010_activity_cursor_index.sql` 与
 `Migrations/011_illustrated_other_category.sql`；前者增加公开活动创建时间/UUID
-部分索引，后者增加分类插画字段及活动自定义小分类列。升级 API 前必须先应用 `011`，
+部分索引，后者增加预留的分类 `icon_key` 字段及活动自定义小分类列。升级 API 前必须先应用 `011`，
 否则 `/activities` 等查询会因缺少 `event.custom_subcategory` 失败。
 原 `/events` 及后台分页接口保持兼容。
 
