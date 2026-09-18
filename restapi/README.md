@@ -96,7 +96,7 @@ docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 
 ## 用户认证与头像
 
-已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `010`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
+已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `011`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
 
 正式用户接口包括：
 
@@ -164,8 +164,11 @@ GET /api/v1/activities?limit=20&cursor=<上一页 data.nextCursor>
 游标为版本化 Base64URL 编码位置，不是秘密或鉴权令牌；非法/过长/未知版本游标返回
 HTTP 400，`error.code=invalid_cursor`。活动列表永不返回精确集合点。
 
-部署时按迁移顺序执行 `Migrations/010_activity_cursor_index.sql`，增加公开活动创建时间/UUID
-部分索引；功能查询不依赖新增列。原 `/events` 及后台分页接口保持兼容。
+部署时按迁移顺序执行 `Migrations/010_activity_cursor_index.sql` 与
+`Migrations/011_illustrated_other_category.sql`；前者增加公开活动创建时间/UUID
+部分索引，后者增加分类插画字段及活动自定义小分类列。升级 API 前必须先应用 `011`，
+否则 `/activities` 等查询会因缺少 `event.custom_subcategory` 失败。
+原 `/events` 及后台分页接口保持兼容。
 
 在仓库根目录验证（测试输出隔离，避免锁住正在运行的 API）：
 
