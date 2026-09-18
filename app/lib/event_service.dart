@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' as parser;
 
 const _apiBase = String.fromEnvironment(
   'API_BASE_URL',
@@ -108,6 +110,39 @@ class ActivityPage {
 }
 
 class EventService {
+  static Future<({String id, String url})> uploadCover(
+    String token,
+    Uint8List bytes,
+  ) async {
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$_apiBase/events/covers'))
+          ..headers['Authorization'] = 'Bearer $token'
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'cover',
+              bytes,
+              filename: 'cover.jpg',
+              contentType: parser.MediaType('image', 'jpeg'),
+            ),
+          );
+    final streamed = await request.send().timeout(const Duration(seconds: 20));
+    final response = await http.Response.fromStream(streamed);
+    final data = _decodeResponse(response, '图片上传失败，请稍后再试')['data'] as Map;
+    return (
+      id: data['coverMediaId'] as String,
+      url: data['coverUrl'] as String,
+    );
+  }
+
+  static Future<void> deleteCover(String token, String id) async {
+    await http
+        .delete(
+          Uri.parse('$_apiBase/events/covers/$id'),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 10));
+  }
+
   static Future<Map<String, dynamic>> detail(
     String token,
     String eventId,
@@ -258,6 +293,7 @@ class EventService {
     required bool approvalRequired,
     String? meetingPoint,
     String? customSubcategory,
+    String? coverMediaId,
   }) async {
     final response = await http
         .post(
@@ -270,6 +306,7 @@ class EventService {
             'categoryId': categoryId,
             if (customSubcategory != null)
               'customSubcategory': customSubcategory.trim(),
+            'coverMediaId': ?coverMediaId,
             'title': title,
             'description': description,
             'cityCode': cityCode,

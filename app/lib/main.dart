@@ -1,5 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth.dart';
 import 'category_service.dart';
@@ -7,6 +11,7 @@ import 'event_service.dart';
 import 'l10n.dart';
 import 'build_failure.dart';
 import 'location_service.dart';
+import 'event_cover_image.dart';
 
 void main() => runApp(const DaziApp());
 
@@ -203,6 +208,7 @@ class EventItem {
     this.startsAt,
     this.endsAt,
     this.beginnerFriendly = false,
+    this.coverUrl,
   });
 
   final int id;
@@ -226,6 +232,7 @@ class EventItem {
   final DateTime? endsAt;
   bool get isPast => endsAt != null && !endsAt!.isAfter(DateTime.now());
   final bool beginnerFriendly;
+  final String? coverUrl;
 }
 
 final demoEvents = <EventItem>[
@@ -475,6 +482,7 @@ class _AppShellState extends State<AppShell> {
     return EventItem(
       id: rawId.hashCode,
       emoji: '${json['category_icon'] ?? '✨'}',
+      coverUrl: json['cover_url'] as String?,
       title: '${json['title'] ?? ''}',
       category: '${json['category_name'] ?? ''}',
       time: time,
@@ -1344,7 +1352,21 @@ class EventCard extends StatelessWidget {
                 ),
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: Text(event.emoji, style: const TextStyle(fontSize: 42)),
+              child: event.coverUrl == null
+                  ? Text(event.emoji, style: const TextStyle(fontSize: 42))
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.network(
+                        absoluteImageUrl(event.coverUrl!),
+                        width: 92,
+                        height: 112,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Text(
+                          event.emoji,
+                          style: const TextStyle(fontSize: 42),
+                        ),
+                      ),
+                    ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -1742,7 +1764,16 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     colors: [Color(0xFFD7ECDF), Color(0xFFFFEED9)],
                   ),
                 ),
-                child: Text(e.emoji, style: const TextStyle(fontSize: 84)),
+                child: e.coverUrl == null
+                    ? Text(e.emoji, style: const TextStyle(fontSize: 84))
+                    : Image.network(
+                        absoluteImageUrl(e.coverUrl!),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        errorBuilder: (_, _, _) =>
+                            Text(e.emoji, style: const TextStyle(fontSize: 84)),
+                      ),
               ),
             ),
           ),
@@ -2109,6 +2140,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
       _title.text.trim().isNotEmpty ||
       _description.text.trim().isNotEmpty ||
       _customSubcategory.text.trim().isNotEmpty ||
+      _coverBytes != null ||
       _meetingPoint.text.trim().isNotEmpty ||
       _price.text != '0' ||
       _startsAt != null ||
@@ -2228,6 +2260,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
   int _capacity = 6;
   bool _approval = true;
   bool _publishing = false;
+  Uint8List? _coverBytes;
+  bool _coverBusy = false;
   DateTime? _startsAt;
   DateTime? _endsAt;
   String? _cityCode;
@@ -2236,6 +2270,68 @@ class _CreateEventPageState extends State<CreateEventPage> {
   String _district = '';
   final _meetingPoint = TextEditingController();
   final _price = TextEditingController(text: '0');
+
+  Future<void> _chooseCover() async {
+    if (_coverBusy) return;
+    setState(() => _coverBusy = true);
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (picked == null || !mounted) return;
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        aspectRatio: const CropAspectRatio(ratioX: 4, ratioY: 3),
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 90,
+        maxWidth: 1600,
+        maxHeight: 1200,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: context.tr('eventCoverCrop'),
+            toolbarColor: _green,
+            toolbarWidgetColor: Colors.white,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: context.tr('eventCoverCrop'),
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+          ),
+          WebUiSettings(
+            context: context,
+            size: CropperSize(
+              width: MediaQuery.sizeOf(context).width.clamp(320, 720).round(),
+              height: 520,
+            ),
+            translations: WebTranslations(
+              title: context.tr('eventCoverCrop'),
+              rotateLeftTooltip: context.tr('eventCoverRotateLeft'),
+              rotateRightTooltip: context.tr('eventCoverRotateRight'),
+              cancelButton: context.tr('eventCoverCancel'),
+              cropButton: context.tr('eventCoverConfirmCrop'),
+            ),
+            themeData: const WebThemeData(rotateIconColor: _green),
+          ),
+        ],
+      );
+      if (cropped == null || !mounted) return;
+      final bytes = prepareEventCover(await cropped.readAsBytes());
+      if (mounted) setState(() => _coverBytes = bytes);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is FormatException
+                  ? context.tr(error.message)
+                  : context.tr('eventCoverInvalid'),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _coverBusy = false);
+    }
+  }
 
   @override
   void initState() {
@@ -2382,6 +2478,44 @@ class _CreateEventPageState extends State<CreateEventPage> {
         decoration: const InputDecoration(hintText: '例如：汉江日落野餐局'),
       ),
       const SizedBox(height: 20),
+      FieldLabel(context.tr('eventCoverLabel')),
+      Text(
+        context.tr('eventCoverRule'),
+        style: TextStyle(color: Colors.grey.shade600),
+      ),
+      const SizedBox(height: 8),
+      if (_coverBytes != null) ...[
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Image.memory(_coverBytes!, fit: BoxFit.cover),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+      Wrap(
+        spacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _coverBusy ? null : _chooseCover,
+            icon: const Icon(Icons.photo_library_outlined),
+            label: Text(
+              context.tr(
+                _coverBytes == null ? 'eventCoverChoose' : 'eventCoverReplace',
+              ),
+            ),
+          ),
+          if (_coverBytes != null)
+            TextButton(
+              onPressed: _coverBusy
+                  ? null
+                  : () => setState(() => _coverBytes = null),
+              child: Text(context.tr('eventCoverRemove')),
+            ),
+        ],
+      ),
+      const SizedBox(height: 20),
       const FieldLabel('活动分类'),
       FutureBuilder<List<ActivityCategory>>(
         future: _categoryFuture,
@@ -2407,14 +2541,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
           final selectedMajor = majors.firstWhere(
             (item) => item.id == _majorCategoryId,
           );
-          _otherSelected = selectedMajor.code == 'other';
           final leaves = categories
               .where((item) => item.parentId == _majorCategoryId)
               .toList();
           if (!leaves.any((item) => item.id == _leafCategoryId)) {
             _leafCategoryId = leaves.isEmpty
                 ? null
-                : _otherSelected
+                : selectedMajor.code == 'other'
                 ? leaves
                       .where((item) => item.code == 'other_custom')
                       .firstOrNull
@@ -2422,6 +2555,8 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 : leaves.first.id;
           }
           final selected = leaves.where((item) => item.id == _leafCategoryId);
+          _otherSelected =
+              selected.isNotEmpty && selected.first.requiresCustomLabel;
           if (selected.isNotEmpty) {
             _category = _otherSelected
                 ? _customSubcategory.text.trim()
@@ -2484,9 +2619,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               key: ValueKey('major-category-${major.id}'),
                               borderRadius: BorderRadius.circular(14),
                               onTap: () {
-                                if (major.code != 'other') {
-                                  _customSubcategory.clear();
-                                }
+                                _customSubcategory.clear();
                                 setState(() {
                                   _selectionEdited = true;
                                   _majorCategoryId = major.id;
@@ -2541,22 +2674,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                   ),
                 ),
-              if (_otherSelected)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('小分类'),
-                    TextField(
-                      key: const ValueKey('custom-subcategory'),
-                      controller: _customSubcategory,
-                      maxLength: 15,
-                      decoration: InputDecoration(
-                        hintText: context.tr('customSubcategoryHint'),
-                      ),
-                    ),
-                  ],
-                )
-              else
+              if (selectedMajor.code != 'other')
                 _CategoryDropdown(
                   key: ValueKey('leaf-category-$_majorCategoryId'),
                   label: '小分类',
@@ -2565,7 +2683,18 @@ class _CreateEventPageState extends State<CreateEventPage> {
                   onChanged: (value) => setState(() {
                     _selectionEdited = true;
                     _leafCategoryId = value;
+                    _customSubcategory.clear();
                   }),
+                ),
+              if (selectedMajor.code == 'other') const FieldLabel('小分类'),
+              if (_otherSelected)
+                TextField(
+                  key: const ValueKey('custom-subcategory'),
+                  controller: _customSubcategory,
+                  maxLength: 15,
+                  decoration: InputDecoration(
+                    hintText: context.tr('customSubcategoryHint'),
+                  ),
                 ),
             ],
           );
@@ -2880,12 +3009,21 @@ class _CreateEventPageState extends State<CreateEventPage> {
       return;
     }
     setState(() => _publishing = true);
+    String? uploadedCoverId;
+    String? uploadedCoverUrl;
+    String? token;
     try {
-      final token = AuthScope.of(context).token;
+      token = AuthScope.of(context).token;
       if (token == null) throw Exception('登录已失效，请重新登录');
+      if (_coverBytes != null) {
+        final upload = await EventService.uploadCover(token, _coverBytes!);
+        uploadedCoverId = upload.id;
+        uploadedCoverUrl = upload.url;
+      }
       await EventService.create(
         token: token,
         categoryId: _leafCategoryId!,
+        coverMediaId: uploadedCoverId,
         customSubcategory: _otherSelected
             ? _customSubcategory.text.trim()
             : null,
@@ -2903,6 +3041,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
         meetingPoint: _meetingPoint.text,
       );
     } catch (error) {
+      if (uploadedCoverId != null && token != null) {
+        try {
+          await EventService.deleteCover(token, uploadedCoverId);
+        } catch (_) {}
+      }
       if (!mounted) return;
       setState(() => _publishing = false);
       final message = error.toString().replaceFirst('Exception: ', '');
@@ -2917,6 +3060,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
       EventItem(
         id: DateTime.now().millisecondsSinceEpoch,
         emoji: '✨',
+        coverUrl: uploadedCoverUrl,
         title: _title.text.trim(),
         category: _otherSelected ? _customSubcategory.text.trim() : _category,
         time: _formatDateTime(_startsAt!),

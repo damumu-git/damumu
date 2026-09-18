@@ -165,9 +165,11 @@ GET /api/v1/activities?limit=20&cursor=<上一页 data.nextCursor>
 HTTP 400，`error.code=invalid_cursor`。活动列表永不返回精确集合点。
 
 部署时按迁移顺序执行 `Migrations/010_activity_cursor_index.sql` 与
-`Migrations/011_illustrated_other_category.sql`；前者增加公开活动创建时间/UUID
-部分索引，后者增加预留的分类 `icon_key` 字段及活动自定义小分类列。升级 API 前必须先应用 `011`，
-否则 `/activities` 等查询会因缺少 `event.custom_subcategory` 失败。
+`Migrations/011_illustrated_other_category.sql` 与
+`Migrations/012_custom_category_leaves.sql`；前者增加公开活动创建时间/UUID
+部分索引，`011` 增加分类图标键与活动自定义小分类列，`012` 为各一级分类增加“其它”叶子及标识。
+升级 API 前必须先应用 `011` 和 `012`，否则活动或分类查询会因缺少字段失败。
+活动封面上传接口 `POST /api/v1/events/covers` 接受登录用户的一张 1280×960 JPEG，最大 2 MB；返回媒体 ID 后在 `POST /events` 传入 `coverMediaId`。文件存于 API 本地 `uploads/events`。
 原 `/events` 及后台分页接口保持兼容。
 
 在仓库根目录验证（测试输出隔离，避免锁住正在运行的 API）：

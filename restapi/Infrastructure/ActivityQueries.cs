@@ -7,7 +7,7 @@ public static class ActivityQueries
                        e.min_participants, e.capacity, e.approved_count, e.waitlist_count,
                        e.price_min, e.price_max, e.price_amount,
                        e.price_currency, e.city_code, e.district_code, e.language_codes,
-                       e.cover_media_id, e.published_at,
+                       e.cover_media_id, CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || cover.storage_key END AS cover_url, e.published_at,
                        c.id AS category_id,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
                        c.icon AS category_icon,
@@ -35,6 +35,7 @@ public static class ActivityQueries
                             ELSE NULL END AS distance_meters
                 FROM event e
                 JOIN category c ON c.id=e.category_id
+                LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id

@@ -66,6 +66,14 @@ void main() {
               'parent_id': 'major$index',
               'name_zh_cn': '子类$index',
             },
+            {
+              'id': 'custom$index',
+              'code': 'custom_$index',
+              'level': 2,
+              'parent_id': 'major$index',
+              'name_zh_cn': '其它',
+              'requires_custom_label': true,
+            },
           ],
           {
             'id': 'other',
@@ -80,6 +88,7 @@ void main() {
             'level': 2,
             'parent_id': 'other',
             'name_zh_cn': '自定义',
+            'requires_custom_label': true,
           },
         ];
       } else if (request.url.path == '/api/v1/regions') {
@@ -118,6 +127,15 @@ void main() {
       );
       final tileSize = tester.getSize(foodTile);
       expect(tileSize.width, greaterThan(tileSize.height));
+      expect(find.byKey(const ValueKey('custom-subcategory')), findsNothing);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('leaf-category-major1')),
+      );
+      await tester.tap(find.text('◇ 子类1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('◇ 其它').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('custom-subcategory')), findsOneWidget);
       expect(find.byKey(const ValueKey('major-category-major7')), findsNothing);
       expect(
         find.byKey(const ValueKey('major-category-other')),

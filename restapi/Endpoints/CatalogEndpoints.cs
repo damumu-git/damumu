@@ -11,7 +11,7 @@ public static class CatalogEndpoints
                 """
                 SELECT id, code, parent_id, level, name_zh_cn, name_en_us,
                        name_ko_kr, description_zh_cn, icon, icon_key,
-                       is_featured, color, sort_order
+                       is_featured, requires_custom_label, color, sort_order
                 FROM category
                 WHERE is_active
                 ORDER BY level, parent_id NULLS FIRST, sort_order, name_zh_cn
