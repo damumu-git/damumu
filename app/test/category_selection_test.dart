@@ -27,9 +27,11 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: 'width $width');
+      if (width == 70) {
+        await tester.tap(find.byIcon(Icons.refresh_rounded));
+        expect(retries, 1);
+      }
     }
-    await tester.tap(find.byIcon(Icons.refresh_rounded));
-    expect(retries, 1);
   });
 
   testWidgets('shows six featured categories, more, and custom other input', (
