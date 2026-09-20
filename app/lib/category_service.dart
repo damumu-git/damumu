@@ -14,6 +14,9 @@ class ActivityCategory {
     required this.level,
     required this.name,
     required this.icon,
+    this.iconKey,
+    this.isFeatured = false,
+    this.requiresCustomLabel = false,
     this.parentId,
   });
 
@@ -22,6 +25,9 @@ class ActivityCategory {
   final int level;
   final String name;
   final String icon;
+  final String? iconKey;
+  final bool isFeatured;
+  final bool requiresCustomLabel;
   final String? parentId;
 
   factory ActivityCategory.fromJson(Map<String, dynamic> json) =>
@@ -31,6 +37,9 @@ class ActivityCategory {
         level: json['level'] as int,
         name: json['name_zh_cn'] as String,
         icon: (json['icon'] as String?) ?? '◇',
+        iconKey: json['icon_key'] as String?,
+        isFeatured: json['is_featured'] as bool? ?? false,
+        requiresCustomLabel: json['requires_custom_label'] as bool? ?? false,
         parentId: json['parent_id'] as String?,
       );
 }
