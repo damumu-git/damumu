@@ -281,6 +281,7 @@ Web 裁剪器依赖 Cropper.js 1.6.2，静态资源随 App 本地提供，以避
 ### 相关位置
 
 - `restapi/Migrations/013_notifications_event_chat.sql`
+- `restapi/Migrations/014_event_chat_organizer_membership.sql`
 - `restapi/Endpoints/SocialEndpoints.cs`
 - `app/lib/social_service.dart`、`app/lib/main.dart`
 
