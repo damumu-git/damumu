@@ -350,6 +350,16 @@ public static class UserEndpoints
             return ApiSupport.Ok(new { id, read = true });
         });
 
+        api.MapPost("/me/notifications/read-all", async (
+            HttpContext context, Db db, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var count = await db.ExecuteAsync(
+                "UPDATE notification SET read_at=now() WHERE user_id=@userId AND read_at IS NULL",
+                new { userId }, ct);
+            return ApiSupport.Ok(new { updated = count, readAt = DateTime.UtcNow });
+        });
+
         api.MapPost("/blocks/{blockedUserId:guid}", async (
             Guid blockedUserId, HttpContext context, BlockRequest request, Db db, CancellationToken ct) =>
         {

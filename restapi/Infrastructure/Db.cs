@@ -74,7 +74,7 @@ public sealed class Db(NpgsqlDataSource dataSource)
 
         await using var eventCommand = new NpgsqlCommand(
             """
-            SELECT id, organizer_user_id, status, approval_mode, capacity, approved_count, waitlist_count
+            SELECT id, organizer_user_id, status, approval_mode, capacity, approved_count, waitlist_count, title
             FROM event
             WHERE id = @eventId AND deleted_at IS NULL
             FOR UPDATE
@@ -91,6 +91,7 @@ public sealed class Db(NpgsqlDataSource dataSource)
         var capacity = reader.GetInt16(4);
         var approvedCount = reader.GetInt16(5);
         var waitlistCount = reader.GetInt16(6);
+        var eventTitle = reader.GetString(7);
         await reader.CloseAsync();
 
         if (organizerId == userId)
@@ -161,6 +162,19 @@ public sealed class Db(NpgsqlDataSource dataSource)
         updateCommand.Parameters.AddWithValue("approvedDelta", approvedDelta);
         updateCommand.Parameters.AddWithValue("waitlistDelta", waitlistDelta);
         await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+
+        await using var organizerNotification = new NpgsqlCommand(
+            """
+            INSERT INTO notification (user_id, notification_type, title, body, data)
+            VALUES (@organizerId, 'event_application_received', '活动收到新报名',
+                    @body, jsonb_build_object('eventId', @eventId, 'applicantUserId', @userId, 'status', @status))
+            """, connection, transaction);
+        organizerNotification.Parameters.AddWithValue("organizerId", organizerId);
+        organizerNotification.Parameters.AddWithValue("eventId", eventId);
+        organizerNotification.Parameters.AddWithValue("userId", userId);
+        organizerNotification.Parameters.AddWithValue("status", status);
+        organizerNotification.Parameters.AddWithValue("body", $"有人报名了「{eventTitle}」，请查看报名信息");
+        await organizerNotification.ExecuteNonQueryAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
         return member;

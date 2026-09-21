@@ -611,10 +611,26 @@ public static class AdminEndpoints
                 throw new ApiException(400, "review_reason_required", "拒绝活动时必须填写理由");
             var item = await db.QueryOneAsync(
                 """
-                UPDATE event SET review_status=@status, review_reason=@reason,
-                    reviewed_at=now(), reviewed_by_user_id=@actorUserId
-                WHERE id=@id AND deleted_at IS NULL
-                RETURNING id, title, status, review_status, review_reason, reviewed_at
+                WITH reviewed AS (
+                    UPDATE event SET review_status=@status, review_reason=@reason,
+                        reviewed_at=now(), reviewed_by_user_id=@actorUserId
+                    WHERE id=@id AND deleted_at IS NULL
+                    RETURNING id, organizer_user_id, title, status, review_status,
+                              review_reason, reviewed_at
+                ), notified AS (
+                    INSERT INTO notification (user_id, notification_type, title, body, data)
+                    SELECT organizer_user_id,
+                           CASE WHEN review_status='approved'
+                                THEN 'event_review_approved' ELSE 'event_review_rejected' END,
+                           CASE WHEN review_status='approved'
+                                THEN '活动审核已通过' ELSE '活动审核未通过' END,
+                           CASE WHEN review_status='approved'
+                                THEN '你发布的「' || title || '」已通过管理员审核'
+                                ELSE '你发布的「' || title || '」未通过审核：' || COALESCE(review_reason, '') END,
+                           jsonb_build_object('eventId', id, 'status', review_status)
+                    FROM reviewed
+                )
+                SELECT id, title, status, review_status, review_reason, reviewed_at FROM reviewed
                 """, new { id, request.Status, request.Reason, request.ActorUserId }, ct);
             if (item is null) throw new ApiException(404, "event_not_found", "活动不存在");
             return ApiSupport.Ok(item);
