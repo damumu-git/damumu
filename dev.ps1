@@ -22,11 +22,7 @@ if ([string]::IsNullOrWhiteSpace($databaseConnection)) {
     } else { 'postgres' }
     $databasePassword = $env:DAMUMU_POSTGRES_PASSWORD
     if ([string]::IsNullOrWhiteSpace($databasePassword)) {
-        $securePassword = Read-Host "$databaseHost`:5432/$databaseName PostgreSQL password" -AsSecureString
-        $databasePassword = [System.Net.NetworkCredential]::new('', $securePassword).Password
-    }
-    if ([string]::IsNullOrWhiteSpace($databasePassword)) {
-        throw 'PostgreSQL 密码不能为空。'
+        throw '未设置数据库连接。请设置 DAMUMU_POSTGRES_PASSWORD，或通过 ConnectionStrings__Muda 提供完整连接字符串。'
     }
     $databaseConnection = "Host=$databaseHost;Port=5432;Database=$databaseName;Username=$databaseUsername;Password=$databasePassword;SSL Mode=Disable"
 }

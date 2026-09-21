@@ -71,9 +71,10 @@ docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 ## Tailscale PostgreSQL 集成测试
 
 当前测试通过 Tailscale 连接 `100.66.109.44:5432/damumu`，默认用户为 `postgres`。
-在 Windows PowerShell 中从仓库根目录执行，脚本会隐藏输入数据库密码：
+在 Windows PowerShell 中先设置数据库密码环境变量，再从仓库根目录执行：
 
 ```powershell
+$env:DAMUMU_POSTGRES_PASSWORD = '你的密码'
 ./scripts/test-tailscale-postgres.ps1
 ```
 
@@ -84,8 +85,28 @@ docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 ./scripts/test-tailscale-postgres.ps1 -ApplyMigrations
 ```
 
-非交互执行时可提前设置仅存在于当前终端进程的
-`DAMUMU_POSTGRES_PASSWORD`。不要把密码写入 Git 配置或受版本控制的脚本。
+脚本只从 `DAMUMU_POSTGRES_PASSWORD` 读取密码，不再交互询问。不要把密码写入 Git 配置或受版本控制的脚本。
+
+## Windows PowerShell 开发启动
+
+`dev.ps1` 优先使用完整的 `ConnectionStrings__Muda` 环境变量；未提供时，根据
+`DAMUMU_POSTGRES_HOST`、`DAMUMU_POSTGRES_DATABASE`、
+`DAMUMU_POSTGRES_USERNAME` 和 `DAMUMU_POSTGRES_PASSWORD` 生成连接字符串。
+密码缺失时脚本直接退出，不再交互询问：
+
+```powershell
+$env:DAMUMU_POSTGRES_PASSWORD = '你的密码'
+./dev.ps1 --services
+# 或同时启动 Flutter Web：
+./dev.ps1 -d chrome --web-port 3000
+```
+
+如果希望新开的 PowerShell 窗口也能读取，可以将密码保存为当前 Windows 用户的环境变量，
+随后重新打开终端：
+
+```powershell
+[Environment]::SetEnvironmentVariable('DAMUMU_POSTGRES_PASSWORD', '你的密码', 'User')
+```
 
 ## Bash 开发启动
 

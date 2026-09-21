@@ -15,11 +15,7 @@ $testOutput = Join-Path $buildRoot ('tailscale-postgres-tests-' + [Guid]::NewGui
 $password = $env:DAMUMU_POSTGRES_PASSWORD
 
 if ([string]::IsNullOrWhiteSpace($password)) {
-    $securePassword = Read-Host "$PostgresHost`:5432/$Database PostgreSQL password" -AsSecureString
-    $password = [System.Net.NetworkCredential]::new('', $securePassword).Password
-}
-if ([string]::IsNullOrWhiteSpace($password)) {
-    throw 'A PostgreSQL password is required'
+    throw 'DAMUMU_POSTGRES_PASSWORD is required. Set it in the environment before running this script.'
 }
 
 $connectionString = "Host=$PostgresHost;Port=5432;Database=$Database;Username=$Username;Password=$password;SSL Mode=Disable"
