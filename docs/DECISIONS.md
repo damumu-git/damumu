@@ -271,9 +271,9 @@ Web 裁剪器依赖 Cropper.js 1.6.2，静态资源随 App 本地提供，以避
 
 ### 决定
 
-每个活动创建时生成一个唯一的活动群聊。组织者以及活动成员状态为 `approved`、`attended` 且未退出的用户拥有群聊成员资格；申请中、候补、被拒或退出的用户不在群聊中。活动成员状态变化由数据库触发器同步到会话成员表，已有活动在迁移时补齐群聊和有效成员。
+每个活动创建时生成一个唯一的活动群聊。组织者以及活动成员状态为 `approved`、`attended` 且未退出活动的用户默认拥有群聊成员资格；申请中、候补、被拒或退出活动的用户不在群聊中。活动成员状态变化由数据库触发器同步到会话成员表，已有活动在迁移时补齐群聊和有效成员。用户也可以只退出活动群聊；该主动退出标记会被保留，后续成员同步不会自动把用户重新加入。
 
-聊天消息和站内通知分别维护未读状态；用户可逐项已读，也可一次标记全部会话和通知为已读。群聊资格只决定聊天访问权，不改变精确集合地点原有的授权规则。
+聊天消息和站内通知分别维护未读状态；用户可逐项已读，也可一次标记全部会话和通知为已读。私信删除采用个人列表隐藏，新消息到达时重新出现；通知删除采用个人软删除。群聊资格只决定聊天访问权，不改变精确集合地点原有的授权规则。
 
 ### 原因
 
@@ -283,6 +283,7 @@ Web 裁剪器依赖 Cropper.js 1.6.2，静态资源随 App 本地提供，以避
 
 - `restapi/Migrations/013_notifications_event_chat.sql`
 - `restapi/Migrations/014_event_chat_organizer_membership.sql`
+- `restapi/Migrations/016_member_profiles_and_message_actions.sql`
 - `restapi/Endpoints/SocialEndpoints.cs`
 - `app/lib/social_service.dart`、`app/lib/main.dart`
 

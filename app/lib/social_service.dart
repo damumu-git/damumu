@@ -124,6 +124,7 @@ class SocialService {
     final response = await http.Response.fromStream(
       await request.send().timeout(const Duration(seconds: 10)),
     );
+    if (response.statusCode == 204) return null;
     Object? decoded;
     try {
       decoded = jsonDecode(utf8.decode(response.bodyBytes));
@@ -220,6 +221,21 @@ class SocialService {
 
   static Future<void> readNotification(String token, String id) =>
       _request(token, '/me/notifications/$id/read', method: 'POST');
+
+  static Future<void> deleteNotification(String token, String id) =>
+      _request(token, '/me/notifications/$id', method: 'DELETE');
+
+  static Future<void> readConversationLatest(
+    String token,
+    String conversationId,
+  ) => _request(
+    token,
+    '/conversations/$conversationId/read-latest',
+    method: 'POST',
+  );
+
+  static Future<void> removeConversation(String token, String conversationId) =>
+      _request(token, '/conversations/$conversationId', method: 'DELETE');
 
   static Future<void> readAll(String token) async {
     await Future.wait([

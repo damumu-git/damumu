@@ -96,6 +96,16 @@ public sealed class Db(NpgsqlDataSource dataSource)
 
         if (organizerId == userId)
             throw new ApiException(409, "organizer_cannot_join", "组织者已是活动成员");
+        await using (var existingCommand = new NpgsqlCommand(
+            "SELECT status FROM event_member WHERE event_id=@eventId AND user_id=@userId FOR UPDATE",
+            connection, transaction))
+        {
+            existingCommand.Parameters.AddWithValue("eventId", eventId);
+            existingCommand.Parameters.AddWithValue("userId", userId);
+            var existingStatus = await existingCommand.ExecuteScalarAsync(cancellationToken);
+            if (existingStatus is not null)
+                throw new ApiException(409, "already_applied", "你已经申请过该活动，不能重复申请");
+        }
         if (eventStatus is not ("published" or "full"))
             throw new ApiException(409, "event_not_joinable", "当前活动不可报名");
 
@@ -118,15 +128,6 @@ public sealed class Db(NpgsqlDataSource dataSource)
                 @note, @shareContact,
                 CASE WHEN @status = 'approved' THEN now() ELSE NULL END
             )
-            ON CONFLICT (event_id, user_id) DO UPDATE SET
-                status = EXCLUDED.status,
-                waitlist_position = EXCLUDED.waitlist_position,
-                party_size = EXCLUDED.party_size,
-                application_note = EXCLUDED.application_note,
-                share_contact = EXCLUDED.share_contact,
-                rejection_reason = NULL,
-                left_at = NULL,
-                updated_at = now()
             RETURNING id, event_id, user_id, status, waitlist_position,
                       party_size, share_contact, application_note, created_at
             """, connection, transaction);

@@ -48,7 +48,7 @@ public static class SocialEndpoints
                     WHERE m.conversation_id=c.id AND m.deleted_at IS NULL
                     ORDER BY m.created_at DESC LIMIT 1
                 ) lm ON true
-                WHERE cm.user_id=@userId AND cm.left_at IS NULL
+                WHERE cm.user_id=@userId AND cm.left_at IS NULL AND cm.hidden_at IS NULL
                 ORDER BY lm.created_at DESC NULLS LAST, c.updated_at DESC
                 LIMIT @limit
                 """, new { userId, limit = take }, ct));
@@ -80,7 +80,7 @@ public static class SocialEndpoints
                     INSERT INTO conversation_member (conversation_id, user_id)
                     VALUES (@conversationId, @memberId)
                     ON CONFLICT (conversation_id, user_id)
-                    DO UPDATE SET left_at=NULL
+                    DO UPDATE SET left_at=NULL, hidden_at=NULL
                     """, new { conversationId, memberId }, ct);
             return ApiSupport.Created($"/api/v1/conversations/{conversationId}", conversation);
         });
@@ -104,7 +104,7 @@ public static class SocialEndpoints
                 FROM message m
                 LEFT JOIN user_profile up ON up.user_id=m.sender_user_id
                 WHERE m.conversation_id=@id AND m.deleted_at IS NULL
-                  AND (@before IS NULL OR m.created_at < @before)
+                  AND (CAST(@before AS timestamptz) IS NULL OR m.created_at < @before)
                 ORDER BY m.created_at DESC, m.id DESC
                 LIMIT @limit
                 """, new { id, before, limit = take }, ct));
@@ -154,6 +154,14 @@ public static class SocialEndpoints
                 "UPDATE conversation SET updated_at=now() WHERE id=@id", new { id }, ct);
             await db.ExecuteAsync(
                 """
+                UPDATE conversation_member cm
+                SET hidden_at=NULL
+                FROM conversation c
+                WHERE cm.conversation_id=@id AND c.id=cm.conversation_id
+                  AND c.conversation_type='direct' AND cm.left_at IS NULL
+                """, new { id }, ct);
+            await db.ExecuteAsync(
+                """
                 INSERT INTO notification (user_id, notification_type, title, body, data)
                 SELECT cm.user_id, 'new_message',
                        CASE WHEN c.conversation_type='event' THEN '活动群有新消息' ELSE '收到新消息' END,
@@ -193,6 +201,75 @@ public static class SocialEndpoints
             return ApiSupport.Created($"/api/v1/conversations/{id}/messages/{message!["id"]}", message);
         });
 
+        api.MapPost("/conversations/{id:guid}/read-latest", async (
+            Guid id, HttpContext context, Db db,
+            RealtimeConnectionManager realtime, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var updated = await db.ExecuteAsync(
+                """
+                UPDATE conversation_member cm
+                SET last_read_at=now(),
+                    last_read_message_id=(
+                        SELECT m.id FROM message m
+                        WHERE m.conversation_id=cm.conversation_id AND m.deleted_at IS NULL
+                        ORDER BY m.created_at DESC, m.id DESC LIMIT 1
+                    )
+                WHERE cm.conversation_id=@id AND cm.user_id=@userId AND cm.left_at IS NULL
+                """, new { id, userId }, ct);
+            if (updated == 0)
+                throw new ApiException(404, "conversation_not_found", "会话不存在");
+            await db.ExecuteAsync(
+                """
+                UPDATE notification SET read_at=COALESCE(read_at, now())
+                WHERE user_id=@userId AND deleted_at IS NULL
+                  AND notification_type='new_message'
+                  AND data->>'conversationId'=@conversationId
+                """, new { userId, conversationId = id.ToString() }, ct);
+            await realtime.PublishAsync([userId], "unread.changed", new { conversationId = id }, ct);
+            return ApiSupport.Ok(new { conversationId = id, readAt = DateTime.UtcNow });
+        });
+
+        api.MapDelete("/conversations/{id:guid}", async (
+            Guid id, HttpContext context, Db db,
+            RealtimeConnectionManager realtime, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var conversationType = await db.ScalarAsync<string>(
+                """
+                SELECT c.conversation_type
+                FROM conversation c
+                JOIN conversation_member cm ON cm.conversation_id=c.id
+                WHERE c.id=@id AND cm.user_id=@userId AND cm.left_at IS NULL
+                """, new { id, userId }, ct);
+            if (conversationType is null)
+                throw new ApiException(404, "conversation_not_found", "会话不存在");
+            if (conversationType == "event")
+            {
+                await db.ExecuteAsync(
+                    """
+                    UPDATE conversation_member
+                    SET left_at=now(), left_voluntarily_at=now(), hidden_at=NULL
+                    WHERE conversation_id=@id AND user_id=@userId
+                    """, new { id, userId }, ct);
+            }
+            else
+            {
+                await db.ExecuteAsync(
+                    """
+                    UPDATE conversation_member
+                    SET hidden_at=now(), last_read_at=now()
+                    WHERE conversation_id=@id AND user_id=@userId AND left_at IS NULL
+                    """, new { id, userId }, ct);
+            }
+            await realtime.PublishAsync([userId], "conversation.removed", new
+            {
+                conversationId = id,
+                conversationType
+            }, ct);
+            return Results.NoContent();
+        });
+
         api.MapGet("/unread-summary", async (
             HttpContext context, Db db, CancellationToken ct) =>
         {
@@ -201,10 +278,10 @@ public static class SocialEndpoints
                 """
                 SELECT
                   (SELECT count(*) FROM notification n
-                   WHERE n.user_id=@userId AND n.read_at IS NULL) AS notification_count,
+                   WHERE n.user_id=@userId AND n.read_at IS NULL AND n.deleted_at IS NULL) AS notification_count,
                   (SELECT count(*) FROM message m
                    JOIN conversation_member cm ON cm.conversation_id=m.conversation_id
-                   WHERE cm.user_id=@userId AND cm.left_at IS NULL
+                   WHERE cm.user_id=@userId AND cm.left_at IS NULL AND cm.hidden_at IS NULL
                      AND m.created_at > COALESCE(cm.last_read_at, '-infinity')
                      AND m.sender_user_id IS DISTINCT FROM @userId
                      AND m.deleted_at IS NULL) AS message_count
@@ -226,7 +303,7 @@ public static class SocialEndpoints
                         WHERE m.conversation_id=cm.conversation_id AND m.deleted_at IS NULL
                         ORDER BY m.created_at DESC, m.id DESC LIMIT 1
                     )
-                WHERE cm.user_id=@userId AND cm.left_at IS NULL
+                WHERE cm.user_id=@userId AND cm.left_at IS NULL AND cm.hidden_at IS NULL
                 """, new { userId }, ct);
             await realtime.PublishAsync([userId], "unread.changed", new { }, ct);
             return ApiSupport.Ok(new { updated = count, readAt = DateTime.UtcNow });

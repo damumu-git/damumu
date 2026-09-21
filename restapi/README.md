@@ -186,7 +186,7 @@ iOS 还须在 Xcode 启用 Push Notifications、Background fetch 和 Remote noti
 后台通知须按 Firebase 文档提供 `web/firebase-messaging-sw.js`。服务账号 JSON、VAPID 私钥及
 其他秘密不得写进 Git；上述客户端 Firebase 配置和 VAPID 公钥不是服务端凭据。
 
-已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `015`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
+已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `016`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
 
 正式用户接口包括：
 
@@ -258,9 +258,11 @@ HTTP 400，`error.code=invalid_cursor`。活动列表永不返回精确集合点
 `Migrations/011_illustrated_other_category.sql`、
 `Migrations/012_custom_category_leaves.sql` 与
 `Migrations/013_notifications_event_chat.sql` 与
-`Migrations/014_event_chat_organizer_membership.sql`；`010` 增加公开活动创建时间/UUID
+`Migrations/014_event_chat_organizer_membership.sql`、
+`Migrations/015_push_devices.sql` 与
+`Migrations/016_member_profiles_and_message_actions.sql`；`010` 增加公开活动创建时间/UUID
 部分索引，`011` 增加分类图标键与活动自定义小分类列，`012` 为各一级分类增加“其它”叶子及标识。
-升级 API 前必须先应用 `011`、`012`、`013` 和 `014`，否则活动、分类或活动群聊行为不完整。
+升级 API 前必须先应用 `011` 至 `016` 的缺失迁移，否则活动、分类、消息操作或活动群聊行为不完整。
 活动封面上传接口 `POST /api/v1/events/covers` 接受登录用户的一张 1280×960 JPEG，最大 2 MB；返回媒体 ID 后在 `POST /events` 传入 `coverMediaId`。文件存于 API 本地 `uploads/events`。
 原 `/events` 及后台分页接口保持兼容。
 

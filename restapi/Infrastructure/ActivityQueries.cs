@@ -16,6 +16,7 @@ public static class ActivityQueries
                        NULL::text AS place_name, NULL::text AS address_public,
                        s.starts_at, s.ends_at,
                        u.id AS organizer_user_id, up.nickname AS organizer_name,
+                       up.avatar_url AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_score,
                        (e.title ILIKE '%新手%' OR e.description ILIKE '%新手%'
                         OR EXISTS (

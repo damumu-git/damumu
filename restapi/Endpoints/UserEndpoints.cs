@@ -333,7 +333,8 @@ public static class UserEndpoints
                 """
                 SELECT id, notification_type, title, body, data, read_at, created_at
                 FROM notification
-                WHERE user_id=@userId AND (NOT @unreadOnly OR read_at IS NULL)
+                WHERE user_id=@userId AND deleted_at IS NULL
+                  AND (NOT @unreadOnly OR read_at IS NULL)
                 ORDER BY created_at DESC
                 LIMIT @limit
                 """, new { userId, unreadOnly = unreadOnly ?? false, limit = take }, ct));
@@ -350,6 +351,25 @@ public static class UserEndpoints
             if (count == 0) throw new ApiException(404, "notification_not_found", "通知不存在");
             await realtime.PublishAsync([userId], "unread.changed", new { }, ct);
             return ApiSupport.Ok(new { id, read = true });
+        });
+
+        api.MapDelete("/me/notifications/{id:guid}", async (
+            Guid id, HttpContext context, Db db,
+            RealtimeConnectionManager realtime, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var updated = await db.ExecuteAsync(
+                """
+                UPDATE notification SET deleted_at=now(), read_at=COALESCE(read_at, now())
+                WHERE id=@id AND user_id=@userId AND deleted_at IS NULL
+                """, new { id, userId }, ct);
+            if (updated == 0)
+                throw new ApiException(404, "notification_not_found", "通知不存在");
+            await realtime.PublishAsync([userId], "notification.removed", new
+            {
+                notificationId = id
+            }, ct);
+            return Results.NoContent();
         });
 
         api.MapPost("/me/notifications/read-all", async (
