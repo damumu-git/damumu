@@ -22,11 +22,7 @@ if ([string]::IsNullOrWhiteSpace($databaseConnection)) {
     } else { 'postgres' }
     $databasePassword = $env:DAMUMU_POSTGRES_PASSWORD
     if ([string]::IsNullOrWhiteSpace($databasePassword)) {
-        $securePassword = Read-Host "$databaseHost`:5432/$databaseName PostgreSQL password" -AsSecureString
-        $databasePassword = [System.Net.NetworkCredential]::new('', $securePassword).Password
-    }
-    if ([string]::IsNullOrWhiteSpace($databasePassword)) {
-        throw 'PostgreSQL 密码不能为空。'
+        throw '未设置数据库连接。请设置 DAMUMU_POSTGRES_PASSWORD，或通过 ConnectionStrings__Muda 提供完整连接字符串。'
     }
     $databaseConnection = "Host=$databaseHost;Port=5432;Database=$databaseName;Username=$databaseUsername;Password=$databasePassword;SSL Mode=Disable"
 }
@@ -47,6 +43,9 @@ function Resolve-Executable([string[]]$Names, [string]$Description) {
 function Stop-DevelopmentProcess([System.Diagnostics.Process]$Process) {
     if ($null -eq $Process -or $Process.HasExited) { return }
     & taskkill.exe /PID $Process.Id /T /F *> $null
+    if ($LASTEXITCODE -ne 0 -and -not $Process.HasExited) {
+        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Show-StartupFailure([string]$Name, [string]$ErrorLog) {
@@ -96,8 +95,57 @@ $apiLog = Join-Path $logDirectory 'restapi.log'
 $apiErrorLog = Join-Path $logDirectory 'restapi.error.log'
 $adminLog = Join-Path $logDirectory 'admin.log'
 $adminErrorLog = Join-Path $logDirectory 'admin.error.log'
+$processFile = Join-Path $logDirectory 'dev-processes.json'
 $apiProcess = $null
 $adminProcess = $null
+
+function Save-DevelopmentProcesses {
+    $processes = @()
+    $knownIds = @{}
+    $entries = @(
+        @{ Name = 'REST API'; Process = $apiProcess; Port = [int]$apiPort },
+        @{ Name = 'Admin'; Process = $adminProcess; Port = [int]$adminPort }
+    )
+    foreach ($service in @(
+        @{ Name = 'REST API listener'; Port = [int]$apiPort },
+        @{ Name = 'Admin listener'; Port = [int]$adminPort }
+    )) {
+        $listenerId = & netstat.exe -ano -p tcp |
+            Select-String -Pattern "^\s*TCP\s+\S+:$($service.Port)\s+\S+\s+LISTENING\s+(\d+)\s*$" |
+            ForEach-Object { [int]$_.Matches[0].Groups[1].Value } |
+            Select-Object -First 1
+        if ($null -ne $listenerId) {
+            $entries += @{
+                Name = $service.Name
+                Process = Get-Process -Id $listenerId -ErrorAction SilentlyContinue
+                Port = $service.Port
+            }
+        }
+    }
+    foreach ($entry in $entries) {
+        $process = $entry.Process
+        if ($null -ne $process -and -not $process.HasExited -and -not $knownIds.ContainsKey($process.Id)) {
+            $knownIds[$process.Id] = $true
+            $processes += [ordered]@{
+                name = $entry.Name
+                pid = $process.Id
+                port = $entry.Port
+                startedAtUtcTicks = $process.StartTime.ToUniversalTime().Ticks
+            }
+        }
+    }
+    [ordered]@{
+        repositoryRoot = $repositoryRoot
+        createdAt = [DateTimeOffset]::UtcNow.ToString('O')
+        processes = $processes
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $processFile -Encoding utf8
+}
+
+function Remove-DevelopmentProcessFile {
+    if (Test-Path -LiteralPath $processFile) {
+        Remove-Item -LiteralPath $processFile -Force
+    }
+}
 
 $previousAspNetEnvironment = $env:ASPNETCORE_ENVIRONMENT
 $previousAspNetUrls = $env:ASPNETCORE_URLS
@@ -124,7 +172,6 @@ try {
         -ArgumentList @($viteEntryPoint, '--host', '127.0.0.1', '--port', $adminPort) `
         -RedirectStandardOutput $adminLog -RedirectStandardError $adminErrorLog
     $env:VITE_API_BASE = $previousViteApiBase
-
     if (-not (Wait-DevelopmentEndpoint "http://localhost:$apiPort/api/v1/health" $apiProcess)) {
         Show-StartupFailure 'REST API' $apiErrorLog
         throw 'REST API 未通过健康检查，请确认 Tailscale 和 PostgreSQL 的账号、密码。'
@@ -133,8 +180,10 @@ try {
         Show-StartupFailure 'Admin' $adminErrorLog
         throw 'Admin 启动失败'
     }
+    Save-DevelopmentProcesses
 
     Write-Host "日志目录：$logDirectory"
+    Write-Host '独立停止命令：.\stop-dev.ps1'
     if ($servicesOnly) {
         Write-Host 'Admin 和 REST API 已启动；按 Ctrl+C 停止。'
         while (-not $apiProcess.HasExited -and -not $adminProcess.HasExited) {
@@ -157,6 +206,15 @@ try {
     $env:VITE_API_BASE = $previousViteApiBase
     $env:ConnectionStrings__Muda = $previousDatabaseConnection
     Write-Host '正在停止 DAMUMU 开发服务…'
-    Stop-DevelopmentProcess $adminProcess
-    Stop-DevelopmentProcess $apiProcess
+    try {
+        if (Test-Path -LiteralPath $processFile) {
+            & (Join-Path $repositoryRoot 'stop-dev.ps1')
+        }
+    } catch {
+        Write-Warning "按 PID 文件停止服务失败：$($_.Exception.Message)"
+    } finally {
+        Stop-DevelopmentProcess $adminProcess
+        Stop-DevelopmentProcess $apiProcess
+        Remove-DevelopmentProcessFile
+    }
 }

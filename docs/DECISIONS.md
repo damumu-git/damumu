@@ -13,6 +13,8 @@
 | ADR-007 | 分类 Emoji 展示与图标键保留 | 已采用 | 2026-08-29 |
 | ADR-014 | 其它分类的小分类单独存储 | 已采用 | 2026-09-17 |
 | ADR-015 | 各大分类的自定义叶子与活动封面规格 | 已采用 | 2026-09-18 |
+| ADR-016 | 活动群聊成员跟随有效参与状态 | 已采用 | 2026-09-21 |
+| ADR-017 | REST 存储、WebSocket 实时同步与 FCM 后台推送 | 已采用 | 2026-09-21 |
 | ADR-008 | 用户位置标签跟随 App 语言 | 已采用 | 2026-09-07 |
 | ADR-009 | 活动容量包含组织者 | 已采用 | 2026-09-08 |
 | ADR-010 | 远端业务数据库使用 damumu 名称 | 已采用 | 2026-09-11 |
@@ -261,6 +263,58 @@ Web 裁剪器依赖 Cropper.js 1.6.2，静态资源随 App 本地提供，以避
 - `restapi/Migrations/012_custom_category_leaves.sql`
 - `restapi/Endpoints/EventEndpoints.cs`
 - `app/lib/event_cover_image.dart`、`app/lib/main.dart`
+
+## ADR-016：活动群聊成员跟随有效参与状态
+
+状态：已采用
+日期：2026-09-21
+
+### 决定
+
+每个活动创建时生成一个唯一的活动群聊。组织者以及活动成员状态为 `approved`、`attended` 且未退出活动的用户默认拥有群聊成员资格；申请中、候补、被拒或退出活动的用户不在群聊中。活动成员状态变化由数据库触发器同步到会话成员表，已有活动在迁移时补齐群聊和有效成员。用户也可以只退出活动群聊；该主动退出标记会被保留，后续成员同步不会自动把用户重新加入。
+
+聊天消息和站内通知分别维护未读状态；用户可逐项已读，也可一次标记全部会话和通知为已读。私信删除采用个人列表隐藏，新消息到达时重新出现；通知删除采用个人软删除。群聊资格只决定聊天访问权，不改变精确集合地点原有的授权规则。
+
+### 原因
+
+数据库同步可覆盖 API、后台任务和后续管理工具产生的成员状态变化，避免群聊成员与实际获批参与者分叉。每个活动的唯一索引可防止重试或并发创建重复群聊。
+
+### 相关位置
+
+- `restapi/Migrations/013_notifications_event_chat.sql`
+- `restapi/Migrations/014_event_chat_organizer_membership.sql`
+- `restapi/Migrations/016_member_profiles_and_message_actions.sql`
+- `restapi/Endpoints/SocialEndpoints.cs`
+- `app/lib/social_service.dart`、`app/lib/main.dart`
+
+## ADR-017：REST 存储、WebSocket 实时同步与 FCM 后台推送
+
+状态：已采用
+日期：2026-09-21
+
+### 决定
+
+聊天消息、通知和已读状态继续由 PostgreSQL 持久化，并通过 REST API 读写。Flutter 登录后建立一条经过首帧令牌认证的 WebSocket 连接；服务端只推送 `message.created`、`notification.created` 等轻量同步事件，客户端收到后从 REST API 重新读取权威数据。连接断开时指数退避重连，重连或 App 恢复后通过 REST 补齐数据。
+
+App 在后台或被系统挂起时使用 Firebase Cloud Messaging。客户端令牌保存在 `push_device`，服务端凭据只从 Application Default Credentials 读取；未配置 Firebase 时推送服务自动停用，站内通知和 WebSocket 继续工作。FCM 只作为提醒和唤醒通道，不作为消息存储或顺序依据。
+
+### 原因
+
+原生 WebSocket 的 Dart 客户端覆盖 Web、Android 和 iOS，避免依赖缺少 Flutter Web 支持的第三方 SignalR 客户端。REST 同步可容忍 WebSocket 和 FCM 的延迟、断线、重复或乱序投递。首帧认证避免把用户令牌放入 WebSocket URL 和访问日志。
+
+### 影响
+
+- 单 API 实例使用内存连接表；多实例部署前须增加 Redis 等跨实例事件总线。
+- Firebase 项目、Web VAPID、公钥配置和服务账号凭据由部署环境提供，不提交仓库。
+- 新实时事件只能作为同步提示，业务成功与否仍由数据库事务和 REST 响应决定。
+
+### 相关位置
+
+- `restapi/Infrastructure/RealtimeConnectionManager.cs`
+- `restapi/Infrastructure/PushNotificationService.cs`
+- `restapi/Migrations/015_push_devices.sql`
+- `app/lib/realtime_service.dart`
+- `app/lib/push_notification_service.dart`
 
 ## ADR-008：用户位置标签跟随 App 语言
 

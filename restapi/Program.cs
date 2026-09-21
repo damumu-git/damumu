@@ -12,6 +12,8 @@ var connectionString = builder.Configuration.GetConnectionString("Muda")
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<Db>();
 builder.Services.AddSingleton<AuthService>();
+builder.Services.AddSingleton<RealtimeConnectionManager>();
+builder.Services.AddSingleton<PushNotificationService>();
 builder.Services.AddOpenApi();
 builder.Services.AddCors(options =>
 {
@@ -55,6 +57,7 @@ app.Use(async (context, next) =>
 });
 
 app.UseCors();
+app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(uploadsRoot),
@@ -77,6 +80,7 @@ api.MapSocialEndpoints();
 api.MapSafetyEndpoints();
 api.MapGovernanceEndpoints();
 api.MapAdminEndpoints();
+api.MapRealtimeEndpoints();
 
 app.Run();
 

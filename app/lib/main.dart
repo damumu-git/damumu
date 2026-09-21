@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,8 +14,15 @@ import 'l10n.dart';
 import 'build_failure.dart';
 import 'location_service.dart';
 import 'event_cover_image.dart';
+import 'social_service.dart';
+import 'realtime_service.dart';
+import 'push_notification_service.dart';
 
-void main() => runApp(const DaziApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await PushNotificationService.initializeFirebase();
+  runApp(const DaziApp());
+}
 
 const _ink = Color(0xFF17162C);
 const _green = Color(0xFF5B4BDB);
@@ -199,6 +208,9 @@ class EventItem {
     required this.hostScore,
     required this.joined,
     required this.capacity,
+    this.apiId,
+    this.organizerUserId,
+    this.organizerAvatar,
     this.price = '免费',
     this.description = '',
     this.tags = const [],
@@ -212,6 +224,7 @@ class EventItem {
   });
 
   final int id;
+  final String? apiId;
   final String emoji;
   final String title;
   final String category;
@@ -219,6 +232,8 @@ class EventItem {
   final String area;
   final String distance;
   final String host;
+  final String? organizerUserId;
+  final String? organizerAvatar;
   final double hostScore;
   int joined;
   final int capacity;
@@ -327,7 +342,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
-  int _unread = 3;
+  int _unread = 0;
   List<EventItem> _events = [];
   bool _eventsLoading = true;
   bool _eventsLoadFailed = false;
@@ -341,6 +356,8 @@ class _AppShellState extends State<AppShell> {
   final Set<String> _loadedEventIds = {};
   double? _latitude;
   double? _longitude;
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<void>? _pushSubscription;
 
   Future<bool> _selectHome() async {
     if (_index == 2 && !await _createKey.currentState!._confirmLeave()) {
@@ -369,6 +386,7 @@ class _AppShellState extends State<AppShell> {
         }
         _index = value;
       });
+      if (value == 3) await _loadUnread();
     }
   }
 
@@ -382,11 +400,39 @@ class _AppShellState extends State<AppShell> {
     _events = List<EventItem>.of(widget.initialEvents ?? const []);
     _eventsLoading = widget.loadRemoteEvents;
     if (widget.loadRemoteEvents || widget.eventLoader != null) _loadEvents();
+    _realtimeSubscription = RealtimeService.instance.events.listen((_) {
+      _loadUnread();
+    });
+    _pushSubscription = PushNotificationService.instance.events.listen((_) {
+      _loadUnread();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadUnread();
+      if (!mounted) return;
+      final token = AuthScope.of(context).token;
+      if (token == null) return;
+      unawaited(RealtimeService.instance.start(token));
+      unawaited(PushNotificationService.instance.start(token));
+    });
+  }
+
+  Future<void> _loadUnread() async {
+    final token = AuthScope.of(context).token;
+    if (token == null) return;
+    try {
+      final summary = await SocialService.unreadSummary(token);
+      if (mounted) setState(() => _unread = summary.total);
+    } catch (_) {
+      // Keep navigation usable when the message service is unavailable.
+    }
   }
 
   @override
   void dispose() {
     if (identical(_activeShell, this)) _activeShell = null;
+    _realtimeSubscription?.cancel();
+    _pushSubscription?.cancel();
+    unawaited(RealtimeService.instance.stop());
     super.dispose();
   }
 
@@ -481,6 +527,7 @@ class _AppShellState extends State<AppShell> {
     final currentUserId = AuthScope.of(context).user?.id;
     return EventItem(
       id: rawId.hashCode,
+      apiId: rawId,
       emoji: '${json['category_icon'] ?? '✨'}',
       coverUrl: json['cover_url'] as String?,
       title: '${json['title'] ?? ''}',
@@ -491,6 +538,8 @@ class _AppShellState extends State<AppShell> {
           ? '距离待计算'
           : '${(distanceMeters / 1000).toStringAsFixed(1)} km',
       host: '${json['organizer_name'] ?? '活动组织者'}',
+      organizerUserId: json['organizer_user_id']?.toString(),
+      organizerAvatar: json['organizer_avatar'] as String?,
       hostScore: (json['organizer_score'] as num?)?.toDouble() ?? 0,
       joined: (json['approved_count'] as num?)?.toInt() ?? 0,
       capacity: (json['capacity'] as num?)?.toInt() ?? 0,
@@ -535,7 +584,6 @@ class _AppShellState extends State<AppShell> {
     setState(() {
       _events.insert(0, event);
       _index = 0;
-      _unread++;
     });
     _loadEvents();
     ScaffoldMessenger.of(
@@ -586,7 +634,7 @@ class _AppShellState extends State<AppShell> {
         onCreated: _created,
         loadRemoteData: widget.loadRemoteEvents,
       ),
-      MessagesPage(onReadAll: () => setState(() => _unread = 0)),
+      MessagesPage(onUnreadChanged: _loadUnread),
       const ProfilePage(),
     ];
     return Scaffold(
@@ -1732,6 +1780,41 @@ class EventDetailPage extends StatefulWidget {
 class _EventDetailPageState extends State<EventDetailPage> {
   bool _saved = false;
   bool _joining = false;
+  bool _detailStarted = false;
+  Map<String, dynamic>? _detail;
+  List<Map<String, dynamic>> _members = const [];
+  String? _membershipStatus;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_detailStarted && widget.event.apiId != null) {
+      _detailStarted = true;
+      _loadDetail();
+    }
+  }
+
+  Future<void> _loadDetail() async {
+    final token = AuthScope.of(context).token;
+    if (token == null || widget.event.apiId == null) return;
+    try {
+      final detail = await EventService.detailData(token, widget.event.apiId!);
+      if (!mounted) return;
+      setState(() {
+        _detail = detail.item;
+        _members = detail.members;
+        _membershipStatus = detail.item['viewer_membership_status']?.toString();
+        widget.event.joined =
+            (detail.item['approved_count'] as num?)?.toInt() ??
+            widget.event.joined;
+        widget.event.isJoined =
+            _membershipStatus == 'approved' || _membershipStatus == 'attended';
+      });
+      widget.onChanged();
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1818,10 +1901,15 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   const Divider(height: 34),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(
+                    onTap: _organizerUserId == null
+                        ? null
+                        : () => _openPublicProfile(context, _organizerUserId!),
+                    leading: UserAvatarImage(
+                      nickname: e.host,
+                      avatarUrl:
+                          _detail?['organizer_avatar'] as String? ??
+                          e.organizerAvatar,
                       radius: 25,
-                      backgroundColor: Color(0xFFFFD9C5),
-                      child: Text('🙂', style: TextStyle(fontSize: 24)),
                     ),
                     title: Text(
                       '组织者 · ${e.host}',
@@ -1867,30 +1955,29 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      for (var i = 0; i < e.joined.clamp(0, 6); i++)
-                        Align(
-                          widthFactor: .78,
-                          child: CircleAvatar(
-                            radius: 20,
-                            backgroundColor: Colors
-                                .primaries[(i + e.id) % Colors.primaries.length]
-                                .shade100,
-                            child: Text(
-                              [
-                                '🧑🏻',
-                                '👩🏻',
-                                '👨🏻',
-                                '🧑🏻‍🦱',
-                                '👩🏻‍🦰',
-                                '🧔🏻',
-                              ][i],
+                  if (_members.isEmpty)
+                    const Text('暂无已通过的参加成员')
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _members
+                          .map(
+                            (member) => InkWell(
+                              borderRadius: BorderRadius.circular(24),
+                              onTap: () => _openPublicProfile(
+                                context,
+                                '${member['user_id']}',
+                              ),
+                              child: UserAvatarImage(
+                                nickname: '${member['nickname'] ?? '用户'}',
+                                avatarUrl: member['avatar_url'] as String?,
+                                radius: 20,
+                              ),
                             ),
-                          ),
-                        ),
-                    ],
-                  ),
+                          )
+                          .toList(),
+                    ),
                   const SizedBox(height: 28),
                   Container(
                     padding: const EdgeInsets.all(18),
@@ -1938,16 +2025,20 @@ class _EventDetailPageState extends State<EventDetailPage> {
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton(
-                  onPressed: _joining || (e.isPast && !e.isOwned)
+                  onPressed:
+                      _joining ||
+                          (e.isPast && !e.isOwned) ||
+                          (_membershipStatus != null && !_canLeave) ||
+                          (!e.approval && full && !e.isOwned && !_canLeave)
                       ? null
                       : e.isOwned
                       ? widget.onOpenMyActivities
-                      : e.isJoined
+                      : _canLeave
                       ? () => _leave(e)
-                      : () => _join(e, full),
+                      : () => _join(e),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    backgroundColor: e.isJoined && !e.isOwned
+                    backgroundColor: _canLeave && !e.isOwned
                         ? Colors.grey.shade700
                         : _green,
                   ),
@@ -1958,13 +2049,14 @@ class _EventDetailPageState extends State<EventDetailPage> {
                               ? '查看我的活动'
                               : e.isPast
                               ? context.tr('pastActivity')
-                              : e.isJoined
+                              : _canLeave
                               ? '退出活动'
-                              : full
-                              ? '加入候补'
-                              : e.approval
-                              ? '申请参加'
-                              : '立即参加',
+                              : _membershipLabel ??
+                                    (e.approval
+                                        ? '申请参加'
+                                        : full
+                                        ? '人数已满'
+                                        : '立即参加'),
                         ),
                 ),
               ),
@@ -1975,13 +2067,46 @@ class _EventDetailPageState extends State<EventDetailPage> {
     );
   }
 
-  Future<void> _join(EventItem e, bool full) async {
+  String? get _organizerUserId =>
+      _detail?['organizer_user_id']?.toString() ?? widget.event.organizerUserId;
+
+  bool get _canLeave =>
+      _membershipStatus == 'approved' ||
+      _membershipStatus == 'attended' ||
+      _membershipStatus == 'waitlisted';
+
+  String? get _membershipLabel => switch (_membershipStatus) {
+    'applied' => '申请审核中',
+    'rejected' => '申请未通过',
+    'withdrawn' => '已退出活动',
+    'waitlisted' => '候补中',
+    _ => null,
+  };
+
+  Future<void> _join(EventItem e) async {
+    final eventId = e.apiId;
+    final token = AuthScope.of(context).token;
+    if (eventId == null || token == null) {
+      _showMessageError(context, '该活动暂时无法报名，请刷新后重试');
+      return;
+    }
+    final note = e.approval ? await _askApplicationNote() : '';
+    if (note == null || !mounted) return;
     setState(() => _joining = true);
-    await Future<void>.delayed(const Duration(milliseconds: 650));
+    Map<String, dynamic> member;
+    try {
+      member = await EventService.join(token, eventId, note: note);
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
+      if (mounted) setState(() => _joining = false);
+      return;
+    }
     if (!mounted) return;
+    final status = '${member['status']}';
     setState(() {
       _joining = false;
-      if (!full && !e.approval) {
+      _membershipStatus = status;
+      if (status == 'approved') {
         e.isJoined = true;
         e.joined++;
       }
@@ -2003,25 +2128,25 @@ class _EventDetailPageState extends State<EventDetailPage> {
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                full ? Icons.hourglass_top : Icons.check,
+                status == 'waitlisted' ? Icons.hourglass_top : Icons.check,
                 color: _green,
                 size: 30,
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              full
+              status == 'waitlisted'
                   ? '已加入候补'
-                  : e.approval
+                  : status == 'applied'
                   ? '申请已提交'
                   : '参加成功！',
               style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             Text(
-              full
+              status == 'waitlisted'
                   ? '有名额释放时会按顺序自动递补并通知你'
-                  : e.approval
+                  : status == 'applied'
                   ? '组织者审核后会通过站内消息通知你'
                   : '活动群聊已解锁，可在「消息」中查看',
               textAlign: TextAlign.center,
@@ -2040,16 +2165,166 @@ class _EventDetailPageState extends State<EventDetailPage> {
     );
   }
 
-  void _leave(EventItem e) {
-    setState(() {
-      e.isJoined = false;
-      e.joined--;
-    });
-    widget.onChanged();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已退出活动')));
+  Future<String?> _askApplicationNote() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('申请参加'),
+        content: TextField(
+          controller: controller,
+          maxLength: 500,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: '申请备注（选填）',
+            hintText: '可以简单介绍自己或说明参加原因',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('提交申请'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
   }
+
+  Future<void> _leave(EventItem e) async {
+    final eventId = e.apiId;
+    final token = AuthScope.of(context).token;
+    if (eventId == null || token == null || _joining) return;
+    setState(() => _joining = true);
+    try {
+      await EventService.leave(token, eventId);
+      if (!mounted) return;
+      setState(() {
+        _joining = false;
+        _membershipStatus = 'withdrawn';
+        if (e.isJoined) e.joined = (e.joined - 1).clamp(0, e.capacity);
+        e.isJoined = false;
+      });
+      widget.onChanged();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已退出活动')));
+    } catch (error) {
+      if (mounted) {
+        setState(() => _joining = false);
+        _showMessageError(context, '$error');
+      }
+    }
+  }
+}
+
+void _openPublicProfile(BuildContext context, String userId) {
+  Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => PublicUserProfilePage(userId: userId)),
+  );
+}
+
+class UserAvatarImage extends StatelessWidget {
+  const UserAvatarImage({
+    required this.nickname,
+    required this.radius,
+    this.avatarUrl,
+    super.key,
+  });
+
+  final String nickname;
+  final String? avatarUrl;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = avatarUrl?.trim();
+    final fallback = nickname.trim().isEmpty ? '用' : nickname.trim()[0];
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: _mint,
+      child: url == null || url.isEmpty
+          ? Text(fallback, style: TextStyle(fontSize: radius * .75))
+          : ClipOval(
+              child: Image.network(
+                absoluteImageUrl(url),
+                width: radius * 2,
+                height: radius * 2,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Center(child: Text(fallback)),
+              ),
+            ),
+    );
+  }
+}
+
+class PublicUserProfilePage extends StatefulWidget {
+  const PublicUserProfilePage({required this.userId, super.key});
+
+  final String userId;
+
+  @override
+  State<PublicUserProfilePage> createState() => _PublicUserProfilePageState();
+}
+
+class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
+  late Future<Map<String, dynamic>> _future = EventService.publicProfile(
+    widget.userId,
+  );
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('用户信息'), actions: const [_HomeAction()]),
+    body: FutureBuilder<Map<String, dynamic>>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: FilledButton.icon(
+              onPressed: () => setState(
+                () => _future = EventService.publicProfile(widget.userId),
+              ),
+              icon: const Icon(Icons.refresh),
+              label: const Text('重新加载'),
+            ),
+          );
+        }
+        final profile = snapshot.data!;
+        final nickname = '${profile['nickname'] ?? '用户'}';
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                UserAvatarImage(
+                  nickname: nickname,
+                  avatarUrl: profile['avatar_url'] as String?,
+                  radius: 52,
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  nickname,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
 }
 
 class _Pill extends StatelessWidget {
@@ -3300,8 +3575,8 @@ class _InfoBox extends StatelessWidget {
 }
 
 class MessagesPage extends StatefulWidget {
-  const MessagesPage({required this.onReadAll, super.key});
-  final VoidCallback onReadAll;
+  const MessagesPage({required this.onUnreadChanged, super.key});
+  final Future<void> Function() onUnreadChanged;
 
   @override
   State<MessagesPage> createState() => _MessagesPageState();
@@ -3309,6 +3584,96 @@ class MessagesPage extends StatefulWidget {
 
 class _MessagesPageState extends State<MessagesPage> {
   int _segment = 0;
+  bool _loading = true;
+  bool _readingAll = false;
+  String? _error;
+  List<ConversationItem> _conversations = const [];
+  List<NotificationItem> _notifications = const [];
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<void>? _pushSubscription;
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _realtimeSubscription = RealtimeService.instance.events.listen((event) {
+      if (event.type == 'message.created' ||
+          event.type == 'notification.created' ||
+          event.type == 'conversation.removed' ||
+          event.type == 'notification.removed' ||
+          event.type == 'unread.changed') {
+        _scheduleRealtimeRefresh();
+      }
+    });
+    _pushSubscription = PushNotificationService.instance.events.listen((_) {
+      _scheduleRealtimeRefresh();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _realtimeSubscription?.cancel();
+    _pushSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleRealtimeRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer(
+      const Duration(milliseconds: 150),
+      () => _load(showProgress: false),
+    );
+  }
+
+  Future<void> _load({bool showProgress = true}) async {
+    final token = AuthScope.of(context).token;
+    if (token == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    if (mounted && showProgress) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final results = await Future.wait([
+        SocialService.conversations(token),
+        SocialService.notifications(token),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _conversations = results[0] as List<ConversationItem>;
+        _notifications = results[1] as List<NotificationItem>;
+        _loading = false;
+      });
+      await widget.onUnreadChanged();
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = '$error';
+        });
+      }
+    }
+  }
+
+  Future<void> _readAll() async {
+    final token = AuthScope.of(context).token;
+    if (token == null || _readingAll) return;
+    setState(() => _readingAll = true);
+    try {
+      await SocialService.readAll(token);
+      await _load();
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
+    } finally {
+      if (mounted) setState(() => _readingAll = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -3320,23 +3685,45 @@ class _MessagesPageState extends State<MessagesPage> {
               children: [
                 Expanded(
                   child: Text(
-                    '消息',
+                    context.tr('messagesTitle'),
                     style: Theme.of(context).textTheme.headlineLarge,
                   ),
                 ),
                 TextButton(
-                  onPressed: widget.onReadAll,
-                  child: const Text('全部已读'),
+                  onPressed: _readingAll ? null : _readAll,
+                  child: Text(
+                    _readingAll
+                        ? context.tr('markingRead')
+                        : context.tr('markAllRead'),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 14),
             SegmentedButton<int>(
               expandedInsets: EdgeInsets.zero,
-              segments: const [
-                ButtonSegment(value: 0, label: Text('活动群聊')),
-                ButtonSegment(value: 1, label: Text('私信')),
-                ButtonSegment(value: 2, label: Text('通知')),
+              segments: [
+                ButtonSegment(
+                  value: 0,
+                  label: _segmentLabel(
+                    context.tr('eventChats'),
+                    _chatUnread('event'),
+                  ),
+                ),
+                ButtonSegment(
+                  value: 1,
+                  label: _segmentLabel(
+                    context.tr('directMessages'),
+                    _chatUnread('direct'),
+                  ),
+                ),
+                ButtonSegment(
+                  value: 2,
+                  label: _segmentLabel(
+                    context.tr('notifications'),
+                    _notifications.where((item) => !item.read).length,
+                  ),
+                ),
               ],
               selected: {_segment},
               onSelectionChanged: (s) => setState(() => _segment = s.first),
@@ -3344,88 +3731,283 @@ class _MessagesPageState extends State<MessagesPage> {
           ],
         ),
       ),
-      Expanded(child: [_groups(), _direct(), _notices()][_segment]),
+      Expanded(child: _content()),
     ],
   );
 
-  Widget _groups() => ListView(
-    padding: const EdgeInsets.symmetric(horizontal: 20),
+  int _chatUnread(String type) => _conversations
+      .where((item) => item.type == type)
+      .fold(0, (total, item) => total + item.unreadCount);
+
+  Widget _segmentLabel(String label, int unread) => Row(
+    mainAxisSize: MainAxisSize.min,
     children: [
-      _ChatTile(
-        emoji: '🌿',
-        title: '汉江日落野餐局',
-        message: '小满：集合点已更新，请大家查看',
-        time: '10:24',
-        unread: 2,
-        onTap: () => _openChat('汉江日落野餐局'),
-      ),
-      _ChatTile(
-        emoji: '🥾',
-        title: '北汉山轻徒步',
-        message: '阿泽：天气不错，周六见！',
-        time: '昨天',
-        onTap: () => _openChat('北汉山轻徒步'),
-      ),
-      _ChatTile(
-        emoji: '🎲',
-        title: '江南桌游夜',
-        message: '系统：活动已取消',
-        time: '周一',
-        onTap: () => _openChat('江南桌游夜'),
-      ),
+      Text(label),
+      if (unread > 0) ...[
+        const SizedBox(width: 5),
+        Badge(label: Text('$unread')),
+      ],
     ],
   );
 
-  Widget _direct() => ListView(
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    children: [
-      _ChatTile(
-        emoji: '🙂',
-        title: '小满',
-        message: '第一次参加也没问题～',
-        time: '昨天',
-        unread: 1,
-        onTap: () => _openChat('小满'),
+  Widget _content() {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null) {
+      return Center(
+        child: FilledButton.icon(
+          onPressed: _load,
+          icon: const Icon(Icons.refresh),
+          label: Text(context.tr('reloadMessages')),
+        ),
+      );
+    }
+    if (_segment == 2) return _notices();
+    final type = _segment == 0 ? 'event' : 'direct';
+    final items = _conversations.where((item) => item.type == type).toList();
+    if (items.isEmpty) {
+      return Center(child: Text(context.tr('noConversations')));
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        children: items
+            .map(
+              (item) => Slidable(
+                key: ValueKey('conversation-${item.id}'),
+                startActionPane: ActionPane(
+                  motion: const StretchMotion(),
+                  extentRatio: .26,
+                  children: [
+                    SlidableAction(
+                      onPressed: (_) => _markConversationRead(item),
+                      backgroundColor: _green,
+                      foregroundColor: Colors.white,
+                      icon: Icons.done_all,
+                      label: '已读',
+                    ),
+                  ],
+                ),
+                endActionPane: ActionPane(
+                  motion: const StretchMotion(),
+                  extentRatio: .3,
+                  children: [
+                    SlidableAction(
+                      onPressed: (_) => _removeConversation(item),
+                      backgroundColor: _orange,
+                      foregroundColor: Colors.white,
+                      icon: Icons.delete_outline,
+                      label: item.type == 'event' ? '退出群聊' : '删除',
+                    ),
+                  ],
+                ),
+                child: _ChatTile(
+                  emoji: item.type == 'event' ? '👥' : '💬',
+                  title: item.title,
+                  message: item.lastMessageBody ?? context.tr('chatCreated'),
+                  time: _relativeTime(item.lastMessageAt),
+                  unread: item.unreadCount,
+                  onTap: () => _openChat(item),
+                ),
+              ),
+            )
+            .toList(),
       ),
-      _ChatTile(
-        emoji: '🧑🏻',
-        title: 'Eric',
-        message: '好的，已收到你的申请',
-        time: '周二',
-        onTap: () => _openChat('Eric'),
-      ),
-    ],
-  );
-
-  Widget _notices() => ListView(
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    children: const [
-      _NoticeTile(
-        icon: Icons.how_to_reg,
-        title: '申请已通过',
-        subtitle: '你已加入「汉江日落野餐局」',
-        time: '10分钟前',
-      ),
-      _NoticeTile(
-        icon: Icons.location_on,
-        title: '集合点已公开',
-        subtitle: '组织者更新了准确集合地点',
-        time: '1小时前',
-      ),
-      _NoticeTile(
-        icon: Icons.rate_review_outlined,
-        title: '等待评价',
-        subtitle: '评价仅展示标签与信誉构成',
-        time: '昨天',
-      ),
-    ],
-  );
-
-  void _openChat(String title) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => ChatPage(title: title)));
+    );
   }
+
+  Widget _notices() {
+    if (_notifications.isEmpty) {
+      return Center(child: Text(context.tr('noNotifications')));
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        children: _notifications
+            .map(
+              (item) => Slidable(
+                key: ValueKey('notification-${item.id}'),
+                startActionPane: ActionPane(
+                  motion: const StretchMotion(),
+                  extentRatio: .26,
+                  children: [
+                    SlidableAction(
+                      onPressed: (_) => _readNotification(item),
+                      backgroundColor: _green,
+                      foregroundColor: Colors.white,
+                      icon: Icons.done_all,
+                      label: '已读',
+                    ),
+                  ],
+                ),
+                endActionPane: ActionPane(
+                  motion: const StretchMotion(),
+                  extentRatio: .26,
+                  children: [
+                    SlidableAction(
+                      onPressed: (_) => _deleteNotification(item),
+                      backgroundColor: _orange,
+                      foregroundColor: Colors.white,
+                      icon: Icons.delete_outline,
+                      label: '删除',
+                    ),
+                  ],
+                ),
+                child: _NoticeTile(
+                  icon: _notificationIcon(item.type),
+                  title: item.title,
+                  subtitle: item.body,
+                  time: _relativeTime(item.createdAt),
+                  unread: !item.read,
+                  onTap: () => _openNotification(item),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  Future<void> _readNotification(NotificationItem item) async {
+    if (item.read) return;
+    final token = AuthScope.of(context).token;
+    if (token == null) return;
+    try {
+      await SocialService.readNotification(token, item.id);
+      await _load();
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
+    }
+  }
+
+  Future<void> _openNotification(NotificationItem item) async {
+    final token = AuthScope.of(context).token;
+    if (token != null && !item.read) {
+      try {
+        await SocialService.readNotification(token, item.id);
+      } catch (error) {
+        if (mounted) _showMessageError(context, '$error');
+      }
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => NotificationDetailPage(item: item)),
+    );
+    await _load(showProgress: false);
+  }
+
+  Future<void> _markConversationRead(ConversationItem item) async {
+    final token = AuthScope.of(context).token;
+    if (token == null) return;
+    try {
+      await SocialService.readConversationLatest(token, item.id);
+      await _load(showProgress: false);
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
+    }
+  }
+
+  Future<void> _removeConversation(ConversationItem item) async {
+    final token = AuthScope.of(context).token;
+    if (token == null) return;
+    try {
+      await SocialService.removeConversation(token, item.id);
+      if (!mounted) return;
+      setState(
+        () => _conversations = _conversations
+            .where((conversation) => conversation.id != item.id)
+            .toList(),
+      );
+      await widget.onUnreadChanged();
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
+    }
+  }
+
+  Future<void> _deleteNotification(NotificationItem item) async {
+    final token = AuthScope.of(context).token;
+    if (token == null) return;
+    try {
+      await SocialService.deleteNotification(token, item.id);
+      if (!mounted) return;
+      setState(
+        () => _notifications = _notifications
+            .where((notification) => notification.id != item.id)
+            .toList(),
+      );
+      await widget.onUnreadChanged();
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
+    }
+  }
+
+  Future<void> _openChat(ConversationItem item) async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => ChatPage(conversation: item)));
+    await _load();
+  }
+}
+
+String _relativeTime(DateTime? value) {
+  if (value == null) return '';
+  final difference = DateTime.now().difference(value);
+  if (difference.inMinutes < 1) return '刚刚';
+  if (difference.inHours < 1) return '${difference.inMinutes}分钟前';
+  if (difference.inDays < 1) return '${difference.inHours}小时前';
+  if (difference.inDays < 7) return '${difference.inDays}天前';
+  return '${value.month}/${value.day}';
+}
+
+IconData _notificationIcon(String type) {
+  if (type == 'announcement') return Icons.campaign_outlined;
+  if (type == 'new_message') return Icons.chat_bubble_outline;
+  if (type.contains('approved')) return Icons.check_circle_outline;
+  if (type.contains('rejected')) return Icons.cancel_outlined;
+  if (type.contains('application')) return Icons.person_add_alt_1;
+  return Icons.notifications_outlined;
+}
+
+class NotificationDetailPage extends StatelessWidget {
+  const NotificationDetailPage({required this.item, super.key});
+
+  final NotificationItem item;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('通知详情'), actions: const [_HomeAction()]),
+    body: ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        CircleAvatar(
+          radius: 30,
+          backgroundColor: _mint,
+          child: Icon(_notificationIcon(item.type), color: _green, size: 30),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          item.title,
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _notificationTime(item.createdAt),
+          style: const TextStyle(color: Colors.black54),
+        ),
+        const SizedBox(height: 24),
+        Text(item.body, style: Theme.of(context).textTheme.bodyLarge),
+      ],
+    ),
+  );
+}
+
+String _notificationTime(DateTime value) {
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${value.year}-${two(value.month)}-${two(value.day)} '
+      '${two(value.hour)}:${two(value.minute)}';
 }
 
 class _ChatTile extends StatelessWidget {
@@ -3480,20 +4062,37 @@ class _NoticeTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.time,
+    required this.onTap,
+    this.unread = false,
   });
   final IconData icon;
   final String title;
   final String subtitle;
   final String time;
+  final VoidCallback onTap;
+  final bool unread;
 
   @override
   Widget build(BuildContext context) => ListTile(
+    onTap: onTap,
+    tileColor: unread ? _mint.withValues(alpha: .55) : null,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     contentPadding: const EdgeInsets.symmetric(vertical: 5),
     leading: CircleAvatar(
       backgroundColor: _mint,
       child: Icon(icon, color: _green),
     ),
-    title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+    title: Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        if (unread) const Badge(),
+      ],
+    ),
     subtitle: Text(subtitle),
     trailing: Text(
       time,
@@ -3503,8 +4102,8 @@ class _NoticeTile extends StatelessWidget {
 }
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({required this.title, super.key});
-  final String title;
+  const ChatPage({required this.conversation, super.key});
+  final ConversationItem conversation;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -3512,7 +4111,76 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   final _input = TextEditingController();
-  final List<String> _sent = [];
+  bool _loading = true;
+  bool _sending = false;
+  String? _error;
+  List<ChatMessage> _messages = const [];
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _realtimeSubscription = RealtimeService.instance.events.listen((event) {
+      if (event.type == 'message.created' &&
+          event.data['conversationId']?.toString() == widget.conversation.id) {
+        _refreshTimer?.cancel();
+        _refreshTimer = Timer(
+          const Duration(milliseconds: 100),
+          () => _load(showProgress: false),
+        );
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _realtimeSubscription?.cancel();
+    _input.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool showProgress = true}) async {
+    final token = AuthScope.of(context).token;
+    if (token == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    if (showProgress && mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final messages = await SocialService.messages(
+        token,
+        widget.conversation.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _messages = messages;
+        _loading = false;
+        _error = null;
+      });
+      if (messages.isNotEmpty) {
+        await SocialService.readConversation(
+          token,
+          widget.conversation.id,
+          messages.last.id,
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = '$error';
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -3521,12 +4189,19 @@ class _ChatPageState extends State<ChatPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            widget.title,
+            widget.conversation.title,
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
           ),
-          const Text(
-            '6 位成员 · 活动群',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.normal),
+          Text(
+            widget.conversation.type == 'event'
+                ? context
+                      .tr('eventChatMembers')
+                      .replaceFirst(
+                        '{count}',
+                        '${widget.conversation.memberCount}',
+                      )
+                : context.tr('privateChat'),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal),
           ),
         ],
       ),
@@ -3537,34 +4212,32 @@ class _ChatPageState extends State<ChatPage> {
     ),
     body: Column(
       children: [
-        Container(
-          margin: const EdgeInsets.all(14),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: _mint,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Row(
-            children: [
-              Icon(Icons.location_on_outlined, color: _green),
-              SizedBox(width: 10),
-              Expanded(child: Text('集合点已更新 · 汝矣渡口站 2 号出口')),
-              Icon(Icons.chevron_right),
-            ],
-          ),
-        ),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            children: [
-              const Center(child: _Pill('今天')),
-              const SizedBox(height: 18),
-              const _Bubble(text: '大家好，今晚天气不错，我们在 2 号出口集合～', mine: false),
-              const _Bubble(text: '收到！需要带野餐垫吗？', mine: true),
-              const _Bubble(text: '不用，我已经准备好了 😊', mine: false),
-              ..._sent.map((m) => _Bubble(text: m, mine: true)),
-            ],
-          ),
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+              ? Center(
+                  child: FilledButton(
+                    onPressed: _load,
+                    child: Text(context.tr('reload')),
+                  ),
+                )
+              : _messages.isEmpty
+              ? Center(child: Text(context.tr('emptyChat')))
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+                  itemCount: _messages.length,
+                  itemBuilder: (_, index) {
+                    final message = _messages[index];
+                    return _Bubble(
+                      text: message.body,
+                      mine:
+                          message.senderUserId ==
+                          AuthScope.of(context).user?.id,
+                      sender: message.senderName,
+                    );
+                  },
+                ),
         ),
         SafeArea(
           child: Padding(
@@ -3578,15 +4251,15 @@ class _ChatPageState extends State<ChatPage> {
                 Expanded(
                   child: TextField(
                     controller: _input,
-                    decoration: const InputDecoration(
-                      hintText: '发送消息…',
+                    decoration: InputDecoration(
+                      hintText: context.tr('sendMessage'),
                       isDense: true,
                     ),
                     onSubmitted: (_) => _send(),
                   ),
                 ),
                 IconButton.filled(
-                  onPressed: _send,
+                  onPressed: _sending ? null : _send,
                   icon: const Icon(Icons.arrow_upward),
                 ),
               ],
@@ -3597,35 +4270,80 @@ class _ChatPageState extends State<ChatPage> {
     ),
   );
 
-  void _send() {
-    if (_input.text.trim().isEmpty) return;
-    setState(() {
-      _sent.add(_input.text.trim());
-      _input.clear();
-    });
+  Future<void> _send() async {
+    final body = _input.text.trim();
+    final token = AuthScope.of(context).token;
+    if (body.isEmpty || token == null || _sending) return;
+    setState(() => _sending = true);
+    try {
+      final message = await SocialService.sendMessage(
+        token,
+        widget.conversation.id,
+        body,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (!_messages.any((item) => item.id == message.id)) {
+          _messages = [..._messages, message];
+        }
+        _input.clear();
+      });
+      await SocialService.readConversation(
+        token,
+        widget.conversation.id,
+        message.id,
+      );
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 }
 
+void _showMessageError(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
+
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.text, required this.mine});
+  const _Bubble({required this.text, required this.mine, this.sender});
   final String text;
   final bool mine;
+  final String? sender;
 
   @override
   Widget build(BuildContext context) => Align(
     alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-    child: Container(
-      constraints: const BoxConstraints(maxWidth: 280),
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
-      decoration: BoxDecoration(
-        color: mine ? _green : Colors.white,
-        borderRadius: BorderRadius.circular(18).copyWith(
-          bottomRight: mine ? const Radius.circular(4) : null,
-          bottomLeft: mine ? null : const Radius.circular(4),
+    child: Column(
+      crossAxisAlignment: mine
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [
+        if (!mine && sender != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 3),
+            child: Text(
+              sender!,
+              style: const TextStyle(fontSize: 11, color: Colors.black54),
+            ),
+          ),
+        Container(
+          constraints: const BoxConstraints(maxWidth: 280),
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+          decoration: BoxDecoration(
+            color: mine ? _green : Colors.white,
+            borderRadius: BorderRadius.circular(18).copyWith(
+              bottomRight: mine ? const Radius.circular(4) : null,
+              bottomLeft: mine ? null : const Radius.circular(4),
+            ),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(color: mine ? Colors.white : _ink),
+          ),
         ),
-      ),
-      child: Text(text, style: TextStyle(color: mine ? Colors.white : _ink)),
+      ],
     ),
   );
 }
@@ -4187,6 +4905,10 @@ class _OrganizerApplicationsState extends State<_OrganizerApplications> {
     final partySize = (application['party_size'] as num?)?.toInt() ?? 1;
     final note = '${application['application_note'] ?? ''}'.trim();
     final trustScore = application['trust_score'] ?? 0;
+    final nickname = '${application['nickname'] ?? context.tr('applicant')}';
+    final createdAt = DateTime.tryParse(
+      '${application['created_at'] ?? ''}',
+    )?.toLocal();
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -4196,23 +4918,43 @@ class _OrganizerApplicationsState extends State<_OrganizerApplications> {
           children: [
             Row(
               children: [
-                const CircleAvatar(child: Icon(Icons.person_outline)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${application['nickname'] ?? context.tr('applicant')}',
-                        style: const TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      Text(
-                        '${context.tr('partySize')}: $partySize · '
-                        '${context.tr('trust')}: $trustScore',
-                      ),
-                    ],
+                InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => _openPublicProfile(context, userId),
+                  child: UserAvatarImage(
+                    nickname: nickname,
+                    avatarUrl: application['avatar_url'] as String?,
+                    radius: 22,
                   ),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _openPublicProfile(context, userId),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          nickname,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        Text(
+                          '${context.tr('partySize')}: $partySize · '
+                          '${context.tr('trust')}: $trustScore',
+                        ),
+                        if (createdAt != null)
+                          Text(
+                            '申请时间：${_notificationTime(createdAt)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.black38),
               ],
             ),
             if (note.isNotEmpty) ...[

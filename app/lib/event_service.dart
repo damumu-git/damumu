@@ -109,6 +109,12 @@ class ActivityPage {
   final bool hasMore;
 }
 
+class EventDetailData {
+  const EventDetailData({required this.item, required this.members});
+  final Map<String, dynamic> item;
+  final List<Map<String, dynamic>> members;
+}
+
 class EventService {
   static Future<({String id, String url})> uploadCover(
     String token,
@@ -146,6 +152,11 @@ class EventService {
   static Future<Map<String, dynamic>> detail(
     String token,
     String eventId,
+  ) async => (await detailData(token, eventId)).item;
+
+  static Future<EventDetailData> detailData(
+    String token,
+    String eventId,
   ) async {
     final response = await http
         .get(
@@ -154,7 +165,53 @@ class EventService {
         )
         .timeout(const Duration(seconds: 10));
     final data = _decodeResponse(response, '活动暂时无法加载，请稍后再试')['data'];
-    return (data['item'] as Map).cast<String, dynamic>();
+    return EventDetailData(
+      item: (data['item'] as Map).cast<String, dynamic>(),
+      members: (data['members'] as List)
+          .map((item) => (item as Map).cast<String, dynamic>())
+          .toList(),
+    );
+  }
+
+  static Future<Map<String, dynamic>> publicProfile(String userId) async {
+    final response = await http
+        .get(Uri.parse('$_apiBase/users/$userId/public-profile'))
+        .timeout(const Duration(seconds: 10));
+    return (_decodeResponse(response, '用户信息暂时无法加载')['data'] as Map)
+        .cast<String, dynamic>();
+  }
+
+  static Future<Map<String, dynamic>> join(
+    String token,
+    String eventId, {
+    String? note,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('$_apiBase/events/$eventId/join'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'partySize': 1,
+            'note': note?.trim().isEmpty == true ? null : note?.trim(),
+            'shareContact': false,
+          }),
+        )
+        .timeout(const Duration(seconds: 10));
+    return (_decodeResponse(response, '报名没有成功，请稍后再试')['data'] as Map)
+        .cast<String, dynamic>();
+  }
+
+  static Future<void> leave(String token, String eventId) async {
+    final response = await http
+        .post(
+          Uri.parse('$_apiBase/events/$eventId/leave'),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 10));
+    _decodeResponse(response, '退出活动没有成功，请稍后再试');
   }
 
   static Future<ActivityPage> list({

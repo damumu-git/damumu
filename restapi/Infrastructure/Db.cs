@@ -74,7 +74,7 @@ public sealed class Db(NpgsqlDataSource dataSource)
 
         await using var eventCommand = new NpgsqlCommand(
             """
-            SELECT id, organizer_user_id, status, approval_mode, capacity, approved_count, waitlist_count
+            SELECT id, organizer_user_id, status, approval_mode, capacity, approved_count, waitlist_count, title
             FROM event
             WHERE id = @eventId AND deleted_at IS NULL
             FOR UPDATE
@@ -91,10 +91,21 @@ public sealed class Db(NpgsqlDataSource dataSource)
         var capacity = reader.GetInt16(4);
         var approvedCount = reader.GetInt16(5);
         var waitlistCount = reader.GetInt16(6);
+        var eventTitle = reader.GetString(7);
         await reader.CloseAsync();
 
         if (organizerId == userId)
             throw new ApiException(409, "organizer_cannot_join", "组织者已是活动成员");
+        await using (var existingCommand = new NpgsqlCommand(
+            "SELECT status FROM event_member WHERE event_id=@eventId AND user_id=@userId FOR UPDATE",
+            connection, transaction))
+        {
+            existingCommand.Parameters.AddWithValue("eventId", eventId);
+            existingCommand.Parameters.AddWithValue("userId", userId);
+            var existingStatus = await existingCommand.ExecuteScalarAsync(cancellationToken);
+            if (existingStatus is not null)
+                throw new ApiException(409, "already_applied", "你已经申请过该活动，不能重复申请");
+        }
         if (eventStatus is not ("published" or "full"))
             throw new ApiException(409, "event_not_joinable", "当前活动不可报名");
 
@@ -117,15 +128,6 @@ public sealed class Db(NpgsqlDataSource dataSource)
                 @note, @shareContact,
                 CASE WHEN @status = 'approved' THEN now() ELSE NULL END
             )
-            ON CONFLICT (event_id, user_id) DO UPDATE SET
-                status = EXCLUDED.status,
-                waitlist_position = EXCLUDED.waitlist_position,
-                party_size = EXCLUDED.party_size,
-                application_note = EXCLUDED.application_note,
-                share_contact = EXCLUDED.share_contact,
-                rejection_reason = NULL,
-                left_at = NULL,
-                updated_at = now()
             RETURNING id, event_id, user_id, status, waitlist_position,
                       party_size, share_contact, application_note, created_at
             """, connection, transaction);
@@ -161,6 +163,19 @@ public sealed class Db(NpgsqlDataSource dataSource)
         updateCommand.Parameters.AddWithValue("approvedDelta", approvedDelta);
         updateCommand.Parameters.AddWithValue("waitlistDelta", waitlistDelta);
         await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+
+        await using var organizerNotification = new NpgsqlCommand(
+            """
+            INSERT INTO notification (user_id, notification_type, title, body, data)
+            VALUES (@organizerId, 'event_application_received', '活动收到新报名',
+                    @body, jsonb_build_object('eventId', @eventId, 'applicantUserId', @userId, 'status', @status))
+            """, connection, transaction);
+        organizerNotification.Parameters.AddWithValue("organizerId", organizerId);
+        organizerNotification.Parameters.AddWithValue("eventId", eventId);
+        organizerNotification.Parameters.AddWithValue("userId", userId);
+        organizerNotification.Parameters.AddWithValue("status", status);
+        organizerNotification.Parameters.AddWithValue("body", $"有人报名了「{eventTitle}」，请查看报名信息");
+        await organizerNotification.ExecuteNonQueryAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
         return member;

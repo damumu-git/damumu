@@ -71,9 +71,10 @@ docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 ## Tailscale PostgreSQL 集成测试
 
 当前测试通过 Tailscale 连接 `100.66.109.44:5432/damumu`，默认用户为 `postgres`。
-在 Windows PowerShell 中从仓库根目录执行，脚本会隐藏输入数据库密码：
+在 Windows PowerShell 中先设置数据库密码环境变量，再从仓库根目录执行：
 
 ```powershell
+$env:DAMUMU_POSTGRES_PASSWORD = '你的密码'
 ./scripts/test-tailscale-postgres.ps1
 ```
 
@@ -84,8 +85,38 @@ docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 ./scripts/test-tailscale-postgres.ps1 -ApplyMigrations
 ```
 
-非交互执行时可提前设置仅存在于当前终端进程的
-`DAMUMU_POSTGRES_PASSWORD`。不要把密码写入 Git 配置或受版本控制的脚本。
+脚本只从 `DAMUMU_POSTGRES_PASSWORD` 读取密码，不再交互询问。不要把密码写入 Git 配置或受版本控制的脚本。
+
+## Windows PowerShell 开发启动
+
+`dev.ps1` 优先使用完整的 `ConnectionStrings__Muda` 环境变量；未提供时，根据
+`DAMUMU_POSTGRES_HOST`、`DAMUMU_POSTGRES_DATABASE`、
+`DAMUMU_POSTGRES_USERNAME` 和 `DAMUMU_POSTGRES_PASSWORD` 生成连接字符串。
+密码缺失时脚本直接退出，不再交互询问：
+
+```powershell
+$env:DAMUMU_POSTGRES_PASSWORD = '你的密码'
+./dev.ps1 --services
+# 或同时启动 Flutter Web：
+./dev.ps1 -d chrome --web-port 3000
+```
+
+启动脚本会把 API 和 Admin 的 PID 记录到 Git 忽略的 `.dev-logs/dev-processes.json`。
+需要从另一个 PowerShell 窗口停止，或原启动窗口已经关闭时，执行：
+
+```powershell
+./stop-dev.ps1
+```
+
+正常按 `Ctrl+C` 时 `dev.ps1` 也会清理子进程。直接关闭 PowerShell 窗口无法保证执行
+脚本的 `finally` 清理，因此应在关闭窗口前运行停止脚本；即使窗口已关闭，PID 文件仍可用于停止进程树。
+
+如果希望新开的 PowerShell 窗口也能读取，可以将密码保存为当前 Windows 用户的环境变量，
+随后重新打开终端：
+
+```powershell
+[Environment]::SetEnvironmentVariable('DAMUMU_POSTGRES_PASSWORD', '你的密码', 'User')
+```
 
 ## Bash 开发启动
 
@@ -96,7 +127,66 @@ docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 
 ## 用户认证与头像
 
-已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `011`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
+## 多用户互动演示数据
+
+API 启动并应用全部迁移后，可以通过真实注册、活动发布、报名审批和聊天接口生成一组
+本地演示数据：
+
+```powershell
+./scripts/seed-demo-interactions.ps1 -UserCount 20
+```
+
+脚本创建约 20 个带 `[DEMO]` 标识的活动；每个活动有一条获批申请、一条被拒申请和
+一条留给界面手动处理的待审核申请，并包含活动群聊消息和相邻账号私信。账号清单保存在 Git 忽略的
+`.dev-data/demo-interactions-<时间>.json`，用于在单设备上切换登录。
+
+单设备并行测试时，先用 `./dev.ps1 --services` 启动 API 和 Admin，然后在不同终端以
+不同 Web 端口启动 Flutter。不同端口具有隔离的浏览器本地存储，可以同时保持不同账号登录：
+
+```powershell
+cd app
+flutter run -d chrome --web-port 3000 --dart-define=API_BASE_URL=http://localhost:8080/api/v1
+flutter run -d edge --web-port 3001 --dart-define=API_BASE_URL=http://localhost:8080/api/v1
+```
+
+从清单选择两个账号分别登录。批次中账号 N 发布活动 N，账号 N+1 的申请已通过并进入群聊，
+账号 N+2 的申请被拒且不在群聊，账号 N+3 保持待审核，可直接验证审批、通知、群聊成员、未读气泡和私信。
+
+## 实时消息和 Firebase 推送
+
+登录后的 App 会连接 `/api/v1/realtime`。WebSocket 的第一条消息携带登录令牌完成认证，后续
+只接收消息和通知的同步事件；聊天正文、历史记录和未读状态仍通过 REST API 与 PostgreSQL
+读写。服务端重启或网络切换后客户端自动重连，并重新读取权威数据。
+
+FCM 未配置时自动停用，不影响 REST、站内通知或 WebSocket。启用服务端发送需要创建 Firebase
+项目、启用 Cloud Messaging API，并把服务账号 JSON 保存在仓库外。PowerShell 示例：
+
+```powershell
+$env:Firebase__ProjectId = '你的 Firebase Project ID'
+$env:GOOGLE_APPLICATION_CREDENTIALS = 'C:\安全目录\firebase-service-account.json'
+./dev.ps1 --services
+```
+
+Flutter 构建需要使用对应平台 Firebase App 的公开配置。Web 还需要 VAPID 公钥：
+
+```powershell
+flutter run -d chrome --web-port 3000 `
+  --dart-define=API_BASE_URL=http://localhost:8080/api/v1 `
+  --dart-define=FIREBASE_API_KEY=... `
+  --dart-define=FIREBASE_APP_ID=... `
+  --dart-define=FIREBASE_MESSAGING_SENDER_ID=... `
+  --dart-define=FIREBASE_PROJECT_ID=... `
+  --dart-define=FIREBASE_AUTH_DOMAIN=... `
+  --dart-define=FIREBASE_STORAGE_BUCKET=... `
+  --dart-define=FIREBASE_WEB_VAPID_KEY=...
+```
+
+Android、iOS 和 Web 的 `FIREBASE_APP_ID` 通常不同，构建各平台时使用该平台 App 的值。
+iOS 还须在 Xcode 启用 Push Notifications、Background fetch 和 Remote notifications；Web
+后台通知须按 Firebase 文档提供 `web/firebase-messaging-sw.js`。服务账号 JSON、VAPID 私钥及
+其他秘密不得写进 Git；上述客户端 Firebase 配置和 VAPID 公钥不是服务端凭据。
+
+已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `016`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
 
 正式用户接口包括：
 
@@ -164,11 +254,15 @@ GET /api/v1/activities?limit=20&cursor=<上一页 data.nextCursor>
 游标为版本化 Base64URL 编码位置，不是秘密或鉴权令牌；非法/过长/未知版本游标返回
 HTTP 400，`error.code=invalid_cursor`。活动列表永不返回精确集合点。
 
-部署时按迁移顺序执行 `Migrations/010_activity_cursor_index.sql` 与
-`Migrations/011_illustrated_other_category.sql` 与
-`Migrations/012_custom_category_leaves.sql`；前者增加公开活动创建时间/UUID
+部署时按迁移顺序执行 `Migrations/010_activity_cursor_index.sql`、
+`Migrations/011_illustrated_other_category.sql`、
+`Migrations/012_custom_category_leaves.sql` 与
+`Migrations/013_notifications_event_chat.sql` 与
+`Migrations/014_event_chat_organizer_membership.sql`、
+`Migrations/015_push_devices.sql` 与
+`Migrations/016_member_profiles_and_message_actions.sql`；`010` 增加公开活动创建时间/UUID
 部分索引，`011` 增加分类图标键与活动自定义小分类列，`012` 为各一级分类增加“其它”叶子及标识。
-升级 API 前必须先应用 `011` 和 `012`，否则活动或分类查询会因缺少字段失败。
+升级 API 前必须先应用 `011` 至 `016` 的缺失迁移，否则活动、分类、消息操作或活动群聊行为不完整。
 活动封面上传接口 `POST /api/v1/events/covers` 接受登录用户的一张 1280×960 JPEG，最大 2 MB；返回媒体 ID 后在 `POST /events` 传入 `coverMediaId`。文件存于 API 本地 `uploads/events`。
 原 `/events` 及后台分页接口保持兼容。
 

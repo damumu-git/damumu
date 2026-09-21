@@ -9,6 +9,7 @@
 .env.*
 !.env.example
 .dev-logs/
+.dev-data/
 /dev.local.sh
 *.log
 

@@ -41,6 +41,7 @@ public static class EventEndpoints
                        NULL::text AS place_name, NULL::text AS address_public,
                        s.starts_at, s.ends_at,
                        u.id AS organizer_user_id, up.nickname AS organizer_name,
+                       up.avatar_url AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_score,
                        (e.title ILIKE '%新手%' OR e.description ILIKE '%新手%'
                         OR EXISTS (
@@ -140,7 +141,13 @@ public static class EventEndpoints
                        ) THEN ST_X(p.public_geo::geometry) END AS public_longitude,
                        up.nickname AS organizer_name, up.avatar_url AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_score,
-                       COALESCE(ts.review_count, 0) AS organizer_review_count
+                       COALESCE(ts.review_count, 0) AS organizer_review_count,
+                       (
+                           SELECT viewer_member.status
+                           FROM event_member viewer_member
+                           WHERE viewer_member.event_id=e.id AND viewer_member.user_id=@viewerId
+                           LIMIT 1
+                       ) AS viewer_membership_status
                 FROM event e
                 JOIN category c ON c.id=e.category_id
                 LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
@@ -172,6 +179,21 @@ public static class EventEndpoints
                 LIMIT 12
                 """, new { id }, ct);
             return ApiSupport.Ok(new { item, schedules, tags, members });
+        });
+
+        api.MapGet("/users/{id:guid}/public-profile", async (
+            Guid id, Db db, CancellationToken ct) =>
+        {
+            var profile = await db.QueryOneAsync(
+                """
+                SELECT u.id, COALESCE(up.nickname, '用户') AS nickname, up.avatar_url
+                FROM app_user u
+                LEFT JOIN user_profile up ON up.user_id=u.id
+                WHERE u.id=@id AND u.status='active' AND u.deleted_at IS NULL
+                """, new { id }, ct);
+            if (profile is null)
+                throw new ApiException(404, "user_not_found", "用户不存在");
+            return ApiSupport.Ok(profile);
         });
 
         api.MapPost("/events/covers", async (
@@ -443,13 +465,35 @@ public static class EventEndpoints
         });
 
         api.MapPost("/events/{id:guid}/join", async (
-            Guid id, HttpContext context, JoinEventRequest request, Db db, CancellationToken ct) =>
+            Guid id, HttpContext context, JoinEventRequest request, Db db,
+            RealtimeConnectionManager realtime, PushNotificationService push,
+            CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             if (request.PartySize is < 1 or > 20)
                 throw new ApiException(400, "party_size_invalid", "报名人数需要为 1–20 人");
-            return ApiSupport.Ok(await db.JoinEventAsync(
-                id, userId, request.PartySize, request.Note, request.ShareContact, ct));
+            var member = await db.JoinEventAsync(
+                id, userId, request.PartySize, request.Note, request.ShareContact, ct);
+            var activity = await db.QueryOneAsync(
+                "SELECT organizer_user_id, title FROM event WHERE id=@id", new { id }, ct);
+            if (activity is not null)
+            {
+                var organizerId = (Guid)activity["organizer_user_id"]!;
+                await realtime.PublishAsync([organizerId], "notification.created", new
+                {
+                    notificationType = "event_application_received",
+                    eventId = id
+                }, ct);
+                await push.SendToUsersAsync(db, [organizerId], "活动收到新报名",
+                    $"有人报名了「{activity["title"]}」，请查看报名信息",
+                    new Dictionary<string, string>
+                    {
+                        ["type"] = "notification.created",
+                        ["notificationType"] = "event_application_received",
+                        ["eventId"] = id.ToString()
+                    }, ct);
+            }
+            return ApiSupport.Ok(member);
         });
 
         api.MapPost("/events/{id:guid}/leave", async (
@@ -458,12 +502,34 @@ public static class EventEndpoints
             var userId = ApiSupport.RequireUserId(context);
             var member = await db.QueryOneAsync(
                 """
-                UPDATE event_member
-                SET status='withdrawn', left_at=now(), waitlist_position=NULL
-                WHERE event_id=@id AND user_id=@userId
-                  AND member_role='participant'
-                  AND status IN ('applied', 'approved', 'waitlisted')
-                RETURNING id, event_id, user_id, status, left_at
+                WITH target AS MATERIALIZED (
+                    SELECT party_size, status
+                    FROM event_member
+                    WHERE event_id=@id AND user_id=@userId
+                      AND member_role='participant'
+                      AND status IN ('applied', 'approved', 'waitlisted')
+                    FOR UPDATE
+                ), changed AS (
+                    UPDATE event_member em
+                    SET status='withdrawn', left_at=now(), waitlist_position=NULL
+                    FROM target
+                    WHERE em.event_id=@id AND em.user_id=@userId
+                    RETURNING em.id, em.event_id, em.user_id, em.status, em.left_at
+                ), event_updated AS (
+                    UPDATE event e
+                    SET approved_count=GREATEST(0, e.approved_count-
+                            CASE WHEN target.status='approved' THEN target.party_size ELSE 0 END),
+                        waitlist_count=GREATEST(0, e.waitlist_count-
+                            CASE WHEN target.status='waitlisted' THEN 1 ELSE 0 END),
+                        status=CASE
+                            WHEN e.status='full' AND target.status='approved' THEN 'published'
+                            ELSE e.status
+                        END
+                    FROM target
+                    WHERE e.id=@id
+                    RETURNING e.id
+                )
+                SELECT changed.* FROM changed
                 """, new { id, userId }, ct);
             if (member is null) throw new ApiException(409, "cannot_leave", "当前没有可退出的报名");
             return ApiSupport.Ok(member);
@@ -482,6 +548,7 @@ public static class EventEndpoints
                 SELECT em.id, em.user_id, em.member_role, em.status, em.waitlist_position,
                        em.party_size, em.application_note, em.share_contact,
                        em.rejection_reason, em.reviewed_at, em.joined_at, em.checked_in_at,
+                       em.created_at,
                        up.nickname, up.avatar_url, COALESCE(ts.score, 0) AS trust_score
                 FROM event_member em
                 LEFT JOIN user_profile up ON up.user_id=em.user_id
@@ -492,19 +559,28 @@ public static class EventEndpoints
         });
 
         api.MapPost("/events/{id:guid}/members/{memberUserId:guid}/approve", async (
-            Guid id, Guid memberUserId, HttpContext context, Db db, CancellationToken ct) =>
-            ApiSupport.Ok(await db.ReviewMemberAsync(
-                id, memberUserId, ApiSupport.RequireUserId(context), true, null, ct)));
+            Guid id, Guid memberUserId, HttpContext context, Db db,
+            RealtimeConnectionManager realtime, PushNotificationService push,
+            CancellationToken ct) =>
+        {
+            var member = await db.ReviewMemberAsync(
+                id, memberUserId, ApiSupport.RequireUserId(context), true, null, ct);
+            await PublishReviewAsync(db, realtime, push, id, memberUserId, true, null, ct);
+            return ApiSupport.Ok(member);
+        });
 
         api.MapPost("/events/{id:guid}/members/{memberUserId:guid}/reject", async (
             Guid id, Guid memberUserId, HttpContext context, RejectApplicationRequest request,
-            Db db, CancellationToken ct) =>
+            Db db, RealtimeConnectionManager realtime, PushNotificationService push,
+            CancellationToken ct) =>
         {
             var reason = request.Reason?.Trim();
             if (reason is null || reason.Length is < 2 or > 300)
                 throw new ApiException(400, "rejection_reason_required", "拒绝理由需要为 2–300 字");
-            return ApiSupport.Ok(await db.ReviewMemberAsync(
-                id, memberUserId, ApiSupport.RequireUserId(context), false, reason, ct));
+            var member = await db.ReviewMemberAsync(
+                id, memberUserId, ApiSupport.RequireUserId(context), false, reason, ct);
+            await PublishReviewAsync(db, realtime, push, id, memberUserId, false, reason, ct);
+            return ApiSupport.Ok(member);
         });
 
         api.MapPost("/events/{id:guid}/check-in", async (
@@ -523,6 +599,41 @@ public static class EventEndpoints
         });
 
         return api;
+    }
+
+    private static async Task PublishReviewAsync(
+        Db db,
+        RealtimeConnectionManager realtime,
+        PushNotificationService push,
+        Guid eventId,
+        Guid memberUserId,
+        bool approved,
+        string? rejectionReason,
+        CancellationToken ct)
+    {
+        var activityTitle = await db.ScalarAsync<string>(
+            "SELECT title FROM event WHERE id=@eventId", new { eventId }, ct) ?? "活动";
+        var notificationType = approved
+            ? "event_application_approved"
+            : "event_application_rejected";
+        await realtime.PublishAsync([memberUserId], "notification.created", new
+        {
+            notificationType,
+            eventId,
+            status = approved ? "approved" : "rejected"
+        }, ct);
+        var body = approved
+            ? $"你申请的「{activityTitle}」已通过"
+            : $"你申请的「{activityTitle}」未通过：{rejectionReason}";
+        await push.SendToUsersAsync(db, [memberUserId],
+            approved ? "活动申请已通过" : "活动申请未通过",
+            body,
+            new Dictionary<string, string>
+            {
+                ["type"] = "notification.created",
+                ["notificationType"] = notificationType,
+                ["eventId"] = eventId.ToString()
+            }, ct);
     }
 }
 
