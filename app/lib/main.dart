@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -13,8 +14,14 @@ import 'build_failure.dart';
 import 'location_service.dart';
 import 'event_cover_image.dart';
 import 'social_service.dart';
+import 'realtime_service.dart';
+import 'push_notification_service.dart';
 
-void main() => runApp(const DaziApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await PushNotificationService.initializeFirebase();
+  runApp(const DaziApp());
+}
 
 const _ink = Color(0xFF17162C);
 const _green = Color(0xFF5B4BDB);
@@ -342,6 +349,8 @@ class _AppShellState extends State<AppShell> {
   final Set<String> _loadedEventIds = {};
   double? _latitude;
   double? _longitude;
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<void>? _pushSubscription;
 
   Future<bool> _selectHome() async {
     if (_index == 2 && !await _createKey.currentState!._confirmLeave()) {
@@ -384,7 +393,20 @@ class _AppShellState extends State<AppShell> {
     _events = List<EventItem>.of(widget.initialEvents ?? const []);
     _eventsLoading = widget.loadRemoteEvents;
     if (widget.loadRemoteEvents || widget.eventLoader != null) _loadEvents();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadUnread());
+    _realtimeSubscription = RealtimeService.instance.events.listen((_) {
+      _loadUnread();
+    });
+    _pushSubscription = PushNotificationService.instance.events.listen((_) {
+      _loadUnread();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadUnread();
+      if (!mounted) return;
+      final token = AuthScope.of(context).token;
+      if (token == null) return;
+      unawaited(RealtimeService.instance.start(token));
+      unawaited(PushNotificationService.instance.start(token));
+    });
   }
 
   Future<void> _loadUnread() async {
@@ -401,6 +423,9 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     if (identical(_activeShell, this)) _activeShell = null;
+    _realtimeSubscription?.cancel();
+    _pushSubscription?.cancel();
+    unawaited(RealtimeService.instance.stop());
     super.dispose();
   }
 
@@ -3327,20 +3352,49 @@ class _MessagesPageState extends State<MessagesPage> {
   String? _error;
   List<ConversationItem> _conversations = const [];
   List<NotificationItem> _notifications = const [];
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  StreamSubscription<void>? _pushSubscription;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
+    _realtimeSubscription = RealtimeService.instance.events.listen((event) {
+      if (event.type == 'message.created' ||
+          event.type == 'notification.created' ||
+          event.type == 'unread.changed') {
+        _scheduleRealtimeRefresh();
+      }
+    });
+    _pushSubscription = PushNotificationService.instance.events.listen((_) {
+      _scheduleRealtimeRefresh();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _realtimeSubscription?.cancel();
+    _pushSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleRealtimeRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer(
+      const Duration(milliseconds: 150),
+      () => _load(showProgress: false),
+    );
+  }
+
+  Future<void> _load({bool showProgress = true}) async {
     final token = AuthScope.of(context).token;
     if (token == null) {
       if (mounted) setState(() => _loading = false);
       return;
     }
-    if (mounted) {
+    if (mounted && showProgress) {
       setState(() {
         _loading = true;
         _error = null;
@@ -3662,20 +3716,34 @@ class _ChatPageState extends State<ChatPage> {
   bool _sending = false;
   String? _error;
   List<ChatMessage> _messages = const [];
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
+    _realtimeSubscription = RealtimeService.instance.events.listen((event) {
+      if (event.type == 'message.created' &&
+          event.data['conversationId']?.toString() == widget.conversation.id) {
+        _refreshTimer?.cancel();
+        _refreshTimer = Timer(
+          const Duration(milliseconds: 100),
+          () => _load(showProgress: false),
+        );
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
+    _realtimeSubscription?.cancel();
     _input.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool showProgress = true}) async {
     final token = AuthScope.of(context).token;
     if (token == null) return;
     try {
@@ -3686,7 +3754,7 @@ class _ChatPageState extends State<ChatPage> {
       if (!mounted) return;
       setState(() {
         _messages = messages;
-        _loading = false;
+        if (showProgress) _loading = false;
         _error = null;
       });
       if (messages.isNotEmpty) {
@@ -3807,7 +3875,9 @@ class _ChatPageState extends State<ChatPage> {
       );
       if (!mounted) return;
       setState(() {
-        _messages = [..._messages, message];
+        if (!_messages.any((item) => item.id == message.id)) {
+          _messages = [..._messages, message];
+        }
         _input.clear();
       });
       await SocialService.readConversation(

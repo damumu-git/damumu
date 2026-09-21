@@ -443,13 +443,35 @@ public static class EventEndpoints
         });
 
         api.MapPost("/events/{id:guid}/join", async (
-            Guid id, HttpContext context, JoinEventRequest request, Db db, CancellationToken ct) =>
+            Guid id, HttpContext context, JoinEventRequest request, Db db,
+            RealtimeConnectionManager realtime, PushNotificationService push,
+            CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             if (request.PartySize is < 1 or > 20)
                 throw new ApiException(400, "party_size_invalid", "报名人数需要为 1–20 人");
-            return ApiSupport.Ok(await db.JoinEventAsync(
-                id, userId, request.PartySize, request.Note, request.ShareContact, ct));
+            var member = await db.JoinEventAsync(
+                id, userId, request.PartySize, request.Note, request.ShareContact, ct);
+            var activity = await db.QueryOneAsync(
+                "SELECT organizer_user_id, title FROM event WHERE id=@id", new { id }, ct);
+            if (activity is not null)
+            {
+                var organizerId = (Guid)activity["organizer_user_id"]!;
+                await realtime.PublishAsync([organizerId], "notification.created", new
+                {
+                    notificationType = "event_application_received",
+                    eventId = id
+                }, ct);
+                await push.SendToUsersAsync(db, [organizerId], "活动收到新报名",
+                    $"有人报名了「{activity["title"]}」，请查看报名信息",
+                    new Dictionary<string, string>
+                    {
+                        ["type"] = "notification.created",
+                        ["notificationType"] = "event_application_received",
+                        ["eventId"] = id.ToString()
+                    }, ct);
+            }
+            return ApiSupport.Ok(member);
         });
 
         api.MapPost("/events/{id:guid}/leave", async (
@@ -492,19 +514,28 @@ public static class EventEndpoints
         });
 
         api.MapPost("/events/{id:guid}/members/{memberUserId:guid}/approve", async (
-            Guid id, Guid memberUserId, HttpContext context, Db db, CancellationToken ct) =>
-            ApiSupport.Ok(await db.ReviewMemberAsync(
-                id, memberUserId, ApiSupport.RequireUserId(context), true, null, ct)));
+            Guid id, Guid memberUserId, HttpContext context, Db db,
+            RealtimeConnectionManager realtime, PushNotificationService push,
+            CancellationToken ct) =>
+        {
+            var member = await db.ReviewMemberAsync(
+                id, memberUserId, ApiSupport.RequireUserId(context), true, null, ct);
+            await PublishReviewAsync(db, realtime, push, id, memberUserId, true, null, ct);
+            return ApiSupport.Ok(member);
+        });
 
         api.MapPost("/events/{id:guid}/members/{memberUserId:guid}/reject", async (
             Guid id, Guid memberUserId, HttpContext context, RejectApplicationRequest request,
-            Db db, CancellationToken ct) =>
+            Db db, RealtimeConnectionManager realtime, PushNotificationService push,
+            CancellationToken ct) =>
         {
             var reason = request.Reason?.Trim();
             if (reason is null || reason.Length is < 2 or > 300)
                 throw new ApiException(400, "rejection_reason_required", "拒绝理由需要为 2–300 字");
-            return ApiSupport.Ok(await db.ReviewMemberAsync(
-                id, memberUserId, ApiSupport.RequireUserId(context), false, reason, ct));
+            var member = await db.ReviewMemberAsync(
+                id, memberUserId, ApiSupport.RequireUserId(context), false, reason, ct);
+            await PublishReviewAsync(db, realtime, push, id, memberUserId, false, reason, ct);
+            return ApiSupport.Ok(member);
         });
 
         api.MapPost("/events/{id:guid}/check-in", async (
@@ -523,6 +554,41 @@ public static class EventEndpoints
         });
 
         return api;
+    }
+
+    private static async Task PublishReviewAsync(
+        Db db,
+        RealtimeConnectionManager realtime,
+        PushNotificationService push,
+        Guid eventId,
+        Guid memberUserId,
+        bool approved,
+        string? rejectionReason,
+        CancellationToken ct)
+    {
+        var activityTitle = await db.ScalarAsync<string>(
+            "SELECT title FROM event WHERE id=@eventId", new { eventId }, ct) ?? "活动";
+        var notificationType = approved
+            ? "event_application_approved"
+            : "event_application_rejected";
+        await realtime.PublishAsync([memberUserId], "notification.created", new
+        {
+            notificationType,
+            eventId,
+            status = approved ? "approved" : "rejected"
+        }, ct);
+        var body = approved
+            ? $"你申请的「{activityTitle}」已通过"
+            : $"你申请的「{activityTitle}」未通过：{rejectionReason}";
+        await push.SendToUsersAsync(db, [memberUserId],
+            approved ? "活动申请已通过" : "活动申请未通过",
+            body,
+            new Dictionary<string, string>
+            {
+                ["type"] = "notification.created",
+                ["notificationType"] = notificationType,
+                ["eventId"] = eventId.ToString()
+            }, ct);
     }
 }
 

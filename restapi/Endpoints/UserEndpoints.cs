@@ -340,24 +340,68 @@ public static class UserEndpoints
         });
 
         api.MapPost("/me/notifications/{id:guid}/read", async (
-            Guid id, HttpContext context, Db db, CancellationToken ct) =>
+            Guid id, HttpContext context, Db db,
+            RealtimeConnectionManager realtime, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var count = await db.ExecuteAsync(
                 "UPDATE notification SET read_at=COALESCE(read_at, now()) WHERE id=@id AND user_id=@userId",
                 new { id, userId }, ct);
             if (count == 0) throw new ApiException(404, "notification_not_found", "通知不存在");
+            await realtime.PublishAsync([userId], "unread.changed", new { }, ct);
             return ApiSupport.Ok(new { id, read = true });
         });
 
         api.MapPost("/me/notifications/read-all", async (
-            HttpContext context, Db db, CancellationToken ct) =>
+            HttpContext context, Db db,
+            RealtimeConnectionManager realtime, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var count = await db.ExecuteAsync(
                 "UPDATE notification SET read_at=now() WHERE user_id=@userId AND read_at IS NULL",
                 new { userId }, ct);
+            await realtime.PublishAsync([userId], "unread.changed", new { }, ct);
             return ApiSupport.Ok(new { updated = count, readAt = DateTime.UtcNow });
+        });
+
+        api.MapPost("/me/push-devices", async (
+            HttpContext context, PushDeviceRequest request, Db db, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var token = request.RegistrationToken?.Trim();
+            var platform = request.Platform?.Trim().ToLowerInvariant();
+            if (token is null || token.Length is < 16 or > 4096)
+                throw new ApiException(400, "push_token_invalid", "推送设备令牌无效");
+            if (platform is not ("android" or "ios" or "web" or "macos"))
+                throw new ApiException(400, "push_platform_invalid", "推送设备平台无效");
+            var device = await db.QueryOneAsync(
+                """
+                INSERT INTO push_device (user_id, platform, registration_token)
+                VALUES (@userId, @platform, @token)
+                ON CONFLICT (registration_token) DO UPDATE SET
+                    user_id=EXCLUDED.user_id,
+                    platform=EXCLUDED.platform,
+                    enabled=true,
+                    last_seen_at=now(),
+                    updated_at=now()
+                RETURNING id, platform, enabled, last_seen_at
+                """, new { userId, platform, token }, ct);
+            return ApiSupport.Ok(device);
+        });
+
+        api.MapPost("/me/push-devices/unregister", async (
+            HttpContext context, PushDeviceRequest request, Db db, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var token = request.RegistrationToken?.Trim();
+            if (string.IsNullOrWhiteSpace(token))
+                throw new ApiException(400, "push_token_invalid", "推送设备令牌无效");
+            var updated = await db.ExecuteAsync(
+                """
+                UPDATE push_device SET enabled=false, updated_at=now()
+                WHERE user_id=@userId AND registration_token=@token
+                """, new { userId, token }, ct);
+            return ApiSupport.Ok(new { updated });
         });
 
         api.MapPost("/blocks/{blockedUserId:guid}", async (
@@ -460,3 +504,4 @@ public sealed record UpdateProfileRequest(
     string? ContactValue);
 public sealed record SetInterestsRequest(Guid[] InterestIds);
 public sealed record BlockRequest(string? ReasonCode);
+public sealed record PushDeviceRequest(string? RegistrationToken, string? Platform);

@@ -227,4 +227,26 @@ class SocialService {
       _request(token, '/me/notifications/read-all', method: 'POST'),
     ]);
   }
+
+  static Future<void> registerPushDevice(
+    String token,
+    String registrationToken,
+    String platform,
+  ) => _request(
+    token,
+    '/me/push-devices',
+    method: 'POST',
+    body: {'registrationToken': registrationToken, 'platform': platform},
+  );
+
+  static Future<void> unregisterPushDevice(
+    String token,
+    String registrationToken,
+    String platform,
+  ) => _request(
+    token,
+    '/me/push-devices/unregister',
+    method: 'POST',
+    body: {'registrationToken': registrationToken, 'platform': platform},
+  );
 }

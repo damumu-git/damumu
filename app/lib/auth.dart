@@ -10,6 +10,7 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'l10n.dart';
+import 'push_notification_service.dart';
 
 const _green = Color(0xFF1F7A55);
 const _mint = Color(0xFFE7F4EC);
@@ -229,6 +230,7 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await PushNotificationService.instance.stop(token);
     user = null;
     token = null;
     await _saveToken(null);

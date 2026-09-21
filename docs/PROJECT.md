@@ -29,7 +29,8 @@ DAMUMU（中文 UI 名称“搭慕慕”）是一款面向韩国本地生活场�
 - Admin：React 19、Vite 8。
 - Infrastructure：本地开发服务加 Tailscale 可达的 PostgreSQL 主机。
 - Object Storage：尚未确定，头像当前使用 API 本地持久化目录。
-- Push / Realtime：尚未选型或完整接入。
+- Realtime：ASP.NET Core 原生 WebSocket；数据库和 REST API 仍是消息事实来源，WebSocket 只发送同步事件。
+- Push：Firebase Cloud Messaging（FCM）；缺少 Firebase 项目配置时自动停用，不影响站内消息和前台 WebSocket。
 
 ## 长期业务规则
 

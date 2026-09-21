@@ -152,7 +152,41 @@ flutter run -d edge --web-port 3001 --dart-define=API_BASE_URL=http://localhost:
 从清单选择两个账号分别登录。批次中账号 N 发布活动 N，账号 N+1 的申请已通过并进入群聊，
 账号 N+2 的申请被拒且不在群聊，账号 N+3 保持待审核，可直接验证审批、通知、群聊成员、未读气泡和私信。
 
-已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `014`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
+## 实时消息和 Firebase 推送
+
+登录后的 App 会连接 `/api/v1/realtime`。WebSocket 的第一条消息携带登录令牌完成认证，后续
+只接收消息和通知的同步事件；聊天正文、历史记录和未读状态仍通过 REST API 与 PostgreSQL
+读写。服务端重启或网络切换后客户端自动重连，并重新读取权威数据。
+
+FCM 未配置时自动停用，不影响 REST、站内通知或 WebSocket。启用服务端发送需要创建 Firebase
+项目、启用 Cloud Messaging API，并把服务账号 JSON 保存在仓库外。PowerShell 示例：
+
+```powershell
+$env:Firebase__ProjectId = '你的 Firebase Project ID'
+$env:GOOGLE_APPLICATION_CREDENTIALS = 'C:\安全目录\firebase-service-account.json'
+./dev.ps1 --services
+```
+
+Flutter 构建需要使用对应平台 Firebase App 的公开配置。Web 还需要 VAPID 公钥：
+
+```powershell
+flutter run -d chrome --web-port 3000 `
+  --dart-define=API_BASE_URL=http://localhost:8080/api/v1 `
+  --dart-define=FIREBASE_API_KEY=... `
+  --dart-define=FIREBASE_APP_ID=... `
+  --dart-define=FIREBASE_MESSAGING_SENDER_ID=... `
+  --dart-define=FIREBASE_PROJECT_ID=... `
+  --dart-define=FIREBASE_AUTH_DOMAIN=... `
+  --dart-define=FIREBASE_STORAGE_BUCKET=... `
+  --dart-define=FIREBASE_WEB_VAPID_KEY=...
+```
+
+Android、iOS 和 Web 的 `FIREBASE_APP_ID` 通常不同，构建各平台时使用该平台 App 的值。
+iOS 还须在 Xcode 启用 Push Notifications、Background fetch 和 Remote notifications；Web
+后台通知须按 Firebase 文档提供 `web/firebase-messaging-sw.js`。服务账号 JSON、VAPID 私钥及
+其他秘密不得写进 Git；上述客户端 Firebase 配置和 VAPID 公钥不是服务端凭据。
+
+已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `015`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
 
 正式用户接口包括：
 

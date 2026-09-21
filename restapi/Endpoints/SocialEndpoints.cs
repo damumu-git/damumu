@@ -111,7 +111,9 @@ public static class SocialEndpoints
         });
 
         api.MapPost("/conversations/{id:guid}/messages", async (
-            Guid id, HttpContext context, SendMessageRequest request, Db db, CancellationToken ct) =>
+            Guid id, HttpContext context, SendMessageRequest request, Db db,
+            RealtimeConnectionManager realtime, PushNotificationService push,
+            CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var allowed = await db.ScalarAsync<long>(
@@ -167,6 +169,27 @@ public static class SocialEndpoints
                     body = request.Body?.Trim(),
                     messageId = (Guid)message!["id"]!
                 }, ct);
+            var recipients = await db.QueryAsync(
+                """
+                SELECT user_id FROM conversation_member
+                WHERE conversation_id=@id AND left_at IS NULL
+                """, new { id }, ct);
+            var recipientIds = recipients
+                .Select(row => (Guid)row["user_id"]!)
+                .ToArray();
+            await realtime.PublishAsync(recipientIds, "message.created", new
+            {
+                conversationId = id,
+                messageId = (Guid)message!["id"]!
+            }, ct);
+            var pushRecipients = recipientIds.Where(recipientId => recipientId != userId).ToArray();
+            var pushBody = string.IsNullOrWhiteSpace(request.Body) ? "收到一条新消息" : request.Body.Trim();
+            await push.SendToUsersAsync(db, pushRecipients, "收到新消息", pushBody, new Dictionary<string, string>
+            {
+                ["type"] = "message.created",
+                ["conversationId"] = id.ToString(),
+                ["messageId"] = ((Guid)message!["id"]!).ToString()
+            }, ct);
             return ApiSupport.Created($"/api/v1/conversations/{id}/messages/{message!["id"]}", message);
         });
 
@@ -190,7 +213,8 @@ public static class SocialEndpoints
         });
 
         api.MapPost("/conversations/read-all", async (
-            HttpContext context, Db db, CancellationToken ct) =>
+            HttpContext context, Db db,
+            RealtimeConnectionManager realtime, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var count = await db.ExecuteAsync(
@@ -204,11 +228,13 @@ public static class SocialEndpoints
                     )
                 WHERE cm.user_id=@userId AND cm.left_at IS NULL
                 """, new { userId }, ct);
+            await realtime.PublishAsync([userId], "unread.changed", new { }, ct);
             return ApiSupport.Ok(new { updated = count, readAt = DateTime.UtcNow });
         });
 
         api.MapPost("/conversations/{id:guid}/read", async (
-            Guid id, HttpContext context, ReadConversationRequest request, Db db, CancellationToken ct) =>
+            Guid id, HttpContext context, ReadConversationRequest request, Db db,
+            RealtimeConnectionManager realtime, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var count = await db.ExecuteAsync(
@@ -226,6 +252,10 @@ public static class SocialEndpoints
                 WHERE user_id=@userId AND notification_type='new_message'
                   AND data->>'conversationId'=@conversationId
                 """, new { userId, conversationId = id.ToString() }, ct);
+            await realtime.PublishAsync([userId], "unread.changed", new
+            {
+                conversationId = id
+            }, ct);
             return ApiSupport.Ok(new { conversationId = id, readAt = DateTime.UtcNow });
         });
 
