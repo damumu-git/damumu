@@ -101,6 +101,16 @@ $env:DAMUMU_POSTGRES_PASSWORD = '你的密码'
 ./dev.ps1 -d chrome --web-port 3000
 ```
 
+启动脚本会把 API 和 Admin 的 PID 记录到 Git 忽略的 `.dev-logs/dev-processes.json`。
+需要从另一个 PowerShell 窗口停止，或原启动窗口已经关闭时，执行：
+
+```powershell
+./stop-dev.ps1
+```
+
+正常按 `Ctrl+C` 时 `dev.ps1` 也会清理子进程。直接关闭 PowerShell 窗口无法保证执行
+脚本的 `finally` 清理，因此应在关闭窗口前运行停止脚本；即使窗口已关闭，PID 文件仍可用于停止进程树。
+
 如果希望新开的 PowerShell 窗口也能读取，可以将密码保存为当前 Windows 用户的环境变量，
 随后重新打开终端：
 
