@@ -3278,16 +3278,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
         ),
       ),
       const SizedBox(height: 18),
-      Card(
-        child: SwitchListTile(
-          value: _approval,
-          onChanged: (v) => setState(() => _approval = v),
-          title: const Text(
-            '需要审核',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          subtitle: const Text('申请者需经你确认后才能加入'),
-        ),
+      ApprovalModeSelector(
+        value: _approval,
+        onChanged: (value) => setState(() => _approval = value),
       ),
       const SizedBox(height: 18),
       const _InfoBox(text: '发布即代表同意社区规范。禁止商业导流、歧视、危险或违法活动。'),
@@ -3541,6 +3534,57 @@ class LoadFailure extends StatelessWidget {
         ),
       );
     },
+  );
+}
+
+class ApprovalModeSelector extends StatelessWidget {
+  const ApprovalModeSelector({
+    required this.value,
+    required this.onChanged,
+    super.key,
+  });
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('是否需要审核', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Text(
+            value ? '申请者需经你确认后才能加入活动' : '申请后立即加入活动，无需组织者确认',
+            style: const TextStyle(color: Colors.black54),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<bool>(
+              key: const ValueKey('approval-mode-selector'),
+              expandedInsets: EdgeInsets.zero,
+              segments: const [
+                ButtonSegment(
+                  value: true,
+                  icon: Icon(Icons.fact_check_outlined),
+                  label: Text('需要审核'),
+                ),
+                ButtonSegment(
+                  value: false,
+                  icon: Icon(Icons.flash_on_outlined),
+                  label: Text('无需审核'),
+                ),
+              ],
+              selected: {value},
+              onSelectionChanged: (selection) => onChanged(selection.first),
+            ),
+          ),
+        ],
+      ),
+    ),
   );
 }
 
