@@ -2085,8 +2085,18 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
   Future<void> _join(EventItem e) async {
     final eventId = e.apiId;
+    if (eventId == null) {
+      setState(() {
+        _membershipStatus = 'approved';
+        e.isJoined = true;
+        e.joined++;
+      });
+      widget.onChanged();
+      _showJoinResult('approved');
+      return;
+    }
     final token = AuthScope.of(context).token;
-    if (eventId == null || token == null) {
+    if (token == null) {
       _showMessageError(context, '该活动暂时无法报名，请刷新后重试');
       return;
     }
@@ -2112,6 +2122,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
       }
     });
     widget.onChanged();
+    _showJoinResult(status);
+  }
+
+  void _showJoinResult(String status) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -4957,10 +4971,11 @@ class _OrganizerApplicationsState extends State<_OrganizerApplications> {
                 const Icon(Icons.chevron_right, color: Colors.black38),
               ],
             ),
-            if (note.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text('${context.tr('applicationNote')}: $note'),
-            ],
+            const SizedBox(height: 12),
+            Text(
+              '${context.tr('applicationNote')}: '
+              '${note.isEmpty ? '未填写' : note}',
+            ),
             const SizedBox(height: 14),
             Row(
               children: [

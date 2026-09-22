@@ -33,3 +33,4 @@ restapi/.codex-build/
 
 # Runtime uploads (keep bundled system avatars)
 restapi/uploads/avatars/
+restapi/uploads/events/

@@ -165,9 +165,10 @@ class EventService {
         )
         .timeout(const Duration(seconds: 10));
     final data = _decodeResponse(response, '活动暂时无法加载，请稍后再试')['data'];
+    final members = data['members'];
     return EventDetailData(
       item: (data['item'] as Map).cast<String, dynamic>(),
-      members: (data['members'] as List)
+      members: (members is List ? members : const <dynamic>[])
           .map((item) => (item as Map).cast<String, dynamic>())
           .toList(),
     );
