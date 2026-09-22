@@ -54,8 +54,9 @@ class _HomeAction extends StatelessWidget {
 }
 
 class DaziApp extends StatefulWidget {
-  const DaziApp({super.key, this.home});
+  const DaziApp({super.key, this.home, this.authController});
   final Widget? home;
+  final AuthController? authController;
 
   @override
   State<DaziApp> createState() => _DaziAppState();
@@ -63,6 +64,8 @@ class DaziApp extends StatefulWidget {
 
 class _DaziAppState extends State<DaziApp> {
   Locale _locale = const Locale('zh');
+  late final AuthController _authController;
+  late final bool _ownsAuthController;
   Key? _recoveryKey;
   ErrorWidgetBuilder? _previousErrorBuilder;
   ErrorWidgetBuilder? _installedErrorBuilder;
@@ -71,6 +74,9 @@ class _DaziAppState extends State<DaziApp> {
   @override
   void initState() {
     super.initState();
+    _authController = widget.authController ?? AuthController();
+    _ownsAuthController = widget.authController == null;
+    if (widget.home == null) _authController.restore();
     if (!_isTestEnvironment) _previousErrorBuilder = ErrorWidget.builder;
     AppLocaleScope.restore().then((value) {
       if (mounted) setState(() => _locale = value);
@@ -83,6 +89,7 @@ class _DaziAppState extends State<DaziApp> {
         _previousErrorBuilder != null) {
       ErrorWidget.builder = _previousErrorBuilder!;
     }
+    if (_ownsAuthController) _authController.dispose();
     super.dispose();
   }
 
@@ -99,100 +106,111 @@ class _DaziAppState extends State<DaziApp> {
     return AppLocaleScope(
       locale: _locale,
       onChanged: _setLocale,
-      child: MaterialApp(
-        key: _recoveryKey,
-        debugShowCheckedModeBanner: false,
-        builder: (context, child) {
-          // Flutter still reports the full exception to developer diagnostics.
-          // Only the widget presented to the user is replaced.
-          if (!_isTestEnvironment) {
-            _previousErrorBuilder ??= ErrorWidget.builder;
-            _installedErrorBuilder = (_) => BuildFailure(
-              title: context.tr('buildErrorTitle'),
-              message: context.tr('buildErrorMessage'),
-              retryLabel: context.tr('retry'),
-              onRetry: () {
-                if (mounted) setState(() => _recoveryKey = UniqueKey());
-              },
-            );
-            ErrorWidget.builder = _installedErrorBuilder!;
-          }
-          return child!;
-        },
-        title: '搭慕慕',
-        locale: _locale,
-        supportedLocales: const [Locale('zh'), Locale('en'), Locale('ko')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: _green,
-            primary: _green,
-            surface: _cream,
-          ),
-          scaffoldBackgroundColor: _cream,
-          fontFamily: 'Noto Sans SC',
-          fontFamilyFallback: const [
-            'Noto Sans KR',
-            'Segoe UI Emoji',
-            'Apple Color Emoji',
-            'Noto Color Emoji',
-            'Noto Emoji',
-            'PingFang SC',
-            'Microsoft YaHei',
-            'Noto Sans CJK SC',
+      child: AuthScope(
+        controller: _authController,
+        child: MaterialApp(
+          key: _recoveryKey,
+          debugShowCheckedModeBanner: false,
+          builder: (context, child) {
+            // Flutter still reports the full exception to developer diagnostics.
+            // Only the widget presented to the user is replaced.
+            if (!_isTestEnvironment) {
+              _previousErrorBuilder ??= ErrorWidget.builder;
+              _installedErrorBuilder = (_) => BuildFailure(
+                title: context.tr('buildErrorTitle'),
+                message: context.tr('buildErrorMessage'),
+                retryLabel: context.tr('retry'),
+                onRetry: () {
+                  if (mounted) setState(() => _recoveryKey = UniqueKey());
+                },
+              );
+              ErrorWidget.builder = _installedErrorBuilder!;
+            }
+            return child!;
+          },
+          title: '搭慕慕',
+          locale: _locale,
+          supportedLocales: const [Locale('zh'), Locale('en'), Locale('ko')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
           ],
-          textTheme: const TextTheme(
-            headlineLarge: TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-              height: 1.12,
-              color: _ink,
+          theme: ThemeData(
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: _green,
+              primary: _green,
+              surface: _cream,
             ),
-            headlineSmall: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: _ink,
+            scaffoldBackgroundColor: _cream,
+            fontFamily: 'Noto Sans SC',
+            fontFamilyFallback: const [
+              'Noto Sans KR',
+              'Segoe UI Emoji',
+              'Apple Color Emoji',
+              'Noto Color Emoji',
+              'Noto Emoji',
+              'PingFang SC',
+              'Microsoft YaHei',
+              'Noto Sans CJK SC',
+            ],
+            textTheme: const TextTheme(
+              headlineLarge: TextStyle(
+                fontSize: 30,
+                fontWeight: FontWeight.w800,
+                height: 1.12,
+                color: _ink,
+              ),
+              headlineSmall: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: _ink,
+              ),
+              titleLarge: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: _ink,
+              ),
+              bodyLarge: TextStyle(fontSize: 16, height: 1.45, color: _ink),
+              bodyMedium: TextStyle(fontSize: 14, height: 1.4, color: _ink),
             ),
-            titleLarge: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: _ink,
+            cardTheme: const CardThemeData(
+              elevation: 0,
+              color: Colors.white,
+              margin: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(22)),
+              ),
             ),
-            bodyLarge: TextStyle(fontSize: 16, height: 1.45, color: _ink),
-            bodyMedium: TextStyle(fontSize: 14, height: 1.4, color: _ink),
+            inputDecorationTheme: InputDecorationTheme(
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Color(0xFFE7E5DF)),
+              ),
+            ),
           ),
-          cardTheme: const CardThemeData(
-            elevation: 0,
-            color: Colors.white,
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(22)),
-            ),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: Color(0xFFE7E5DF)),
-            ),
-          ),
+          home: widget.home ?? _authenticatedHome(),
         ),
-        home:
-            widget.home ??
-            AuthGate(authenticatedBuilder: (_) => const AppShell()),
       ),
     );
   }
+
+  Widget _authenticatedHome() => AnimatedBuilder(
+    animation: _authController,
+    builder: (context, _) {
+      if (_authController.loading) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      return _authController.user == null ? const AuthPage() : const AppShell();
+    },
+  );
 }
 
 class EventItem {
