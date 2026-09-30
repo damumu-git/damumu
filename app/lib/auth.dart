@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'l10n.dart';
 import 'push_notification_service.dart';
+import 'web_cropper_layout.dart';
 
 const _green = Color(0xFF1F7A55);
 const _mint = Color(0xFFE7F4EC);
@@ -747,6 +748,7 @@ Future<void> _pickAvatar(
       throw const FormatException('largePhotoProcessingFailed');
     }
     if (!sheetContext.mounted) return;
+    final webLayout = webCropperLayout(sheetContext);
     final cropped = await ImageCropper().cropImage(
       sourcePath: picked.path,
       aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
@@ -769,15 +771,11 @@ Future<void> _pickAvatar(
         ),
         WebUiSettings(
           context: sheetContext,
+          presentStyle: webLayout.presentStyle,
           viewwMode: WebViewMode.mode_1,
           guides: true,
           rotatable: true,
-          size: CropperSize(
-            width: MediaQuery.sizeOf(
-              sheetContext,
-            ).width.clamp(320, 720).round(),
-            height: 520,
-          ),
+          size: webLayout.size,
           translations: WebTranslations(
             title: cropTitle,
             rotateLeftTooltip: '向左旋转',

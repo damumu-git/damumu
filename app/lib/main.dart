@@ -16,6 +16,7 @@ import 'build_failure.dart';
 import 'location_service.dart';
 import 'event_cover_image.dart';
 import 'social_service.dart';
+import 'web_cropper_layout.dart';
 import 'realtime_service.dart';
 import 'push_notification_service.dart';
 
@@ -2617,6 +2618,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         throw const FormatException('largePhotoProcessingFailed');
       }
       if (!mounted) return;
+      final webLayout = webCropperLayout(context);
       final cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
         aspectRatio: const CropAspectRatio(ratioX: 4, ratioY: 3),
@@ -2638,13 +2640,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
           ),
           WebUiSettings(
             context: context,
+            presentStyle: webLayout.presentStyle,
             viewwMode: WebViewMode.mode_1,
             guides: true,
             rotatable: true,
-            size: CropperSize(
-              width: MediaQuery.sizeOf(context).width.clamp(320, 720).round(),
-              height: 520,
-            ),
+            size: webLayout.size,
             translations: WebTranslations(
               title: context.tr('eventCoverCrop'),
               rotateLeftTooltip: context.tr('eventCoverRotateLeft'),
