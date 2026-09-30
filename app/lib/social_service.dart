@@ -25,6 +25,7 @@ class ConversationItem {
     this.lastMessageBody,
     this.lastMessageSender,
     this.lastMessageAt,
+    this.lastMessageType,
   });
 
   final String id;
@@ -36,6 +37,7 @@ class ConversationItem {
   final String? lastMessageBody;
   final String? lastMessageSender;
   final DateTime? lastMessageAt;
+  final String? lastMessageType;
 
   factory ConversationItem.fromJson(Map<String, dynamic> json) =>
       ConversationItem(
@@ -46,6 +48,7 @@ class ConversationItem {
         memberCount: (json['member_count'] as num?)?.toInt() ?? 0,
         lastMessageId: json['last_message_id']?.toString(),
         lastMessageBody: json['last_message_body'] as String?,
+        lastMessageType: json['last_message_type'] as String?,
         lastMessageSender: json['last_message_sender'] as String?,
         lastMessageAt: DateTime.tryParse(
           '${json['last_message_at'] ?? ''}',
@@ -60,11 +63,13 @@ class ChatMessage {
     required this.body,
     required this.createdAt,
     this.senderName,
+    this.messageType = 'text',
   });
   final String id;
   final String? senderUserId;
   final String body;
   final String? senderName;
+  final String messageType;
   final DateTime createdAt;
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -72,6 +77,7 @@ class ChatMessage {
     senderUserId: json['sender_user_id']?.toString(),
     body: '${json['body'] ?? ''}',
     senderName: json['sender_name'] as String?,
+    messageType: '${json['message_type'] ?? 'text'}',
     createdAt: DateTime.parse('${json['created_at']}').toLocal(),
   );
 }

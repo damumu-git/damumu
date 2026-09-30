@@ -8,6 +8,7 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth.dart';
+import 'activity_interactions.dart';
 import 'category_service.dart';
 import 'event_service.dart';
 import 'l10n.dart';
@@ -1838,6 +1839,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
   Widget build(BuildContext context) {
     final e = widget.event;
     final full = e.joined >= e.capacity;
+    final cancelled = _detail?['status'] == 'cancelled';
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -1888,6 +1890,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     spacing: 8,
                     children: [
                       _Pill(e.category),
+                      if (cancelled) _Pill(context.tr('eventCancelled')),
                       if (e.isPast) _Pill(context.tr('pastActivity')),
                       if (e.isOwned) const _Pill('我发布的', green: true),
                       if (e.approval) const _Pill('需组织者审核'),
@@ -1900,6 +1903,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     e.title,
                     style: Theme.of(context).textTheme.headlineLarge,
                   ),
+                  if (cancelled)
+                    EventCancellationNotice(
+                      reason: '${_detail?['cancellation_reason'] ?? ''}',
+                    ),
                   const SizedBox(height: 24),
                   _DetailRow(
                     icon: Icons.schedule,
@@ -2044,7 +2051,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
               Expanded(
                 child: FilledButton(
                   onPressed:
-                      _joining ||
+                      cancelled ||
+                          _joining ||
                           (e.isPast && !e.isOwned) ||
                           (_membershipStatus != null && !_canLeave) ||
                           (!e.approval && full && !e.isOwned && !_canLeave)
@@ -2063,7 +2071,9 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   child: _joining
                       ? const _ButtonProgress(label: '提交中…')
                       : Text(
-                          e.isOwned
+                          cancelled
+                              ? context.tr('eventCancelled')
+                              : e.isOwned
                               ? '查看我的活动'
                               : e.isPast
                               ? context.tr('pastActivity')
@@ -2337,10 +2347,24 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                UserAvatarImage(
-                  nickname: nickname,
-                  avatarUrl: profile['avatar_url'] as String?,
-                  radius: 52,
+                Tooltip(
+                  message: context.tr('viewAvatar'),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(52),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => AvatarPreviewPage(
+                          nickname: nickname,
+                          avatarUrl: profile['avatar_url'] as String?,
+                        ),
+                      ),
+                    ),
+                    child: UserAvatarImage(
+                      nickname: nickname,
+                      avatarUrl: profile['avatar_url'] as String?,
+                      radius: 52,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 18),
                 Text(
@@ -3880,7 +3904,9 @@ class _MessagesPageState extends State<MessagesPage> {
                 child: _ChatTile(
                   emoji: item.type == 'event' ? '👥' : '💬',
                   title: item.title,
-                  message: item.lastMessageBody ?? context.tr('chatCreated'),
+                  message: item.lastMessageType == 'event_cancelled'
+                      ? '${context.tr('eventCancelled')} · ${context.tr('cancellationReason')}：${item.lastMessageBody ?? ''}'
+                      : item.lastMessageBody ?? context.tr('chatCreated'),
                   time: _relativeTime(item.lastMessageAt),
                   unread: item.unreadCount,
                   onTap: () => _openChat(item),
@@ -4305,6 +4331,9 @@ class _ChatPageState extends State<ChatPage> {
                   itemCount: _messages.length,
                   itemBuilder: (_, index) {
                     final message = _messages[index];
+                    if (message.messageType == 'event_cancelled') {
+                      return EventCancellationNotice(reason: message.body);
+                    }
                     return _Bubble(
                       text: message.body,
                       mine:
@@ -4788,7 +4817,9 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
     if (rows.isEmpty) return Center(child: Text(emptyText));
     return RefreshIndicator(
       onRefresh: () async {
-        setState(() => _future = EventService.myActivities(widget.token));
+        setState(() {
+          _future = EventService.myActivities(widget.token);
+        });
         await _future;
       },
       child: ListView.separated(
@@ -4809,7 +4840,11 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                 child: Text('${row['category_icon'] ?? '✨'}'),
               ),
               title: Text(
-                '${isPast ? '${context.tr('pastActivity')} · ' : ''}${row['title'] ?? ''}',
+                '${row['event_status'] == 'cancelled'
+                    ? '${context.tr('eventCancelled')} · '
+                    : isPast
+                    ? '${context.tr('pastActivity')} · '
+                    : ''}${row['title'] ?? ''}',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               subtitle: Text(
@@ -4824,12 +4859,12 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                       child: Text(context.tr('publishSimilar')),
                     )
                   : const Icon(Icons.chevron_right),
-              onTap: () {
+              onTap: () async {
                 if (widget.selectSource) {
                   Navigator.of(context).pop('${row['id']}');
                   return;
                 }
-                Navigator.of(context).push(
+                await Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => _MyActivityRecordPage(
                       activity: row,
@@ -4838,6 +4873,11 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                     ),
                   ),
                 );
+                if (mounted) {
+                  setState(() {
+                    _future = EventService.myActivities(widget.token);
+                  });
+                }
               },
             ),
           );
@@ -4853,7 +4893,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
   }
 }
 
-class _MyActivityRecordPage extends StatelessWidget {
+class _MyActivityRecordPage extends StatefulWidget {
   const _MyActivityRecordPage({
     required this.activity,
     required this.token,
@@ -4862,6 +4902,29 @@ class _MyActivityRecordPage extends StatelessWidget {
   final Map<String, dynamic> activity;
   final String token;
   final bool isOrganizer;
+
+  @override
+  State<_MyActivityRecordPage> createState() => _MyActivityRecordPageState();
+}
+
+class _MyActivityRecordPageState extends State<_MyActivityRecordPage> {
+  late final Map<String, dynamic> activity = Map.of(widget.activity);
+  String get token => widget.token;
+  bool get isOrganizer => widget.isOrganizer;
+
+  Future<void> _cancel() async {
+    final reason = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          CancelEventDialog(token: token, eventId: '${activity['id']}'),
+    );
+    if (!mounted || reason == null) return;
+    setState(() {
+      activity['event_status'] = 'cancelled';
+      activity['cancellation_reason'] = reason;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -4897,17 +4960,36 @@ class _MyActivityRecordPage extends StatelessWidget {
             leading: const Icon(Icons.verified_outlined),
             title: const Text('活动状态'),
             subtitle: Text(
-              '${activity['event_status']} · 报名状态 ${activity['membership_status']}',
+              '${activity['event_status'] == 'cancelled' ? context.tr('eventCancelled') : activity['event_status']} · 报名状态 ${activity['membership_status']}',
             ),
           ),
+          if (activity['event_status'] == 'cancelled')
+            EventCancellationNotice(
+              reason: '${activity['cancellation_reason'] ?? ''}',
+            ),
           if (isOrganizer) ...[
             FilledButton.icon(
               onPressed: () => _openSimilarEvent(context, '${activity['id']}'),
               icon: const Icon(Icons.copy_outlined),
               label: Text(context.tr('publishSimilar')),
             ),
-            const Divider(height: 34),
-            _OrganizerApplications(token: token, eventId: '${activity['id']}'),
+            if (activity['event_status'] != 'cancelled' &&
+                activity['event_status'] != 'completed') ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _cancel,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                icon: const Icon(Icons.event_busy_outlined),
+                label: Text(context.tr('cancelEvent')),
+              ),
+              const Divider(height: 34),
+              _OrganizerApplications(
+                token: token,
+                eventId: '${activity['id']}',
+              ),
+            ],
           ],
         ],
       ),

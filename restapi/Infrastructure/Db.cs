@@ -193,7 +193,7 @@ public sealed class Db(NpgsqlDataSource dataSource)
         await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
 
         await using var eventCommand = new NpgsqlCommand(
-            "SELECT organizer_user_id, capacity, approved_count, title FROM event WHERE id=@eventId FOR UPDATE",
+            "SELECT organizer_user_id, capacity, approved_count, title, status FROM event WHERE id=@eventId FOR UPDATE",
             connection, transaction);
         eventCommand.Parameters.AddWithValue("eventId", eventId);
         await using var eventReader = await eventCommand.ExecuteReaderAsync(cancellationToken);
@@ -201,6 +201,8 @@ public sealed class Db(NpgsqlDataSource dataSource)
             throw new ApiException(404, "event_not_found", "活动不存在");
         if (eventReader.GetGuid(0) != reviewerUserId)
             throw new ApiException(403, "forbidden", "只有组织者可以审核成员");
+        if (eventReader.GetString(4) is "cancelled" or "completed")
+            throw new ApiException(409, "event_closed", "活动已结束或取消，无法审核成员");
         var capacity = eventReader.GetInt16(1);
         var approvedCount = eventReader.GetInt16(2);
         var eventTitle = eventReader.GetString(3);

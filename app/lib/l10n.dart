@@ -42,6 +42,16 @@ const languageLabels = {'zh': '中文', 'en': 'English', 'ko': '한국어'};
 
 const _strings = <String, Map<String, String>>{
   'zh': {
+    'viewAvatar': '查看大图',
+    'closePreview': '关闭预览',
+    'cancelEvent': '取消活动',
+    'eventCancelled': '活动取消',
+    'cancellationReason': '取消原因',
+    'cancellationReasonRequired': '请输入取消原因（最多 500 字）',
+    'cancelEventExplanation': '取消后，活动群将自动收到取消通知和原因。',
+    'keepEvent': '保留活动',
+    'confirmCancelEvent': '确认取消活动',
+    'cancelEventFailed': '取消未完成，请刷新活动状态后重试。',
     'messagesTitle': '消息',
     'markAllRead': '全部已读',
     'markingRead': '处理中…',
@@ -161,6 +171,18 @@ const _strings = <String, Map<String, String>>{
     'retry': '再试一次',
   },
   'en': {
+    'viewAvatar': 'View avatar',
+    'closePreview': 'Close preview',
+    'cancelEvent': 'Cancel activity',
+    'eventCancelled': 'Activity cancelled',
+    'cancellationReason': 'Cancellation reason',
+    'cancellationReasonRequired': 'Enter a reason (up to 500 characters)',
+    'cancelEventExplanation':
+        'The activity group will receive a cancellation notice with your reason.',
+    'keepEvent': 'Keep activity',
+    'confirmCancelEvent': 'Confirm cancellation',
+    'cancelEventFailed':
+        'Cancellation could not be confirmed. Refresh the activity and try again.',
     'messagesTitle': 'Messages',
     'markAllRead': 'Mark all read',
     'markingRead': 'Updating…',
@@ -286,6 +308,16 @@ const _strings = <String, Map<String, String>>{
     'retry': 'Try again',
   },
   'ko': {
+    'viewAvatar': '프로필 사진 확대',
+    'closePreview': '미리보기 닫기',
+    'cancelEvent': '활동 취소',
+    'eventCancelled': '활동이 취소되었습니다',
+    'cancellationReason': '취소 사유',
+    'cancellationReasonRequired': '취소 사유를 입력해 주세요 (최대 500자)',
+    'cancelEventExplanation': '활동 그룹에 취소 알림과 사유가 자동으로 전송됩니다.',
+    'keepEvent': '활동 유지',
+    'confirmCancelEvent': '활동 취소 확인',
+    'cancelEventFailed': '취소를 확인하지 못했습니다. 활동을 새로고침한 후 다시 시도해 주세요.',
     'messagesTitle': '메시지',
     'markAllRead': '모두 읽음',
     'markingRead': '처리 중…',

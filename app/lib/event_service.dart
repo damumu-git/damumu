@@ -116,6 +116,24 @@ class EventDetailData {
 }
 
 class EventService {
+  static Future<void> cancelEvent(
+    String token,
+    String eventId,
+    String reason,
+  ) async {
+    final response = await http
+        .post(
+          Uri.parse('$_apiBase/events/$eventId/cancel'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'reason': reason}),
+        )
+        .timeout(const Duration(seconds: 10));
+    _decodeResponse(response, '取消活动没有成功，请稍后再试');
+  }
+
   static Future<({String id, String url})> uploadCover(
     String token,
     Uint8List bytes,

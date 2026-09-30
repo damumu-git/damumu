@@ -450,17 +450,38 @@ public static class EventEndpoints
         });
 
         api.MapPost("/events/{id:guid}/cancel", async (
-            Guid id, HttpContext context, CancelEventRequest request, Db db, CancellationToken ct) =>
+            Guid id, HttpContext context, CancelEventRequest request, Db db,
+            RealtimeConnectionManager realtime, PushNotificationService push,
+            ILoggerFactory loggerFactory, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
-            var item = await db.QueryOneAsync(
-                """
-                UPDATE event
-                SET status='cancelled', cancelled_at=now(), cancellation_reason=@reason
-                WHERE id=@id AND organizer_user_id=@userId AND status NOT IN ('cancelled', 'completed')
-                RETURNING id, status, cancelled_at
-                """, new { id, userId, reason = request.Reason }, ct);
+            var reason = EventCancellation.ValidateReason(request.Reason);
+            var item = await db.QueryOneAsync(EventCancellation.Sql, new { id, userId, reason }, ct);
             if (item is null) throw new ApiException(409, "cannot_cancel", "活动不可取消");
+            // Delivery is best effort after persistence; a transport failure must
+            // not report an already committed cancellation as a failed operation.
+            try
+            {
+                var conversationId = (Guid)item["conversation_id"]!;
+                var messageId = (Guid)item["message_id"]!;
+                var recipients = await db.QueryAsync(
+                    "SELECT user_id FROM conversation_member WHERE conversation_id=@conversationId AND left_at IS NULL",
+                    new { conversationId }, ct);
+                var recipientIds = recipients.Select(row => (Guid)row["user_id"]!).ToArray();
+                await realtime.PublishAsync(recipientIds, "message.created", new { conversationId, messageId }, ct);
+                await push.SendToUsersAsync(db, recipientIds.Where(recipient => recipient != userId),
+                    "活动取消", $"取消原因：{reason}", new Dictionary<string, string>
+                    {
+                        ["type"] = "message.created",
+                        ["conversationId"] = conversationId.ToString(),
+                        ["messageId"] = messageId.ToString()
+                    }, ct);
+            }
+            catch (Exception exception)
+            {
+                loggerFactory.CreateLogger("EventCancellation").LogWarning(exception,
+                    "Cancellation persisted; clients will synchronize the group notice later");
+            }
             return ApiSupport.Ok(item);
         });
 

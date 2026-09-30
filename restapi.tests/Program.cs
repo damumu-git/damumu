@@ -2,6 +2,13 @@ using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using Muda.Api.Infrastructure;
 
+CancellationChecks.ValidateReasons();
+if (args.FirstOrDefault() == "--cancellation-db")
+{
+    await CancellationChecks.RunDatabase();
+    return;
+}
+
 static void Check(bool condition, string message)
 {
     if (!condition) throw new Exception(message);

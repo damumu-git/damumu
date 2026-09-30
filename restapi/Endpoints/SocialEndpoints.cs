@@ -125,6 +125,8 @@ public static class SocialEndpoints
                   AND cm.left_at IS NULL AND c.status='active'
                 """, new { id, userId }, ct);
             if (allowed == 0) throw new ApiException(403, "forbidden", "无权在该会话发言");
+            if (request.MessageType == "event_cancelled")
+                throw new ApiException(400, "reserved_message_type", "不能发送系统活动通知");
             if (string.IsNullOrWhiteSpace(request.Body) && request.MediaAssetId is null)
                 throw new ApiException(400, "empty_message", "消息不能为空");
 
