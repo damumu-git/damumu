@@ -5469,19 +5469,6 @@ class _SafetyCenterPageState extends State<SafetyCenterPage> {
             const SizedBox(height: 8),
             const Text('若你正处于危险中，请优先联系当地紧急服务。'),
             const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: () {},
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.red.shade700,
-              ),
-              icon: const Icon(Icons.call),
-              label: const Text('拨打 112（警方）'),
-            ),
-            OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.medical_services_outlined),
-              label: const Text('拨打 119（消防急救）'),
-            ),
             OutlinedButton.icon(
               onPressed: () {},
               icon: const Icon(Icons.share_location_outlined),
