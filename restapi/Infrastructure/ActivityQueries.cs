@@ -18,6 +18,7 @@ public static class ActivityQueries
                        u.id AS organizer_user_id, up.nickname AS organizer_name,
                        up.avatar_url AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_score,
+                       organizer_risk.category_code AS organizer_risk_tag,
                        (e.title ILIKE '%新手%' OR e.description ILIKE '%新手%'
                         OR EXISTS (
                             SELECT 1
@@ -40,6 +41,17 @@ public static class ActivityQueries
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id
+                LEFT JOIN LATERAL (
+                    SELECT r.category_code
+                    FROM report r
+                    WHERE r.reported_user_id=e.organizer_user_id
+                      AND r.context_event_id IS NOT NULL
+                      AND r.target_type='activity' AND r.status<>'dismissed'
+                    GROUP BY r.category_code
+                    HAVING count(DISTINCT r.reporter_user_id)>=3
+                    ORDER BY count(DISTINCT r.reporter_user_id) DESC, r.category_code
+                    LIMIT 1
+                ) organizer_risk ON true
                 LEFT JOIN place p ON p.id=e.place_id
                 LEFT JOIN administrative_region city_region ON city_region.code=e.city_code
                 LEFT JOIN administrative_region district_region ON district_region.code=e.district_code

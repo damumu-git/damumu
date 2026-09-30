@@ -43,6 +43,7 @@ public static class EventEndpoints
                        u.id AS organizer_user_id, up.nickname AS organizer_name,
                        up.avatar_url AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_score,
+                       organizer_risk.category_code AS organizer_risk_tag,
                        (e.title ILIKE '%新手%' OR e.description ILIKE '%新手%'
                         OR EXISTS (
                             SELECT 1
@@ -65,6 +66,17 @@ public static class EventEndpoints
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id
+                LEFT JOIN LATERAL (
+                    SELECT r.category_code
+                    FROM report r
+                    WHERE r.reported_user_id=e.organizer_user_id
+                      AND r.context_event_id IS NOT NULL
+                      AND r.target_type='activity' AND r.status<>'dismissed'
+                    GROUP BY r.category_code
+                    HAVING count(DISTINCT r.reporter_user_id)>=3
+                    ORDER BY count(DISTINCT r.reporter_user_id) DESC, r.category_code
+                    LIMIT 1
+                ) organizer_risk ON true
                 LEFT JOIN place p ON p.id=e.place_id
                 LEFT JOIN administrative_region city_region ON city_region.code=e.city_code
                 LEFT JOIN administrative_region district_region ON district_region.code=e.district_code
@@ -178,21 +190,51 @@ public static class EventEndpoints
                 ORDER BY em.joined_at
                 LIMIT 12
                 """, new { id }, ct);
-            return ApiSupport.Ok(new { item, schedules, tags, members });
+            FeedbackEligibility? feedback = null;
+            if (viewerId.HasValue)
+                feedback = await FeedbackPolicy.ResolveAsync(
+                    db, id, viewerId.Value, "activity", null, ct);
+            return ApiSupport.Ok(new { item, schedules, tags, members, feedback });
         });
 
         api.MapGet("/users/{id:guid}/public-profile", async (
-            Guid id, Db db, CancellationToken ct) =>
+            Guid id, Guid? eventId, HttpContext context, Db db, CancellationToken ct) =>
         {
+            var viewerId = ApiSupport.GetOptionalUserId(context);
             var profile = await db.QueryOneAsync(
                 """
-                SELECT u.id, COALESCE(up.nickname, '用户') AS nickname, up.avatar_url
+                SELECT u.id, COALESCE(up.nickname, '用户') AS nickname, up.avatar_url,
+                       (SELECT count(*) FROM endorsement en WHERE en.target_user_id=u.id) AS like_count
                 FROM app_user u
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 WHERE u.id=@id AND u.status='active' AND u.deleted_at IS NULL
                 """, new { id }, ct);
             if (profile is null)
                 throw new ApiException(404, "user_not_found", "用户不存在");
+            var positiveTags = await db.QueryAsync(
+                """
+                SELECT tag_code, count(*) AS count
+                FROM endorsement
+                WHERE target_user_id=@id
+                GROUP BY tag_code
+                ORDER BY count(*) DESC, tag_code
+                LIMIT 3
+                """, new { id }, ct);
+            profile["positive_tags"] = positiveTags;
+            if (viewerId.HasValue && eventId.HasValue)
+            {
+                var feedback = await FeedbackPolicy.ResolveAsync(
+                    db, eventId.Value, viewerId.Value, "user", id, ct);
+                profile["feedback_eligible"] = feedback.Eligible;
+                profile["viewer_like_tag"] = feedback.LikeTag;
+                profile["viewer_report_tag"] = feedback.ReportTag;
+            }
+            else
+            {
+                profile["feedback_eligible"] = false;
+                profile["viewer_like_tag"] = null;
+                profile["viewer_report_tag"] = null;
+            }
             return ApiSupport.Ok(profile);
         });
 
@@ -570,10 +612,23 @@ public static class EventEndpoints
                        em.party_size, em.application_note, em.share_contact,
                        em.rejection_reason, em.reviewed_at, em.joined_at, em.checked_in_at,
                        em.created_at,
-                       up.nickname, up.avatar_url, COALESCE(ts.score, 0) AS trust_score
+                       up.nickname, up.avatar_url, COALESCE(ts.score, 0) AS trust_score,
+                       (SELECT count(*) FROM endorsement en WHERE en.target_user_id=em.user_id) AS like_count,
+                       member_risk.category_code AS member_risk_tag
                 FROM event_member em
                 LEFT JOIN user_profile up ON up.user_id=em.user_id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=em.user_id
+                LEFT JOIN LATERAL (
+                    SELECT r.category_code
+                    FROM report r
+                    WHERE r.reported_user_id=em.user_id
+                      AND r.context_event_id IS NOT NULL
+                      AND r.target_type='user' AND r.status<>'dismissed'
+                    GROUP BY r.category_code
+                    HAVING count(DISTINCT r.reporter_user_id)>=3
+                    ORDER BY count(DISTINCT r.reporter_user_id) DESC, r.category_code
+                    LIMIT 1
+                ) member_risk ON true
                 WHERE em.event_id=@id AND (@status IS NULL OR em.status=@status)
                 ORDER BY em.created_at
                 """, new { id, status }, ct));

@@ -21,11 +21,13 @@ internal static class DatabaseChecks
         foreach (var table in new[]
         {
             "event", "category", "app_user", "user_profile", "trust_snapshot",
-            "place", "administrative_region", "event_schedule", "event_tag", "interest"
+            "place", "administrative_region", "event_schedule", "event_tag", "interest",
+            "report"
         })
         {
             await Execute($"CREATE TEMP TABLE {table} ON COMMIT DROP AS SELECT * FROM public.{table} WITH NO DATA");
         }
+        await Execute("ALTER TABLE report ADD COLUMN IF NOT EXISTS context_event_id uuid");
         var organizerId = Guid.Parse("10000000-0000-0000-0000-000000000001");
         var categoryId = Guid.Parse("20000000-0000-0000-0000-000000000001");
         await Execute($"INSERT INTO app_user (id) VALUES ('{organizerId}')");

@@ -3,6 +3,13 @@ using Microsoft.AspNetCore.WebUtilities;
 using Muda.Api.Infrastructure;
 
 CancellationChecks.ValidateReasons();
+FeedbackChecks.Validate();
+if (args.FirstOrDefault() == "--feedback-db")
+{
+    if (args.Length != 3) throw new Exception("Usage: --feedback-db <settings> <migration>");
+    await FeedbackChecks.ValidateMigration(args[1], args[2]);
+    return;
+}
 if (args.FirstOrDefault() == "--cancellation-db")
 {
     await CancellationChecks.RunDatabase();

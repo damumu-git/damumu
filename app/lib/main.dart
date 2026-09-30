@@ -11,6 +11,8 @@ import 'auth.dart';
 import 'activity_interactions.dart';
 import 'category_service.dart';
 import 'event_service.dart';
+import 'feedback.dart';
+import 'feedback_model.dart';
 import 'l10n.dart';
 import 'build_failure.dart';
 import 'location_service.dart';
@@ -241,6 +243,7 @@ class EventItem {
     this.endsAt,
     this.beginnerFriendly = false,
     this.coverUrl,
+    this.organizerRiskTag,
   });
 
   final int id;
@@ -268,6 +271,7 @@ class EventItem {
   bool get isPast => endsAt != null && !endsAt!.isAfter(DateTime.now());
   final bool beginnerFriendly;
   final String? coverUrl;
+  final String? organizerRiskTag;
 }
 
 final demoEvents = <EventItem>[
@@ -550,6 +554,7 @@ class _AppShellState extends State<AppShell> {
       apiId: rawId,
       emoji: '${json['category_icon'] ?? '✨'}',
       coverUrl: json['cover_url'] as String?,
+      organizerRiskTag: json['organizer_risk_tag'] as String?,
       title: '${json['title'] ?? ''}',
       category: '${json['category_name'] ?? ''}',
       time: time,
@@ -1460,6 +1465,18 @@ class EventCard extends StatelessWidget {
                     ],
                   ),
                   if (event.isPast) _Pill(context.tr('pastActivity')),
+                  if (event.organizerRiskTag != null) ...[
+                    const SizedBox(height: 7),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _RiskPill(
+                        text: feedbackTagLabel(
+                          context,
+                          event.organizerRiskTag!,
+                        ),
+                      ),
+                    ),
+                  ],
                   if (event.isOwned) ...[
                     const SizedBox(height: 7),
                     const Align(
@@ -1804,6 +1821,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
   Map<String, dynamic>? _detail;
   List<Map<String, dynamic>> _members = const [];
   String? _membershipStatus;
+  FeedbackEligibilityData? _feedback;
 
   @override
   void didChangeDependencies() {
@@ -1823,6 +1841,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
       setState(() {
         _detail = detail.item;
         _members = detail.members;
+        _feedback = detail.feedback;
         _membershipStatus = detail.item['viewer_membership_status']?.toString();
         widget.event.joined =
             (detail.item['approved_count'] as num?)?.toInt() ??
@@ -1929,7 +1948,11 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     contentPadding: EdgeInsets.zero,
                     onTap: _organizerUserId == null
                         ? null
-                        : () => _openPublicProfile(context, _organizerUserId!),
+                        : () => _openPublicProfile(
+                            context,
+                            _organizerUserId!,
+                            eventId: e.apiId,
+                          ),
                     leading: UserAvatarImage(
                       nickname: e.host,
                       avatarUrl:
@@ -1960,6 +1983,15 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     runSpacing: 8,
                     children: e.tags.map((t) => _Pill(t)).toList(),
                   ),
+                  if (e.isPast && e.apiId != null && !cancelled)
+                    FeedbackActionGrid(
+                      token: AuthScope.of(context).token ?? '',
+                      eventId: e.apiId!,
+                      targetType: 'activity',
+                      initialEligibility: _feedback,
+                      onPublishSimilar: () =>
+                          _openSimilarEvent(context, e.apiId!),
+                    ),
                   const SizedBox(height: 26),
                   Row(
                     children: [
@@ -1994,6 +2026,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                               onTap: () => _openPublicProfile(
                                 context,
                                 '${member['user_id']}',
+                                eventId: e.apiId,
                               ),
                               child: UserAvatarImage(
                                 nickname: '${member['nickname'] ?? '用户'}',
@@ -2266,9 +2299,15 @@ class _EventDetailPageState extends State<EventDetailPage> {
   }
 }
 
-void _openPublicProfile(BuildContext context, String userId) {
+void _openPublicProfile(
+  BuildContext context,
+  String userId, {
+  String? eventId,
+}) {
   Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => PublicUserProfilePage(userId: userId)),
+    MaterialPageRoute(
+      builder: (_) => PublicUserProfilePage(userId: userId, eventId: eventId),
+    ),
   );
 }
 
@@ -2307,17 +2346,29 @@ class UserAvatarImage extends StatelessWidget {
 }
 
 class PublicUserProfilePage extends StatefulWidget {
-  const PublicUserProfilePage({required this.userId, super.key});
+  const PublicUserProfilePage({required this.userId, this.eventId, super.key});
 
   final String userId;
+  final String? eventId;
 
   @override
   State<PublicUserProfilePage> createState() => _PublicUserProfilePageState();
 }
 
 class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
-  late Future<Map<String, dynamic>> _future = EventService.publicProfile(
+  Future<Map<String, dynamic>>? _future;
+  bool _countedLikeSubmission = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _future ??= _load();
+  }
+
+  Future<Map<String, dynamic>> _load() => EventService.publicProfile(
     widget.userId,
+    token: AuthScope.of(context).token,
+    eventId: widget.eventId,
   );
 
   @override
@@ -2332,9 +2383,7 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
         if (snapshot.hasError) {
           return Center(
             child: FilledButton.icon(
-              onPressed: () => setState(
-                () => _future = EventService.publicProfile(widget.userId),
-              ),
+              onPressed: () => setState(() => _future = _load()),
               icon: const Icon(Icons.refresh),
               label: const Text('重新加载'),
             ),
@@ -2342,9 +2391,9 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
         }
         final profile = snapshot.data!;
         final nickname = '${profile['nickname'] ?? '用户'}';
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -2375,6 +2424,56 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+                const SizedBox(height: 12),
+                Text(
+                  '❤ ${profile['like_count'] ?? 0}',
+                  style: const TextStyle(
+                    color: Colors.pink,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (profile['positive_tags'] is List &&
+                    (profile['positive_tags'] as List).isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: (profile['positive_tags'] as List)
+                        .map(
+                          (tag) => _Pill(
+                            feedbackTagLabel(context, '${tag['tag_code']}'),
+                            green: true,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+                if (widget.eventId != null &&
+                    profile['feedback_eligible'] == true)
+                  FeedbackActionGrid(
+                    token: AuthScope.of(context).token ?? '',
+                    eventId: widget.eventId!,
+                    targetType: 'user',
+                    targetUserId: widget.userId,
+                    initialEligibility: FeedbackEligibilityData(
+                      eligible: true,
+                      likeTag: profile['viewer_like_tag'] as String?,
+                      reportTag: profile['viewer_report_tag'] as String?,
+                    ),
+                    onLikeSubmitted: () {
+                      if (profile['viewer_like_tag'] == null &&
+                          !_countedLikeSubmission) {
+                        setState(() {
+                          _countedLikeSubmission = true;
+                          profile['like_count'] =
+                              ((profile['like_count'] as num?)?.toInt() ?? 0) +
+                              1;
+                        });
+                      }
+                    },
+                  ),
               ],
             ),
           ),
@@ -2401,6 +2500,28 @@ class _Pill extends StatelessWidget {
       style: TextStyle(
         color: green ? _green : _ink,
         fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
+}
+
+class _RiskPill extends StatelessWidget {
+  const _RiskPill({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.orange.shade50,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Colors.orange.shade300),
+    ),
+    child: Text(
+      '${context.tr('riskSignal')}: $text',
+      style: TextStyle(
+        color: Colors.orange.shade900,
+        fontWeight: FontWeight.w700,
       ),
     ),
   );
@@ -4911,6 +5032,11 @@ class _MyActivityRecordPageState extends State<_MyActivityRecordPage> {
   late final Map<String, dynamic> activity = Map.of(widget.activity);
   String get token => widget.token;
   bool get isOrganizer => widget.isOrganizer;
+  bool get activityEnded {
+    final endsAt = DateTime.tryParse('${activity['ends_at'] ?? ''}')?.toLocal();
+    return activity['event_status'] == 'completed' ||
+        (endsAt != null && !endsAt.isAfter(DateTime.now()));
+  }
 
   Future<void> _cancel() async {
     final reason = await showDialog<String>(
@@ -4968,28 +5094,38 @@ class _MyActivityRecordPageState extends State<_MyActivityRecordPage> {
               reason: '${activity['cancellation_reason'] ?? ''}',
             ),
           if (isOrganizer) ...[
-            FilledButton.icon(
-              onPressed: () => _openSimilarEvent(context, '${activity['id']}'),
-              icon: const Icon(Icons.copy_outlined),
-              label: Text(context.tr('publishSimilar')),
-            ),
-            if (activity['event_status'] != 'cancelled' &&
-                activity['event_status'] != 'completed') ...[
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _cancel,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FeedbackActionCard(
+                  icon: Icons.copy_outlined,
+                  label: context.tr('publishSimilar'),
+                  onTap: () => _openSimilarEvent(context, '${activity['id']}'),
                 ),
-                icon: const Icon(Icons.event_busy_outlined),
-                label: Text(context.tr('cancelEvent')),
-              ),
+                if (activity['event_status'] != 'cancelled' && !activityEnded)
+                  FeedbackActionCard(
+                    icon: Icons.event_busy_outlined,
+                    label: context.tr('cancelEvent'),
+                    color: Theme.of(context).colorScheme.error,
+                    onTap: _cancel,
+                  ),
+              ],
+            ),
+            if (activity['event_status'] != 'cancelled' && !activityEnded) ...[
               const Divider(height: 34),
               _OrganizerApplications(
                 token: token,
                 eventId: '${activity['id']}',
               ),
             ],
+          ] else if (activityEnded &&
+              activity['event_status'] != 'cancelled') ...[
+            FeedbackActionGrid(
+              token: token,
+              eventId: '${activity['id']}',
+              targetType: 'activity',
+            ),
           ],
         ],
       ),
@@ -5078,7 +5214,11 @@ class _OrganizerApplicationsState extends State<_OrganizerApplications> {
               children: [
                 InkWell(
                   customBorder: const CircleBorder(),
-                  onTap: () => _openPublicProfile(context, userId),
+                  onTap: () => _openPublicProfile(
+                    context,
+                    userId,
+                    eventId: widget.eventId,
+                  ),
                   child: UserAvatarImage(
                     nickname: nickname,
                     avatarUrl: application['avatar_url'] as String?,
@@ -5088,7 +5228,11 @@ class _OrganizerApplicationsState extends State<_OrganizerApplications> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: InkWell(
-                    onTap: () => _openPublicProfile(context, userId),
+                    onTap: () => _openPublicProfile(
+                      context,
+                      userId,
+                      eventId: widget.eventId,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -5100,6 +5244,23 @@ class _OrganizerApplicationsState extends State<_OrganizerApplications> {
                           '${context.tr('partySize')}: $partySize · '
                           '${context.tr('trust')}: $trustScore',
                         ),
+                        Text(
+                          '❤ ${application['like_count'] ?? 0}',
+                          style: const TextStyle(
+                            color: Colors.pink,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (application['member_risk_tag'] != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: _RiskPill(
+                              text: feedbackTagLabel(
+                                context,
+                                '${application['member_risk_tag']}',
+                              ),
+                            ),
+                          ),
                         if (createdAt != null)
                           Text(
                             '申请时间：${_notificationTime(createdAt)}',

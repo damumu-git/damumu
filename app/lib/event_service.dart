@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' as parser;
+import 'feedback_model.dart';
 
 const _apiBase = String.fromEnvironment(
   'API_BASE_URL',
@@ -110,9 +111,14 @@ class ActivityPage {
 }
 
 class EventDetailData {
-  const EventDetailData({required this.item, required this.members});
+  const EventDetailData({
+    required this.item,
+    required this.members,
+    this.feedback,
+  });
   final Map<String, dynamic> item;
   final List<Map<String, dynamic>> members;
+  final FeedbackEligibilityData? feedback;
 }
 
 class EventService {
@@ -189,15 +195,82 @@ class EventService {
       members: (members is List ? members : const <dynamic>[])
           .map((item) => (item as Map).cast<String, dynamic>())
           .toList(),
+      feedback: data['feedback'] is Map
+          ? FeedbackEligibilityData.fromJson(
+              (data['feedback'] as Map).cast<String, dynamic>(),
+            )
+          : null,
     );
   }
 
-  static Future<Map<String, dynamic>> publicProfile(String userId) async {
+  static Future<Map<String, dynamic>> publicProfile(
+    String userId, {
+    String? token,
+    String? eventId,
+  }) async {
     final response = await http
-        .get(Uri.parse('$_apiBase/users/$userId/public-profile'))
+        .get(
+          Uri.parse('$_apiBase/users/$userId/public-profile').replace(
+            queryParameters: eventId == null ? null : {'eventId': eventId},
+          ),
+          headers: token == null ? null : {'Authorization': 'Bearer $token'},
+        )
         .timeout(const Duration(seconds: 10));
     return (_decodeResponse(response, '用户信息暂时无法加载')['data'] as Map)
         .cast<String, dynamic>();
+  }
+
+  static Future<FeedbackEligibilityData> feedbackEligibility(
+    String token,
+    String eventId,
+    String targetType, {
+    String? targetUserId,
+  }) async {
+    final query = <String, String>{
+      'eventId': eventId,
+      'targetType': targetType,
+    };
+    if (targetUserId != null) query['targetUserId'] = targetUserId;
+    final response = await http
+        .get(
+          Uri.parse(
+            '$_apiBase/feedback/eligibility',
+          ).replace(queryParameters: query),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 10));
+    final data = (_decodeResponse(response, '评价状态加载失败')['data'] as Map)
+        .cast<String, dynamic>();
+    return FeedbackEligibilityData.fromJson(data);
+  }
+
+  static Future<void> submitFeedback(
+    String token, {
+    required String eventId,
+    required String targetType,
+    String? targetUserId,
+    required String feedbackType,
+    required String tagCode,
+    String? description,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('$_apiBase/feedback'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'eventId': eventId,
+            'targetType': targetType,
+            'targetUserId': targetUserId,
+            'feedbackType': feedbackType,
+            'tagCode': tagCode,
+            'description': description,
+          }),
+        )
+        .timeout(const Duration(seconds: 10));
+    _decodeResponse(response, '评价提交失败，请稍后再试');
   }
 
   static Future<Map<String, dynamic>> join(

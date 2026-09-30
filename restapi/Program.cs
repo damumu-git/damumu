@@ -79,6 +79,7 @@ api.MapActivityEndpoints();
 api.MapSocialEndpoints();
 api.MapSafetyEndpoints();
 api.MapGovernanceEndpoints();
+api.MapFeedbackEndpoints();
 api.MapAdminEndpoints();
 api.MapRealtimeEndpoints();
 
