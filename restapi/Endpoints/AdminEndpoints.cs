@@ -105,7 +105,8 @@ public static class AdminEndpoints
                 SELECT u.*, p.nickname, p.avatar_url, p.bio, p.city_code, p.district_code,
                        p.languages, p.gender, p.occupation, p.arrival_year,
                        ts.score AS trust_score, ts.review_count, ts.attended_count,
-                       ts.no_show_count, ts.organized_count, ts.tag_counts
+                       ts.no_show_count, ts.organized_count, ts.tag_counts,
+                       (SELECT count(*) FROM endorsement en WHERE en.target_user_id=u.id) AS like_count
                 FROM app_user u
                 LEFT JOIN user_profile p ON p.user_id=u.id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id
@@ -121,10 +122,17 @@ public static class AdminEndpoints
                 """, new { id }, ct);
             var reports = await db.QueryAsync(
                 """
-                SELECT id, target_type, category_code, priority, status, created_at
+                SELECT id, target_type, category_code, description, priority, status,
+                       resolution_code, created_at, resolved_at
                 FROM report WHERE reported_user_id=@id ORDER BY created_at DESC LIMIT 20
                 """, new { id }, ct);
-            return ApiSupport.Ok(new { user, events, reports });
+            var positiveTags = await db.QueryAsync(
+                """
+                SELECT tag_code, count(*) AS count
+                FROM endorsement WHERE target_user_id=@id
+                GROUP BY tag_code ORDER BY count(*) DESC, tag_code LIMIT 8
+                """, new { id }, ct);
+            return ApiSupport.Ok(new { user, events, reports, positiveTags });
         });
 
         admin.MapPatch("/users/{id:guid}/status", async (
@@ -158,7 +166,7 @@ public static class AdminEndpoints
                        c.icon AS category_icon,
                        p.name AS place_name, up.nickname AS organizer_name,
                        s.starts_at, s.ends_at,
-                       (SELECT count(*) FROM report r WHERE r.target_type='event' AND r.target_id=e.id) AS report_count
+                       (SELECT count(*) FROM report r WHERE r.target_type IN ('event','activity') AND r.target_id=e.id) AS report_count
                 FROM event e
                 JOIN category c ON c.id=e.category_id
                 LEFT JOIN place p ON p.id=e.place_id
@@ -183,6 +191,64 @@ public static class AdminEndpoints
                   AND (@city IS NULL OR e.city_code=@city)
                 """, new { q, status, city }, ct);
             return ApiSupport.Ok(rows, new { total, limit = take, offset = skip });
+        });
+
+        admin.MapGet("/events/{id:guid}", async (Guid id, Db db, CancellationToken ct) =>
+        {
+            var item = await db.QueryOneAsync(
+                """
+                SELECT e.*, COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
+                       c.icon AS category_icon, p.name AS place_name,
+                       p.address_public, up.nickname AS organizer_name,
+                       up.avatar_url AS organizer_avatar,
+                       COALESCE(ts.score, 0) AS organizer_trust_score,
+                       CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || cover.storage_key END AS cover_url,
+                       (SELECT count(*) FROM report r
+                        WHERE r.target_type IN ('event','activity') AND r.target_id=e.id) AS report_count
+                FROM event e
+                JOIN category c ON c.id=e.category_id
+                LEFT JOIN place p ON p.id=e.place_id
+                LEFT JOIN user_profile up ON up.user_id=e.organizer_user_id
+                LEFT JOIN trust_snapshot ts ON ts.user_id=e.organizer_user_id
+                LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
+                WHERE e.id=@id AND e.deleted_at IS NULL
+                """, new { id }, ct);
+            if (item is null) throw new ApiException(404, "event_not_found", "活动不存在");
+            var schedules = await db.QueryAsync(
+                """
+                SELECT id, starts_at, ends_at, timezone, status,
+                       check_in_opens_at, check_in_closes_at
+                FROM event_schedule WHERE event_id=@id ORDER BY starts_at
+                """, new { id }, ct);
+            var members = await db.QueryAsync(
+                """
+                SELECT em.user_id, em.member_role, em.status, em.party_size,
+                       em.application_note, em.rejection_reason, em.joined_at,
+                       em.checked_in_at, em.created_at, up.nickname, up.avatar_url,
+                       COALESCE(ts.score, 0) AS trust_score
+                FROM event_member em
+                LEFT JOIN user_profile up ON up.user_id=em.user_id
+                LEFT JOIN trust_snapshot ts ON ts.user_id=em.user_id
+                WHERE em.event_id=@id ORDER BY em.created_at
+                """, new { id }, ct);
+            var reports = await db.QueryAsync(
+                """
+                SELECT r.id, r.reporter_user_id, r.category_code, r.description,
+                       r.priority, r.status, r.resolution_code, r.created_at,
+                       reporter.nickname AS reporter_name
+                FROM report r
+                LEFT JOIN user_profile reporter ON reporter.user_id=r.reporter_user_id
+                WHERE r.target_type IN ('event','activity') AND r.target_id=@id
+                ORDER BY r.created_at DESC LIMIT 50
+                """, new { id }, ct);
+            var actions = await db.QueryAsync(
+                """
+                SELECT id, action_type, reason_code, reason_note, created_at
+                FROM moderation_action
+                WHERE target_type IN ('event','activity') AND target_id=@id
+                ORDER BY created_at DESC LIMIT 30
+                """, new { id }, ct);
+            return ApiSupport.Ok(new { item, schedules, members, reports, actions });
         });
 
         admin.MapPatch("/events/{id:guid}/moderation", async (
@@ -236,14 +302,14 @@ public static class AdminEndpoints
                        r.resolved_at, r.created_at, r.row_version,
                        reporter.nickname AS reporter_name,
                        reported.nickname AS reported_user_name,
-                       CASE WHEN r.target_type='event' THEN e.title
+                       CASE WHEN r.target_type IN ('event','activity') THEN e.title
                             WHEN r.target_type='message' THEN left(m.body, 100)
                             ELSE NULL END AS target_summary,
                        (SELECT count(*) FROM report_evidence re WHERE re.report_id=r.id) AS evidence_count
                 FROM report r
                 LEFT JOIN user_profile reporter ON reporter.user_id=r.reporter_user_id
                 LEFT JOIN user_profile reported ON reported.user_id=r.reported_user_id
-                LEFT JOIN event e ON r.target_type='event' AND e.id=r.target_id
+                LEFT JOIN event e ON r.target_type IN ('event','activity') AND e.id=r.target_id
                 LEFT JOIN message m ON r.target_type='message' AND m.id=r.target_id
                 WHERE (@status IS NULL OR r.status=@status)
                   AND (@priority IS NULL OR r.priority=@priority)

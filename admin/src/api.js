@@ -37,6 +37,7 @@ export const api = {
   updateUserStatus: (id, body) =>
     request(`/admin/users/${id}/status`, { method: 'PATCH', body: JSON.stringify(body) }),
   events: (filters = {}) => request(`/admin/events${params(filters)}`),
+  event: (id) => request(`/admin/events/${id}`),
   moderateEvent: (id, body) =>
     request(`/admin/events/${id}/moderation`, { method: 'PATCH', body: JSON.stringify(body) }),
   reports: (filters = {}) => request(`/admin/reports${params(filters)}`),

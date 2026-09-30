@@ -37,6 +37,13 @@ const statusText = {
   contacted: '已联系',
   acknowledged: '已确认',
   false_alarm: '误报',
+  scheduled: '已排期',
+  approved: '已通过',
+  attended: '已签到',
+  applied: '待审核',
+  rejected: '已拒绝',
+  withdrawn: '已退出',
+  waitlisted: '候补中',
 }
 
 const formatDate = (value, withTime = true) => {
@@ -187,12 +194,117 @@ function Dashboard() {
   )
 }
 
+function DetailHeader({ kicker, title, subtitle, status, onBack, actions }) {
+  return (
+    <div className="detail-header">
+      <button className="back-button" onClick={onBack}><span>←</span> 返回列表</button>
+      <div className="detail-title-row">
+        <div>
+          <span className="kicker">{kicker}</span>
+          <div className="detail-title"><h2>{title}</h2>{status && <Status value={status} />}</div>
+          {subtitle && <p>{subtitle}</p>}
+        </div>
+        {actions && <div className="detail-actions">{actions}</div>}
+      </div>
+    </div>
+  )
+}
+
+function MetricCard({ label, value, note, tone = 'green' }) {
+  return (
+    <article className={`detail-metric tone-${tone}`}>
+      <span>{label}</span>
+      <strong>{value ?? '—'}</strong>
+      {note && <small>{note}</small>}
+    </article>
+  )
+}
+
+function Field({ label, value, wide = false }) {
+  return <div className={wide ? 'detail-field wide' : 'detail-field'}><dt>{label}</dt><dd>{value || '—'}</dd></div>
+}
+
+function UserDetail({ id, onBack }) {
+  const [notice, setNotice] = useState('')
+  const resource = useResource(() => api.user(id), [id])
+  const payload = resource.data?.data
+  const user = payload?.user
+
+  const changeStatus = async (nextStatus) => {
+    const reason = window.prompt(`将「${user.nickname ?? user.id}」设为${statusText[nextStatus]}，请输入原因：`)
+    if (reason === null) return
+    try {
+      await api.updateUserStatus(user.id, { status: nextStatus, reason, actorUserId: null })
+      setNotice('用户状态已更新并写入审计日志')
+      resource.reload()
+    } catch (error) { setNotice(error.message) }
+  }
+
+  return (
+    <PageState {...resource} onRetry={resource.reload}>
+      {user && <div className="detail-page">
+        <DetailHeader
+          kicker="User profile"
+          title={user.nickname ?? '未设置昵称'}
+          subtitle={`用户 ID · ${user.id}`}
+          status={user.status}
+          onBack={onBack}
+          actions={<>
+            {user.status !== 'active' && <button className="button secondary" onClick={() => changeStatus('active')}>恢复账号</button>}
+            {user.status !== 'suspended' && <button className="button ghost" onClick={() => changeStatus('suspended')}>暂停账号</button>}
+            {user.status !== 'banned' && <button className="button danger-button" onClick={() => changeStatus('banned')}>封禁账号</button>}
+          </>}
+        />
+        {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
+        <div className="detail-metrics">
+          <MetricCard label="信誉分" value={Number(user.trust_score ?? 0).toFixed(1)} note={`${user.review_count ?? 0} 次评价`} />
+          <MetricCard label="收到喜欢" value={`❤ ${user.like_count ?? 0}`} note="来自共同活动参与者" tone="rose" />
+          <MetricCard label="参与活动" value={user.attended_count ?? 0} note={`组织 ${user.organized_count ?? 0} 场`} tone="blue" />
+          <MetricCard label="被举报" value={payload.reports?.length ?? 0} note={`爽约 ${user.no_show_count ?? 0} 次`} tone="amber" />
+        </div>
+        <div className="detail-layout">
+          <section className="panel detail-main-card">
+            <div className="profile-hero">
+              <span className="avatar avatar-large">{(user.nickname ?? '慕').slice(0, 1)}</span>
+              <div><span className="eyebrow">账号资料</span><h3>{user.nickname ?? '未设置昵称'}</h3><p>{user.bio || '该用户暂未填写个人简介。'}</p></div>
+            </div>
+            <dl className="detail-fields">
+              <Field label="账号角色" value={user.role === 'organizer' ? '组织者' : user.role === 'admin' ? '管理员' : '普通用户'} />
+              <Field label="界面语言" value={user.locale} />
+              <Field label="所在地区" value={[user.city_code, user.district_code].filter(Boolean).join(' · ')} />
+              <Field label="职业" value={user.occupation} />
+              <Field label="性别" value={user.gender} />
+              <Field label="到韩年份" value={user.arrival_year} />
+              <Field label="注册时间" value={formatDate(user.created_at)} />
+              <Field label="最后登录" value={formatDate(user.last_login_at)} />
+              <Field label="语言" value={Array.isArray(user.languages) ? user.languages.join('、') : user.languages} wide />
+            </dl>
+            {!!payload.positiveTags?.length && <div className="tag-section"><span className="eyebrow">常见正向反馈</span><div className="tag-cloud">{payload.positiveTags.map((tag) => <span key={tag.tag_code}>❤ {tag.tag_code}<b>{tag.count}</b></span>)}</div></div>}
+          </section>
+          <aside className="detail-side-stack">
+            <section className="panel"><div className="section-heading"><div><span className="kicker">Activity history</span><h3>最近活动</h3></div><span>{payload.events?.length ?? 0}</span></div>
+              <div className="detail-list">{payload.events?.map((event) => <div className="detail-list-row" key={event.id}><div><strong>{event.title}</strong><small>{event.member_role === 'organizer' ? '组织者' : '参与者'} · {formatDate(event.created_at)}</small></div><Status value={event.event_status} /></div>)}{!payload.events?.length && <p className="inline-empty">暂无活动记录</p>}</div>
+            </section>
+            <section className="panel"><div className="section-heading"><div><span className="kicker">Trust signals</span><h3>举报记录</h3></div><span>{payload.reports?.length ?? 0}</span></div>
+              <div className="detail-list">{payload.reports?.map((report) => <div className="detail-list-row report-row" key={report.id}><div><strong>{report.category_code}</strong><small>{report.description || '无补充说明'} · {formatDate(report.created_at)}</small></div><Status value={report.status} /></div>)}{!payload.reports?.length && <p className="inline-empty">没有举报记录</p>}</div>
+            </section>
+          </aside>
+        </div>
+      </div>}
+    </PageState>
+  )
+}
+
 function Users() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
+  const [role, setRole] = useState('')
+  const [selectedId, setSelectedId] = useState(null)
   const [notice, setNotice] = useState('')
-  const resource = useResource(() => api.users({ q: search, status, limit: 50 }), [search, status])
+  const resource = useResource(() => api.users({ q: search, status, role, limit: 50 }), [search, status, role])
   const rows = resource.data?.data ?? []
+
+  if (selectedId) return <UserDetail id={selectedId} onBack={() => { setSelectedId(null); resource.reload() }} />
 
   const changeStatus = async (user, nextStatus) => {
     const reason = window.prompt(`将「${user.nickname ?? user.id}」设为${statusText[nextStatus]}，请输入原因：`)
@@ -205,42 +317,31 @@ function Users() {
   }
 
   return (
-    <section className="panel full-panel">
-      <div className="panel-heading">
-        <div><span className="kicker">Identity & trust</span><h3>用户管理</h3><p>账号状态、信誉和被举报情况</p></div>
+    <section className="panel full-panel management-panel">
+      <div className="panel-heading management-heading">
+        <div><span className="kicker">Identity & trust</span><h3>用户管理</h3><p>查看账号资料、参与履历、正向反馈和安全治理信号</p></div>
         <span className="count-badge">{resource.data?.meta?.total ?? 0} 位用户</span>
       </div>
       {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
       <FilterBar search={search} setSearch={setSearch} placeholder="搜索昵称或用户 UUID">
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="">全部状态</option><option value="active">正常</option>
-          <option value="suspended">暂停</option><option value="banned">封禁</option>
-        </select>
+        <select value={role} onChange={(event) => setRole(event.target.value)}><option value="">全部身份</option><option value="member">普通用户</option><option value="organizer">组织者</option><option value="admin">管理员</option></select>
+        <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">全部状态</option><option value="active">正常</option><option value="suspended">暂停</option><option value="banned">封禁</option></select>
       </FilterBar>
       <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
-        <div className="table-wrap">
+        <div className="table-wrap management-table">
           <table>
-            <thead><tr><th>用户</th><th>地区</th><th>身份</th><th>信誉</th><th>活动记录</th><th>举报</th><th>状态</th><th /></tr></thead>
-            <tbody>
-              {rows.map((user) => (
-                <tr key={user.id}>
-                  <td><div className="identity"><span className="avatar">{(user.nickname ?? '慕').slice(0, 1)}</span><div><strong>{user.nickname ?? '未设置昵称'}</strong><small>{user.id.slice(0, 8)}</small></div></div></td>
-                  <td>{user.city_code}{user.district_code ? ` · ${user.district_code}` : ''}</td>
-                  <td>{user.role === 'organizer' ? '组织者' : user.role === 'admin' ? '管理员' : '用户'}</td>
-                  <td><strong>{Number(user.trust_score).toFixed(1)}</strong><small className="cell-note"> / 5.0</small></td>
-                  <td>{user.attended_count} 参加 · {user.no_show_count} 爽约</td>
-                  <td><span className={Number(user.report_count) ? 'danger-text' : ''}>{user.report_count}</span></td>
-                  <td><Status value={user.status} /></td>
-                  <td>
-                    <div className="row-actions">
-                      {user.status !== 'suspended' && <button onClick={() => changeStatus(user, 'suspended')}>暂停</button>}
-                      {user.status !== 'active' && <button onClick={() => changeStatus(user, 'active')}>恢复</button>}
-                      {user.status !== 'banned' && <button className="danger" onClick={() => changeStatus(user, 'banned')}>封禁</button>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+            <thead><tr><th>用户</th><th>地区 / 身份</th><th>信誉</th><th>活动记录</th><th>安全信号</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody>{rows.map((user) => (
+              <tr key={user.id} className="clickable-row" onDoubleClick={() => setSelectedId(user.id)}>
+                <td><div className="identity"><span className="avatar">{(user.nickname ?? '慕').slice(0, 1)}</span><div><strong>{user.nickname ?? '未设置昵称'}</strong><small>{user.id}</small></div></div></td>
+                <td><strong>{user.city_code || '地区未设置'}{user.district_code ? ` · ${user.district_code}` : ''}</strong><small className="block-note">{user.role === 'organizer' ? '组织者' : user.role === 'admin' ? '管理员' : '普通用户'}</small></td>
+                <td><strong>{Number(user.trust_score).toFixed(1)}</strong><small className="cell-note"> / 5.0</small></td>
+                <td><strong>{user.attended_count}</strong><small className="block-note">参加 · {user.no_show_count} 爽约</small></td>
+                <td><span className={Number(user.report_count) ? 'signal-count danger-text' : 'signal-count'}>{user.report_count}</span><small className="cell-note"> 条举报</small></td>
+                <td><Status value={user.status} /></td>
+                <td><div className="row-actions"><button className="view-button" onClick={() => setSelectedId(user.id)}>查看详情</button>{user.status !== 'suspended' && <button onClick={() => changeStatus(user, 'suspended')}>暂停</button>}{user.status !== 'active' && <button onClick={() => changeStatus(user, 'active')}>恢复</button>}</div></td>
+              </tr>
+            ))}</tbody>
           </table>
         </div>
       </PageState>
@@ -248,55 +349,100 @@ function Users() {
   )
 }
 
+function EventDetail({ id, onBack }) {
+  const [notice, setNotice] = useState('')
+  const resource = useResource(() => api.event(id), [id])
+  const payload = resource.data?.data
+  const item = payload?.item
+
+  const moderate = async (nextStatus) => {
+    const reason = window.prompt(`处置活动「${item.title}」，请输入理由：`)
+    if (reason === null) return
+    try {
+      await api.moderateEvent(item.id, { status: nextStatus, reasonCode: 'admin_decision', reason, actorUserId: null })
+      setNotice('活动处置已完成并写入审计日志')
+      resource.reload()
+    } catch (error) { setNotice(error.message) }
+  }
+
+  return (
+    <PageState {...resource} onRetry={resource.reload}>
+      {item && <div className="detail-page">
+        <DetailHeader kicker="Event operations" title={item.title} subtitle={`活动 ID · ${item.id}`} status={item.status} onBack={onBack}
+          actions={<>{item.status === 'hidden' ? <button className="button secondary" onClick={() => moderate('published')}>恢复展示</button> : <button className="button ghost" onClick={() => moderate('hidden')}>隐藏活动</button>}{item.status !== 'cancelled' && <button className="button danger-button" onClick={() => moderate('cancelled')}>取消活动</button>}</>} />
+        {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
+        <div className="detail-metrics">
+          <MetricCard label="已通过" value={`${item.approved_count}/${item.capacity}`} note={`候补 ${item.waitlist_count ?? 0} 人`} />
+          <MetricCard label="预计费用" value={Number(item.price_amount ?? 0) ? `₩${Number(item.price_amount).toLocaleString()}` : '免费'} note={item.price_currency ?? 'KRW'} tone="blue" />
+          <MetricCard label="活动举报" value={item.report_count ?? 0} note="包含参与者活动反馈" tone="rose" />
+          <MetricCard label="可见性" value={item.visibility} note={`审核方式 ${item.approval_mode}`} tone="amber" />
+        </div>
+        <div className="detail-layout event-detail-layout">
+          <section className="panel detail-main-card">
+            <div className="event-detail-hero"><div className="event-detail-symbol">{item.category_icon ?? '◇'}</div><div><span className="eyebrow">{item.category_name}</span><h3>{item.title}</h3><p>{item.description || '暂无活动介绍。'}</p></div></div>
+            <dl className="detail-fields">
+              <Field label="组织者" value={`${item.organizer_name ?? '未设置'} · 信誉 ${Number(item.organizer_trust_score ?? 0).toFixed(1)}`} wide />
+              <Field label="活动地区" value={[item.city_code, item.district_code].filter(Boolean).join(' · ')} />
+              <Field label="集合地点" value={item.place_name} />
+              <Field label="详细地址" value={item.address_public} wide />
+              <Field label="最低成行" value={`${item.min_participants ?? 1} 人`} />
+              <Field label="语言" value={Array.isArray(item.language_codes) ? item.language_codes.join('、') : item.language_codes} />
+              <Field label="创建时间" value={formatDate(item.created_at)} />
+              <Field label="发布时间" value={formatDate(item.published_at)} />
+              {item.cancellation_reason && <Field label="取消原因" value={item.cancellation_reason} wide />}
+            </dl>
+          </section>
+          <aside className="detail-side-stack">
+            <section className="panel"><div className="section-heading"><div><span className="kicker">Schedule</span><h3>时间安排</h3></div><span>{payload.schedules?.length ?? 0}</span></div><div className="detail-list">{payload.schedules?.map((schedule) => <div className="detail-list-row" key={schedule.id}><div><strong>{formatDate(schedule.starts_at)} — {formatDate(schedule.ends_at)}</strong><small>{schedule.timezone} · 签到开放 {formatDate(schedule.check_in_opens_at)}</small></div><Status value={schedule.status} /></div>)}</div></section>
+            <section className="panel"><div className="section-heading"><div><span className="kicker">Moderation</span><h3>处置记录</h3></div><span>{payload.actions?.length ?? 0}</span></div><div className="detail-list">{payload.actions?.map((action) => <div className="detail-list-row" key={action.id}><div><strong>{action.action_type}</strong><small>{action.reason_note || action.reason_code || '未填写原因'} · {formatDate(action.created_at)}</small></div></div>)}{!payload.actions?.length && <p className="inline-empty">暂无处置记录</p>}</div></section>
+          </aside>
+        </div>
+        <section className="panel detail-section"><div className="section-heading"><div><span className="kicker">Participants</span><h3>成员与申请</h3></div><span>{payload.members?.length ?? 0} 人</span></div><div className="table-wrap"><table><thead><tr><th>用户</th><th>角色</th><th>状态</th><th>人数</th><th>信誉</th><th>申请备注</th><th>加入时间</th></tr></thead><tbody>{payload.members?.map((member) => <tr key={member.user_id}><td><div className="identity"><span className="avatar">{(member.nickname ?? '慕').slice(0, 1)}</span><div><strong>{member.nickname ?? '未设置昵称'}</strong><small>{member.user_id}</small></div></div></td><td>{member.member_role === 'organizer' ? '组织者' : '参与者'}</td><td><Status value={member.status} /></td><td>{member.party_size}</td><td>{Number(member.trust_score ?? 0).toFixed(1)}</td><td className="text-cell">{member.application_note || member.rejection_reason || '—'}</td><td>{formatDate(member.created_at)}</td></tr>)}</tbody></table></div></section>
+        <section className="panel detail-section"><div className="section-heading"><div><span className="kicker">Reports</span><h3>举报与风险反馈</h3></div><span>{payload.reports?.length ?? 0} 条</span></div><div className="report-grid compact-reports">{payload.reports?.map((report) => <article className="report-card" key={report.id}><div className="report-top"><span className={`priority priority-${report.priority}`}>P{report.priority}</span><Status value={report.status} /><time>{formatDate(report.created_at)}</time></div><h4>{report.category_code}</h4><p>{report.description || '举报人未提供补充说明。'}</p><small>举报人：{report.reporter_name ?? report.reporter_user_id}</small></article>)}{!payload.reports?.length && <p className="inline-empty">该活动没有举报记录</p>}</div></section>
+      </div>}
+    </PageState>
+  )
+}
+
 function Events() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
+  const [selectedId, setSelectedId] = useState(null)
   const [notice, setNotice] = useState('')
   const resource = useResource(() => api.events({ q: search, status, limit: 50 }), [search, status])
   const rows = resource.data?.data ?? []
+
+  if (selectedId) return <EventDetail id={selectedId} onBack={() => { setSelectedId(null); resource.reload() }} />
 
   const moderate = async (event, nextStatus) => {
     const reason = window.prompt(`处置活动「${event.title}」，请输入理由：`)
     if (reason === null) return
     try {
-      await api.moderateEvent(event.id, {
-        status: nextStatus, reasonCode: 'admin_decision', reason, actorUserId: null,
-      })
+      await api.moderateEvent(event.id, { status: nextStatus, reasonCode: 'admin_decision', reason, actorUserId: null })
       setNotice('活动处置已完成')
       resource.reload()
     } catch (error) { setNotice(error.message) }
   }
 
   return (
-    <section className="panel full-panel">
-      <div className="panel-heading"><div><span className="kicker">Supply operations</span><h3>活动管理</h3><p>供给质量、可见性和履约情况</p></div><span className="count-badge">{resource.data?.meta?.total ?? 0} 场活动</span></div>
+    <section className="panel full-panel management-panel">
+      <div className="panel-heading management-heading"><div><span className="kicker">Supply operations</span><h3>活动管理</h3><p>检查供给质量、履约信息、成员构成和治理记录</p></div><span className="count-badge">{resource.data?.meta?.total ?? 0} 场活动</span></div>
       {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
       <FilterBar search={search} setSearch={setSearch} placeholder="搜索活动标题">
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="">全部状态</option><option value="draft">草稿</option><option value="published">已发布</option>
-          <option value="full">已满员</option><option value="hidden">已隐藏</option><option value="cancelled">已取消</option>
-        </select>
+        <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">全部状态</option><option value="draft">草稿</option><option value="published">已发布</option><option value="full">已满员</option><option value="hidden">已隐藏</option><option value="cancelled">已取消</option><option value="completed">已完成</option></select>
       </FilterBar>
       <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>活动</th><th>组织者</th><th>时间 / 地点</th><th>名额</th><th>举报</th><th>状态</th><th /></tr></thead>
-            <tbody>{rows.map((event) => (
-              <tr key={event.id}>
-                <td><div className="event-name"><span>{event.category_icon ?? '◇'}</span><div><strong>{event.title}</strong><small>{event.category_name}</small></div></div></td>
-                <td>{event.organizer_name ?? '未设置'}</td>
-                <td><strong>{formatDate(event.starts_at)}</strong><small className="block-note">{event.place_name ?? event.district_code ?? event.city_code}</small></td>
-                <td><strong>{event.approved_count}/{event.capacity}</strong><small className="block-note">候补 {event.waitlist_count}</small></td>
-                <td><span className={Number(event.report_count) ? 'danger-text' : ''}>{event.report_count}</span></td>
-                <td><Status value={event.status} /></td>
-                <td><div className="row-actions">
-                  {event.status === 'hidden' ? <button onClick={() => moderate(event, 'published')}>恢复</button> : <button onClick={() => moderate(event, 'hidden')}>隐藏</button>}
-                  {event.status !== 'cancelled' && <button className="danger" onClick={() => moderate(event, 'cancelled')}>取消</button>}
-                </div></td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
+        <div className="table-wrap management-table"><table><thead><tr><th>活动</th><th>组织者</th><th>时间 / 地点</th><th>参与情况</th><th>治理信号</th><th>状态</th><th>操作</th></tr></thead><tbody>{rows.map((event) => (
+          <tr key={event.id} className="clickable-row" onDoubleClick={() => setSelectedId(event.id)}>
+            <td><div className="event-name"><span>{event.category_icon ?? '◇'}</span><div><strong>{event.title}</strong><small>{event.category_name} · {event.id}</small></div></div></td>
+            <td><strong>{event.organizer_name ?? '未设置'}</strong><small className="block-note">{event.city_code || '地区未设置'}</small></td>
+            <td><strong>{formatDate(event.starts_at)}</strong><small className="block-note">{event.place_name ?? event.district_code ?? event.city_code ?? '地点未设置'}</small></td>
+            <td><strong>{event.approved_count}/{event.capacity}</strong><small className="block-note">候补 {event.waitlist_count}</small></td>
+            <td><span className={Number(event.report_count) ? 'signal-count danger-text' : 'signal-count'}>{event.report_count}</span><small className="cell-note"> 条举报</small></td>
+            <td><Status value={event.status} /></td>
+            <td><div className="row-actions"><button className="view-button" onClick={() => setSelectedId(event.id)}>查看详情</button>{event.status === 'hidden' ? <button onClick={() => moderate(event, 'published')}>恢复</button> : <button onClick={() => moderate(event, 'hidden')}>隐藏</button>}</div></td>
+          </tr>
+        ))}</tbody></table></div>
       </PageState>
     </section>
   )
