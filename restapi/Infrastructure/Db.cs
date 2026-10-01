@@ -181,12 +181,33 @@ public sealed class Db(NpgsqlDataSource dataSource)
         return member;
     }
 
-    public async Task<Dictionary<string, object?>> ReviewMemberAsync(
+    public Task<Dictionary<string, object?>> ReviewMemberAsync(
         Guid eventId,
         Guid memberUserId,
         Guid reviewerUserId,
         bool approve,
         string? rejectionReason,
+        CancellationToken cancellationToken) =>
+        ReviewMemberCoreAsync(
+            eventId, memberUserId, reviewerUserId, approve, rejectionReason,
+            allowAdministrativeReview: false, cancellationToken: cancellationToken);
+
+    public Task<Dictionary<string, object?>> ReviewMemberAsAdminAsync(
+        Guid eventId,
+        Guid memberUserId,
+        Guid? actorUserId,
+        CancellationToken cancellationToken) =>
+        ReviewMemberCoreAsync(
+            eventId, memberUserId, actorUserId, approve: true, rejectionReason: null,
+            allowAdministrativeReview: true, cancellationToken: cancellationToken);
+
+    private async Task<Dictionary<string, object?>> ReviewMemberCoreAsync(
+        Guid eventId,
+        Guid memberUserId,
+        Guid? reviewerUserId,
+        bool approve,
+        string? rejectionReason,
+        bool allowAdministrativeReview,
         CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -199,7 +220,7 @@ public sealed class Db(NpgsqlDataSource dataSource)
         await using var eventReader = await eventCommand.ExecuteReaderAsync(cancellationToken);
         if (!await eventReader.ReadAsync(cancellationToken))
             throw new ApiException(404, "event_not_found", "活动不存在");
-        if (eventReader.GetGuid(0) != reviewerUserId)
+        if (!allowAdministrativeReview && eventReader.GetGuid(0) != reviewerUserId)
             throw new ApiException(403, "forbidden", "只有组织者可以审核成员");
         if (eventReader.GetString(4) is "cancelled" or "completed")
             throw new ApiException(409, "event_closed", "活动已结束或取消，无法审核成员");
@@ -233,7 +254,7 @@ public sealed class Db(NpgsqlDataSource dataSource)
                       rejection_reason, reviewed_at
             """, connection, transaction);
         command.Parameters.AddWithValue("status", approve ? "approved" : "rejected");
-        command.Parameters.AddWithValue("reviewerUserId", reviewerUserId);
+        command.Parameters.AddWithValue("reviewerUserId", (object?)reviewerUserId ?? DBNull.Value);
         command.Parameters.AddWithValue("eventId", eventId);
         command.Parameters.AddWithValue("memberUserId", memberUserId);
         command.Parameters.AddWithValue("rejectionReason", (object?)rejectionReason ?? DBNull.Value);

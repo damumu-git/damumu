@@ -677,7 +677,7 @@ public static class EventEndpoints
         return api;
     }
 
-    private static async Task PublishReviewAsync(
+    internal static async Task PublishReviewAsync(
         Db db,
         RealtimeConnectionManager realtime,
         PushNotificationService push,

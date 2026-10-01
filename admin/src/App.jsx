@@ -351,6 +351,7 @@ function Users() {
 
 function EventDetail({ id, onBack }) {
   const [notice, setNotice] = useState('')
+  const [approvingUserId, setApprovingUserId] = useState(null)
   const resource = useResource(() => api.event(id), [id])
   const payload = resource.data?.data
   const item = payload?.item
@@ -363,6 +364,19 @@ function EventDetail({ id, onBack }) {
       setNotice('活动处置已完成并写入审计日志')
       resource.reload()
     } catch (error) { setNotice(error.message) }
+  }
+
+  const approveMember = async (member) => {
+    setApprovingUserId(member.user_id)
+    try {
+      await api.approveEventMember(item.id, member.user_id, { actorUserId: null })
+      setNotice(`已通过「${member.nickname ?? member.user_id}」的活动申请`)
+      await resource.reload()
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setApprovingUserId(null)
+    }
   }
 
   return (
@@ -397,7 +411,14 @@ function EventDetail({ id, onBack }) {
             <section className="panel"><div className="section-heading"><div><span className="kicker">Moderation</span><h3>处置记录</h3></div><span>{payload.actions?.length ?? 0}</span></div><div className="detail-list">{payload.actions?.map((action) => <div className="detail-list-row" key={action.id}><div><strong>{action.action_type}</strong><small>{action.reason_note || action.reason_code || '未填写原因'} · {formatDate(action.created_at)}</small></div></div>)}{!payload.actions?.length && <p className="inline-empty">暂无处置记录</p>}</div></section>
           </aside>
         </div>
-        <section className="panel detail-section"><div className="section-heading"><div><span className="kicker">Participants</span><h3>成员与申请</h3></div><span>{payload.members?.length ?? 0} 人</span></div><div className="table-wrap"><table><thead><tr><th>用户</th><th>角色</th><th>状态</th><th>人数</th><th>信誉</th><th>申请备注</th><th>加入时间</th></tr></thead><tbody>{payload.members?.map((member) => <tr key={member.user_id}><td><div className="identity"><span className="avatar">{(member.nickname ?? '慕').slice(0, 1)}</span><div><strong>{member.nickname ?? '未设置昵称'}</strong><small>{member.user_id}</small></div></div></td><td>{member.member_role === 'organizer' ? '组织者' : '参与者'}</td><td><Status value={member.status} /></td><td>{member.party_size}</td><td>{Number(member.trust_score ?? 0).toFixed(1)}</td><td className="text-cell">{member.application_note || member.rejection_reason || '—'}</td><td>{formatDate(member.created_at)}</td></tr>)}</tbody></table></div></section>
+        <section className="panel detail-section">
+          <div className="section-heading"><div><span className="kicker">Participants</span><h3>成员与申请</h3></div><span>{payload.members?.length ?? 0} 人</span></div>
+          <div className="table-wrap"><table><thead><tr><th>用户</th><th>角色</th><th>状态</th><th>人数</th><th>信誉</th><th>申请备注</th><th>加入时间</th><th>操作</th></tr></thead><tbody>{payload.members?.map((member) => <tr key={member.user_id}>
+            <td><div className="identity"><span className="avatar">{(member.nickname ?? '慕').slice(0, 1)}</span><div><strong>{member.nickname ?? '未设置昵称'}</strong><small>{member.user_id}</small></div></div></td>
+            <td>{member.member_role === 'organizer' ? '组织者' : '参与者'}</td><td><Status value={member.status} /></td><td>{member.party_size}</td><td>{Number(member.trust_score ?? 0).toFixed(1)}</td><td className="text-cell">{member.application_note || member.rejection_reason || '—'}</td><td>{formatDate(member.created_at)}</td>
+            <td>{member.status === 'applied' ? <button className="button approve-button" disabled={approvingUserId !== null} onClick={() => approveMember(member)}>{approvingUserId === member.user_id ? '处理中…' : '通过申请'}</button> : <span className="muted-action">—</span>}</td>
+          </tr>)}</tbody></table></div>
+        </section>
         <section className="panel detail-section"><div className="section-heading"><div><span className="kicker">Reports</span><h3>举报与风险反馈</h3></div><span>{payload.reports?.length ?? 0} 条</span></div><div className="report-grid compact-reports">{payload.reports?.map((report) => <article className="report-card" key={report.id}><div className="report-top"><span className={`priority priority-${report.priority}`}>P{report.priority}</span><Status value={report.status} /><time>{formatDate(report.created_at)}</time></div><h4>{report.category_code}</h4><p>{report.description || '举报人未提供补充说明。'}</p><small>举报人：{report.reporter_name ?? report.reporter_user_id}</small></article>)}{!payload.reports?.length && <p className="inline-empty">该活动没有举报记录</p>}</div></section>
       </div>}
     </PageState>

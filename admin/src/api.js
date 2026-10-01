@@ -38,6 +38,11 @@ export const api = {
     request(`/admin/users/${id}/status`, { method: 'PATCH', body: JSON.stringify(body) }),
   events: (filters = {}) => request(`/admin/events${params(filters)}`),
   event: (id) => request(`/admin/events/${id}`),
+  approveEventMember: (eventId, memberUserId, body) =>
+    request(`/admin/events/${eventId}/members/${memberUserId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   moderateEvent: (id, body) =>
     request(`/admin/events/${id}/moderation`, { method: 'PATCH', body: JSON.stringify(body) }),
   reports: (filters = {}) => request(`/admin/reports${params(filters)}`),

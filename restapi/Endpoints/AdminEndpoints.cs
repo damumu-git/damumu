@@ -251,6 +251,24 @@ public static class AdminEndpoints
             return ApiSupport.Ok(new { item, schedules, members, reports, actions });
         });
 
+        admin.MapPost("/events/{id:guid}/members/{memberUserId:guid}/approve", async (
+            Guid id,
+            Guid memberUserId,
+            AdminApplicationApprovalRequest request,
+            Db db,
+            RealtimeConnectionManager realtime,
+            PushNotificationService push,
+            CancellationToken ct) =>
+        {
+            var member = await db.ReviewMemberAsAdminAsync(
+                id, memberUserId, request.ActorUserId, ct);
+            await EventEndpoints.PublishReviewAsync(
+                db, realtime, push, id, memberUserId, true, null, ct);
+            await WriteAudit(db, request.ActorUserId, "admin.event.application_approved",
+                "event", id, new { memberUserId }, ct);
+            return ApiSupport.Ok(member);
+        });
+
         admin.MapPatch("/events/{id:guid}/moderation", async (
             Guid id, AdminEventModerationRequest request, Db db, CancellationToken ct) =>
         {
@@ -878,6 +896,7 @@ public sealed record AdminRegionRequest(
 public sealed record AdminFeatureFlagRequest(bool Enabled, Guid? ActorUserId);
 public sealed record AdminEventReviewRequest(string Status, string? Reason, Guid? ActorUserId);
 public sealed record AdminAnnouncementRequest(string Title, string Body, Guid? ActorUserId);
+public sealed record AdminApplicationApprovalRequest(Guid? ActorUserId);
 public sealed record AdminSystemAvatarRequest(
     string Code,
     string NameZhCn,
