@@ -14,6 +14,8 @@ builder.Services.AddSingleton<Db>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<RealtimeConnectionManager>();
 builder.Services.AddSingleton<PushNotificationService>();
+builder.Services.AddHostedService<RealtimeRelayService>();
+builder.Services.AddHostedService<ConversationLifecycleService>();
 builder.Services.AddOpenApi();
 builder.Services.AddCors(options =>
 {

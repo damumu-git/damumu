@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zaihandazi/activity_interactions.dart';
 import 'package:zaihandazi/auth.dart';
 import 'package:zaihandazi/main.dart';
@@ -145,6 +146,7 @@ void main() {
   testWidgets('group renders cancellation title and reason as a notice', (
     tester,
   ) async {
+    SharedPreferences.setMockInitialValues({});
     final auth = AuthController()
       ..token = 'token'
       ..user = const AuthUser(
@@ -185,7 +187,9 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
       expect(find.byType(EventCancellationNotice), findsOneWidget);
       expect(find.text('活动取消'), findsOneWidget);
       expect(find.text('取消原因：天气原因'), findsOneWidget);

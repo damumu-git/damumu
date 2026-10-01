@@ -26,7 +26,8 @@ public static class EventCancellation
             FROM cancelled e JOIN conversation c ON c.event_id=e.id AND c.conversation_type='event'
             RETURNING id, conversation_id
         ), bumped AS (
-            UPDATE conversation c SET updated_at=now()
+            UPDATE conversation c
+            SET updated_at=now(), status='read_only', read_only_at=now()
             FROM notice n WHERE c.id=n.conversation_id
         ), notified AS (
             INSERT INTO notification (user_id, notification_type, title, body, data)

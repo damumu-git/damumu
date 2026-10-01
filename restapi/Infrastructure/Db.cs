@@ -61,6 +61,222 @@ public sealed class Db(NpgsqlDataSource dataSource)
         return (T)Convert.ChangeType(result, typeof(T));
     }
 
+    public async Task<MessageSendResult> SendMessageAsync(
+        Guid conversationId, Guid userId, string messageType, string? body,
+        Guid? mediaAssetId, Guid? replyToMessageId, Guid clientMessageId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+
+        Dictionary<string, object?>? existingMessage = null;
+        await using (var existing = new NpgsqlCommand(
+            """
+            SELECT id, conversation_id, sender_user_id, message_type, body,
+                   media_asset_id, reply_to_message_id, client_message_id,
+                   edited_at, recalled_at, created_at
+            FROM message WHERE sender_user_id=@userId AND client_message_id=@clientMessageId
+            """, connection, transaction))
+        {
+            existing.Parameters.AddWithValue("userId", userId);
+            existing.Parameters.AddWithValue("clientMessageId", clientMessageId);
+            await using var reader = await existing.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var row = ReadRow(reader);
+                if ((Guid)row["conversation_id"]! != conversationId)
+                    throw new ApiException(409, "client_message_conflict", "消息标识已被其它会话使用");
+                existingMessage = row;
+            }
+        }
+        if (existingMessage is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return new(existingMessage, [], false, "");
+        }
+
+        string conversationType;
+        await using (var access = new NpgsqlCommand(
+            """
+            SELECT c.conversation_type, c.status
+            FROM conversation_member cm JOIN conversation c ON c.id=cm.conversation_id
+            WHERE cm.conversation_id=@conversationId AND cm.user_id=@userId AND cm.left_at IS NULL
+            FOR UPDATE OF c
+            """, connection, transaction))
+        {
+            access.Parameters.AddWithValue("conversationId", conversationId);
+            access.Parameters.AddWithValue("userId", userId);
+            await using var reader = await access.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+                throw new ApiException(403, "forbidden", "无权在该会话发言");
+            conversationType = reader.GetString(0);
+            if (reader.GetString(1) != "active")
+                throw new ApiException(409, "conversation_read_only", "该活动群已结束，只能查看历史消息");
+        }
+
+        if (replyToMessageId is not null)
+        {
+            await using var reply = new NpgsqlCommand(
+                "SELECT count(*) FROM message WHERE id=@replyId AND conversation_id=@conversationId AND deleted_at IS NULL",
+                connection, transaction);
+            reply.Parameters.AddWithValue("replyId", replyToMessageId.Value);
+            reply.Parameters.AddWithValue("conversationId", conversationId);
+            if (Convert.ToInt64(await reply.ExecuteScalarAsync(cancellationToken)) == 0)
+                throw new ApiException(400, "invalid_reply", "回复的消息不存在");
+        }
+        if (mediaAssetId is not null)
+        {
+            await using var media = new NpgsqlCommand(
+                "SELECT count(*) FROM media_asset WHERE id=@mediaAssetId AND owner_user_id=@userId AND status='ready' AND deleted_at IS NULL",
+                connection, transaction);
+            media.Parameters.AddWithValue("mediaAssetId", mediaAssetId.Value);
+            media.Parameters.AddWithValue("userId", userId);
+            if (Convert.ToInt64(await media.ExecuteScalarAsync(cancellationToken)) == 0)
+                throw new ApiException(400, "invalid_media", "消息附件不存在或不可用");
+        }
+
+        Dictionary<string, object?> message;
+        await using (var insert = new NpgsqlCommand(
+            """
+            INSERT INTO message (conversation_id, sender_user_id, message_type, body,
+                                 media_asset_id, reply_to_message_id, client_message_id)
+            VALUES (@conversationId, @userId, @messageType, @body,
+                    @mediaAssetId, @replyToMessageId, @clientMessageId)
+            RETURNING id, conversation_id, sender_user_id, message_type, body,
+                      media_asset_id, reply_to_message_id, client_message_id,
+                      edited_at, recalled_at, created_at
+            """, connection, transaction))
+        {
+            insert.Parameters.AddWithValue("conversationId", conversationId);
+            insert.Parameters.AddWithValue("userId", userId);
+            insert.Parameters.AddWithValue("messageType", messageType);
+            insert.Parameters.AddWithValue("body", (object?)body ?? DBNull.Value);
+            insert.Parameters.AddWithValue("mediaAssetId", (object?)mediaAssetId ?? DBNull.Value);
+            insert.Parameters.AddWithValue("replyToMessageId", (object?)replyToMessageId ?? DBNull.Value);
+            insert.Parameters.AddWithValue("clientMessageId", clientMessageId);
+            await using var reader = await insert.ExecuteReaderAsync(cancellationToken);
+            await reader.ReadAsync(cancellationToken);
+            message = ReadRow(reader);
+        }
+
+        await using (var update = new NpgsqlCommand(
+            "UPDATE conversation SET updated_at=now() WHERE id=@conversationId", connection, transaction))
+        {
+            update.Parameters.AddWithValue("conversationId", conversationId);
+            await update.ExecuteNonQueryAsync(cancellationToken);
+        }
+        if (conversationType == "direct")
+        {
+            await using var reveal = new NpgsqlCommand(
+                "UPDATE conversation_member SET hidden_at=NULL WHERE conversation_id=@conversationId AND left_at IS NULL",
+                connection, transaction);
+            reveal.Parameters.AddWithValue("conversationId", conversationId);
+            await reveal.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        var recipients = new List<Guid>();
+        await using (var notify = new NpgsqlCommand(
+            """
+            WITH recipients AS (
+                SELECT user_id FROM conversation_member
+                WHERE conversation_id=@conversationId AND left_at IS NULL
+            ), inserted AS (
+                INSERT INTO notification (user_id, notification_type, title, body, data)
+                SELECT user_id, 'new_message',
+                       CASE WHEN @conversationType='event' THEN '活动群有新消息' ELSE '收到新消息' END,
+                       COALESCE(NULLIF(@body, ''), '收到一条新消息'),
+                       jsonb_build_object('conversationId', @conversationId, 'messageId', @messageId)
+                FROM recipients WHERE user_id<>@userId
+            ) SELECT user_id FROM recipients
+            """, connection, transaction))
+        {
+            notify.Parameters.AddWithValue("conversationId", conversationId);
+            notify.Parameters.AddWithValue("conversationType", conversationType);
+            notify.Parameters.AddWithValue("body", (object?)body ?? DBNull.Value);
+            notify.Parameters.AddWithValue("messageId", (Guid)message["id"]!);
+            notify.Parameters.AddWithValue("userId", userId);
+            await using var reader = await notify.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken)) recipients.Add(reader.GetGuid(0));
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return new(message, recipients.ToArray(), true, conversationType);
+    }
+
+    public async Task<Dictionary<string, object?>> ReportMessageAsync(
+        Guid conversationId, Guid messageId, Guid reporterUserId,
+        string categoryCode, string? description, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+        Guid reportedUserId;
+        await using (var target = new NpgsqlCommand(
+            """
+            SELECT m.sender_user_id FROM message m
+            JOIN conversation_member cm ON cm.conversation_id=m.conversation_id
+            WHERE m.id=@messageId AND m.conversation_id=@conversationId
+              AND cm.user_id=@reporterUserId AND cm.left_at IS NULL AND m.deleted_at IS NULL
+            """, connection, transaction))
+        {
+            target.Parameters.AddWithValue("messageId", messageId);
+            target.Parameters.AddWithValue("conversationId", conversationId);
+            target.Parameters.AddWithValue("reporterUserId", reporterUserId);
+            var sender = await target.ExecuteScalarAsync(cancellationToken);
+            if (sender is not Guid senderId)
+                throw new ApiException(404, "message_not_found", "消息不存在或无权举报");
+            if (senderId == reporterUserId)
+                throw new ApiException(400, "cannot_report_self", "不能举报自己的消息");
+            reportedUserId = senderId;
+        }
+
+        Dictionary<string, object?> report;
+        await using (var insert = new NpgsqlCommand(
+            """
+            INSERT INTO report (reporter_user_id, target_type, target_id, reported_user_id,
+                                category_code, description, priority)
+            VALUES (@reporterUserId, 'message', @messageId, @reportedUserId,
+                    @categoryCode, @description, 2)
+            RETURNING id, target_type, target_id, category_code, priority, status, created_at
+            """, connection, transaction))
+        {
+            insert.Parameters.AddWithValue("reporterUserId", reporterUserId);
+            insert.Parameters.AddWithValue("messageId", messageId);
+            insert.Parameters.AddWithValue("reportedUserId", reportedUserId);
+            insert.Parameters.AddWithValue("categoryCode", categoryCode);
+            insert.Parameters.AddWithValue("description", (object?)description ?? DBNull.Value);
+            await using var reader = await insert.ExecuteReaderAsync(cancellationToken);
+            await reader.ReadAsync(cancellationToken);
+            report = ReadRow(reader);
+        }
+
+        await using (var evidence = new NpgsqlCommand(
+            """
+            INSERT INTO report_evidence (report_id, evidence_type, snapshot)
+            SELECT @reportId, 'message_context', jsonb_build_object(
+                'conversationId', @conversationId, 'reportedMessageId', @messageId,
+                'capturedAt', now(), 'messages', COALESCE(jsonb_agg(jsonb_build_object(
+                    'id', context.id, 'senderUserId', context.sender_user_id,
+                    'messageType', context.message_type, 'body', context.body,
+                    'createdAt', context.created_at, 'recalledAt', context.recalled_at)
+                    ORDER BY context.created_at, context.id), '[]'::jsonb))
+            FROM (
+                SELECT m.* FROM message m
+                WHERE m.conversation_id=@conversationId AND m.deleted_at IS NULL
+                ORDER BY abs(extract(epoch FROM (m.created_at -
+                    (SELECT created_at FROM message WHERE id=@messageId)))), m.created_at, m.id
+                LIMIT 11
+            ) context
+            """, connection, transaction))
+        {
+            evidence.Parameters.AddWithValue("reportId", (Guid)report["id"]!);
+            evidence.Parameters.AddWithValue("conversationId", conversationId);
+            evidence.Parameters.AddWithValue("messageId", messageId);
+            await evidence.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
+        return report;
+    }
+
     public async Task<Dictionary<string, object?>> JoinEventAsync(
         Guid eventId,
         Guid userId,
@@ -341,6 +557,12 @@ public sealed class Db(NpgsqlDataSource dataSource)
         }
     }
 }
+
+public sealed record MessageSendResult(
+    Dictionary<string, object?> Message,
+    Guid[] RecipientIds,
+    bool Created,
+    string ConversationType);
 
 public sealed class ApiException(int statusCode, string code, string message) : Exception(message)
 {

@@ -2,14 +2,18 @@ using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using Npgsql;
 
 namespace Muda.Api.Infrastructure;
 
-public sealed class RealtimeConnectionManager(ILogger<RealtimeConnectionManager> logger)
+public sealed class RealtimeConnectionManager(
+    NpgsqlDataSource dataSource,
+    ILogger<RealtimeConnectionManager> logger)
 {
     private const int MaxMessageBytes = 16 * 1024;
     private static readonly TimeSpan AuthenticationTimeout = TimeSpan.FromSeconds(10);
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Guid, Connection>> _connections = new();
+    internal Guid InstanceId { get; } = Guid.NewGuid();
 
     public async Task RunAsync(WebSocket socket, AuthService auth, CancellationToken requestAborted)
     {
@@ -84,6 +88,33 @@ public sealed class RealtimeConnectionManager(ILogger<RealtimeConnectionManager>
         object data,
         CancellationToken cancellationToken = default)
     {
+        var ids = userIds.Distinct().ToArray();
+        await PublishLocalAsync(ids, type, data, cancellationToken);
+        try
+        {
+            var element = JsonSerializer.SerializeToElement(data);
+            foreach (var recipientChunk in ids.Chunk(100))
+            {
+                var payload = JsonSerializer.Serialize(
+                    new RealtimeRelay(InstanceId, recipientChunk, type, element));
+                await using var command = dataSource.CreateCommand(
+                    "SELECT pg_notify('muda_realtime', @payload)");
+                command.Parameters.AddWithValue("payload", payload);
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+        }
+        catch (Exception exception) when (exception is NpgsqlException or InvalidOperationException)
+        {
+            logger.LogWarning(exception, "Cross-instance realtime relay failed; local delivery and REST synchronization remain available");
+        }
+    }
+
+    internal async Task PublishLocalAsync(
+        IEnumerable<Guid> userIds,
+        string type,
+        object data,
+        CancellationToken cancellationToken = default)
+    {
         var payload = new { type, data };
         foreach (var userId in userIds.Distinct())
         {
@@ -102,6 +133,8 @@ public sealed class RealtimeConnectionManager(ILogger<RealtimeConnectionManager>
             }
         }
     }
+
+    internal sealed record RealtimeRelay(Guid Origin, Guid[] UserIds, string Type, JsonElement Data);
 
     private static async Task<JsonDocument?> ReceiveJsonAsync(
         WebSocket socket,

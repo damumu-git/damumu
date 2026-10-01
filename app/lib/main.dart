@@ -3849,8 +3849,10 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   Future<void> _load({bool showProgress = true}) async {
-    final token = AuthScope.of(context).token;
-    if (token == null) {
+    final auth = AuthScope.of(context);
+    final token = auth.token;
+    final userId = auth.user?.id;
+    if (token == null || userId == null) {
       if (mounted) setState(() => _loading = false);
       return;
     }
@@ -4336,7 +4338,12 @@ class _ChatPageState extends State<ChatPage> {
   final _input = TextEditingController();
   bool _loading = true;
   bool _sending = false;
+  bool _loadingOlder = false;
   String? _error;
+  String? _nextCursor;
+  bool _hasMore = false;
+  ChatMessage? _replyingTo;
+  ChatMessage? _editingMessage;
   List<ChatMessage> _messages = const [];
   StreamSubscription<RealtimeEvent>? _realtimeSubscription;
   Timer? _refreshTimer;
@@ -4345,7 +4352,8 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
     _realtimeSubscription = RealtimeService.instance.events.listen((event) {
-      if (event.type == 'message.created' &&
+      if ((event.type == 'message.created' ||
+              event.type == 'message.updated') &&
           event.data['conversationId']?.toString() == widget.conversation.id) {
         _refreshTimer?.cancel();
         _refreshTimer = Timer(
@@ -4366,40 +4374,63 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _load({bool showProgress = true}) async {
-    final token = AuthScope.of(context).token;
-    if (token == null) {
+    final auth = AuthScope.of(context);
+    final token = auth.token;
+    final userId = auth.user?.id;
+    if (token == null || userId == null) {
       if (mounted) setState(() => _loading = false);
       return;
     }
     if (showProgress && mounted) {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
-    try {
-      final messages = await SocialService.messages(
-        token,
+      final cached = await SocialService.cachedMessages(
+        userId,
+        widget.conversation.id,
+      );
+      final pending = await SocialService.pendingMessages(
+        userId,
         widget.conversation.id,
       );
       if (!mounted) return;
       setState(() {
-        _messages = messages;
+        _messages = [...cached, ...pending];
+        _loading = cached.isEmpty && pending.isEmpty;
+        _error = null;
+      });
+    }
+    try {
+      final page = await SocialService.messages(token, widget.conversation.id);
+      final pending = await SocialService.pendingMessages(
+        userId,
+        widget.conversation.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _messages = [...page.items, ...pending];
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
         _loading = false;
         _error = null;
       });
-      if (messages.isNotEmpty) {
+      await SocialService.cacheMessages(
+        userId,
+        widget.conversation.id,
+        page.items,
+      );
+      for (final message in pending) {
+        unawaited(_deliverPending(message));
+      }
+      if (page.items.isNotEmpty) {
         await SocialService.readConversation(
           token,
           widget.conversation.id,
-          messages.last.id,
+          page.items.last.id,
         );
       }
     } catch (error) {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = '$error';
+          _error = _messages.isEmpty ? '$error' : null;
         });
       }
     }
@@ -4428,10 +4459,7 @@ class _ChatPageState extends State<ChatPage> {
           ),
         ],
       ),
-      actions: [
-        IconButton(onPressed: () {}, icon: const Icon(Icons.more_horiz)),
-        const _HomeAction(),
-      ],
+      actions: [const _HomeAction()],
     ),
     body: Column(
       children: [
@@ -4449,49 +4477,113 @@ class _ChatPageState extends State<ChatPage> {
               ? Center(child: Text(context.tr('emptyChat')))
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-                  itemCount: _messages.length,
+                  itemCount: _messages.length + (_hasMore ? 1 : 0),
                   itemBuilder: (_, index) {
-                    final message = _messages[index];
+                    if (_hasMore && index == 0) {
+                      return Center(
+                        child: TextButton.icon(
+                          onPressed: _loadingOlder ? null : _loadOlder,
+                          icon: _loadingOlder
+                              ? const SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.history),
+                          label: Text(context.tr('loadOlderMessages')),
+                        ),
+                      );
+                    }
+                    final messageIndex = index - (_hasMore ? 1 : 0);
+                    final message = _messages[messageIndex];
                     if (message.messageType == 'event_cancelled') {
                       return EventCancellationNotice(reason: message.body);
                     }
                     return _Bubble(
-                      text: message.body,
+                      text: message.recalledAt == null
+                          ? message.body
+                          : context.tr('messageRecalled'),
                       mine:
                           message.senderUserId ==
                           AuthScope.of(context).user?.id,
                       sender: message.senderName,
+                      pending: message.pending,
+                      failed: message.failed,
+                      recalled: message.recalledAt != null,
+                      mediaUrl: message.mediaUrl,
+                      replyText: message.replyToMessageId == null
+                          ? null
+                          : (message.replyToBody ??
+                                context.tr('messageRecalled')),
+                      onLongPress: message.pending
+                          ? () => _deliverPending(message)
+                          : () => _showMessageActions(message),
                     );
                   },
                 ),
         ),
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.add_circle_outline),
+        if (_replyingTo != null || _editingMessage != null)
+          Material(
+            color: _mint,
+            child: ListTile(
+              dense: true,
+              leading: Icon(_editingMessage == null ? Icons.reply : Icons.edit),
+              title: Text(
+                context.tr(
+                  _editingMessage == null
+                      ? 'replyingToMessage'
+                      : 'editingMessage',
                 ),
-                Expanded(
-                  child: TextField(
-                    controller: _input,
-                    decoration: InputDecoration(
-                      hintText: context.tr('sendMessage'),
-                      isDense: true,
-                    ),
-                    onSubmitted: (_) => _send(),
-                  ),
-                ),
-                IconButton.filled(
-                  onPressed: _sending ? null : _send,
-                  icon: const Icon(Icons.arrow_upward),
-                ),
-              ],
+              ),
+              subtitle: Text(
+                (_editingMessage ?? _replyingTo)!.body,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: IconButton(
+                onPressed: () => setState(() {
+                  _replyingTo = null;
+                  _editingMessage = null;
+                  _input.clear();
+                }),
+                icon: const Icon(Icons.close),
+              ),
             ),
           ),
-        ),
+        if (widget.conversation.status != 'active')
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(context.tr('conversationReadOnly')),
+          )
+        else
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: _sending ? null : _pickChatImage,
+                    icon: const Icon(Icons.add_circle_outline),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _input,
+                      decoration: InputDecoration(
+                        hintText: context.tr('sendMessage'),
+                        isDense: true,
+                      ),
+                      onSubmitted: (_) => _send(),
+                    ),
+                  ),
+                  IconButton.filled(
+                    onPressed: _sending ? null : _send,
+                    icon: const Icon(Icons.arrow_upward),
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     ),
   );
@@ -4500,29 +4592,366 @@ class _ChatPageState extends State<ChatPage> {
     final body = _input.text.trim();
     final token = AuthScope.of(context).token;
     if (body.isEmpty || token == null || _sending) return;
+    if (_editingMessage != null) {
+      final editing = _editingMessage!;
+      setState(() => _sending = true);
+      try {
+        final edited = await SocialService.editMessage(
+          token,
+          widget.conversation.id,
+          editing.id,
+          body,
+        );
+        if (!mounted) return;
+        setState(() {
+          _messages = _messages
+              .map((item) => item.id == edited.id ? edited : item)
+              .toList();
+          _editingMessage = null;
+          _input.clear();
+        });
+      } catch (error) {
+        if (mounted) _showMessageError(context, '$error');
+      } finally {
+        if (mounted) setState(() => _sending = false);
+      }
+      return;
+    }
+    final clientId = SocialService.newClientMessageId();
+    final pending = ChatMessage(
+      id: clientId,
+      senderUserId: AuthScope.of(context).user?.id,
+      body: body,
+      createdAt: DateTime.now(),
+      clientMessageId: clientId,
+      replyToMessageId: _replyingTo?.id,
+      replyToBody: _replyingTo?.body,
+      pending: true,
+    );
+    final userId = AuthScope.of(context).user!.id;
     setState(() => _sending = true);
+    try {
+      await SocialService.savePending(userId, widget.conversation.id, pending);
+      if (!mounted) return;
+      setState(() {
+        _messages = [..._messages, pending];
+        _input.clear();
+        _replyingTo = null;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _sending = false);
+        _showMessageError(context, '$error');
+      }
+      return;
+    }
+    await _deliverPending(pending);
+    if (mounted) setState(() => _sending = false);
+  }
+
+  Future<void> _pickChatImage() async {
+    final token = AuthScope.of(context).token;
+    if (token == null || _sending) return;
+    final tooLargeMessage = context.tr('chatImageTooLarge');
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 82,
+      maxWidth: 1600,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _sending = true);
+    String? uploadedMediaId;
+    try {
+      final bytes = await picked.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
+        throw Exception(tooLargeMessage);
+      }
+      final filename = picked.name.toLowerCase();
+      final mimeType =
+          picked.mimeType ??
+          (filename.endsWith('.png')
+              ? 'image/png'
+              : filename.endsWith('.webp')
+              ? 'image/webp'
+              : 'image/jpeg');
+      final uploaded = await SocialService.uploadChatImage(
+        token,
+        widget.conversation.id,
+        bytes,
+        picked.name,
+        mimeType,
+      );
+      uploadedMediaId = uploaded['mediaAssetId'];
+      await SocialService.sendMessage(
+        token,
+        widget.conversation.id,
+        '',
+        SocialService.newClientMessageId(),
+        mediaAssetId: uploadedMediaId,
+      );
+      uploadedMediaId = null;
+      await _load(showProgress: false);
+    } catch (error) {
+      if (uploadedMediaId != null) {
+        try {
+          await SocialService.deleteChatMedia(
+            token,
+            widget.conversation.id,
+            uploadedMediaId,
+          );
+        } catch (_) {
+          // The media remains unreferenced and can be removed by maintenance.
+        }
+      }
+      if (mounted) _showMessageError(context, '$error');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _deliverPending(ChatMessage pending) async {
+    final auth = AuthScope.of(context);
+    final token = auth.token;
+    final userId = auth.user?.id;
+    final clientId = pending.clientMessageId;
+    if (token == null || userId == null || clientId == null) return;
     try {
       final message = await SocialService.sendMessage(
         token,
         widget.conversation.id,
-        body,
+        pending.body,
+        clientId,
+        replyToMessageId: pending.replyToMessageId,
+      );
+      await SocialService.removePending(
+        userId,
+        widget.conversation.id,
+        clientId,
       );
       if (!mounted) return;
       setState(() {
-        if (!_messages.any((item) => item.id == message.id)) {
-          _messages = [..._messages, message];
-        }
-        _input.clear();
+        _messages = [
+          ..._messages.where(
+            (item) => item.clientMessageId != clientId && item.id != message.id,
+          ),
+          message,
+        ];
       });
+      await SocialService.cacheMessages(
+        userId,
+        widget.conversation.id,
+        _messages.where((item) => !item.pending).toList(),
+      );
       await SocialService.readConversation(
         token,
         widget.conversation.id,
         message.id,
       );
+      unawaited(_load(showProgress: false));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _messages = _messages
+            .map(
+              (item) => item.clientMessageId == clientId
+                  ? item.copyWith(pending: true, failed: true)
+                  : item,
+            )
+            .toList();
+      });
+      _showMessageError(context, context.tr('messageQueuedForRetry'));
+    }
+  }
+
+  Future<void> _loadOlder() async {
+    final token = AuthScope.of(context).token;
+    if (token == null || _nextCursor == null || _loadingOlder) return;
+    setState(() => _loadingOlder = true);
+    try {
+      final page = await SocialService.messages(
+        token,
+        widget.conversation.id,
+        cursor: _nextCursor,
+      );
+      if (!mounted) return;
+      setState(() {
+        final existing = _messages.map((item) => item.id).toSet();
+        _messages = [
+          ...page.items.where((item) => !existing.contains(item.id)),
+          ..._messages,
+        ];
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+      });
+      await SocialService.cacheMessages(
+        AuthScope.of(context).user!.id,
+        widget.conversation.id,
+        _messages.where((item) => !item.pending).toList(),
+      );
     } catch (error) {
       if (mounted) _showMessageError(context, '$error');
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) setState(() => _loadingOlder = false);
+    }
+  }
+
+  Future<void> _showMessageActions(ChatMessage message) async {
+    if (message.recalledAt != null) return;
+    final mine = message.senderUserId == AuthScope.of(context).user?.id;
+    final canRecall =
+        mine &&
+        DateTime.now().difference(message.createdAt) <=
+            const Duration(minutes: 5);
+    final canEdit =
+        mine &&
+        DateTime.now().difference(message.createdAt) <=
+            const Duration(minutes: 15);
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.reply),
+              title: Text(context.tr('replyMessage')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                setState(() {
+                  _replyingTo = message;
+                  _editingMessage = null;
+                  _input.clear();
+                });
+              },
+            ),
+            if (canRecall)
+              ListTile(
+                leading: const Icon(Icons.undo),
+                title: Text(context.tr('recallMessage')),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _recall(message);
+                },
+              ),
+            if (canEdit)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: Text(context.tr('editMessage')),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  setState(() {
+                    _editingMessage = message;
+                    _replyingTo = null;
+                    _input.text = message.body;
+                    _input.selection = TextSelection.collapsed(
+                      offset: _input.text.length,
+                    );
+                  });
+                },
+              ),
+            if (!mine)
+              ListTile(
+                leading: const Icon(Icons.flag_outlined),
+                title: Text(context.tr('reportMessage')),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _report(message);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _recall(ChatMessage message) async {
+    final token = AuthScope.of(context).token;
+    if (token == null) return;
+    try {
+      final recalled = await SocialService.recallMessage(
+        token,
+        widget.conversation.id,
+        message.id,
+      );
+      if (mounted) {
+        setState(
+          () => _messages = _messages
+              .map((item) => item.id == message.id ? recalled : item)
+              .toList(),
+        );
+      }
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
+    }
+  }
+
+  Future<void> _report(ChatMessage message) async {
+    const categories = [
+      'harassment',
+      'inappropriate_content',
+      'spam',
+      'fraud',
+      'privacy_violation',
+      'unsafe_behavior',
+    ];
+    final category = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(context.tr('chooseMessageReportReason')),
+        children: categories
+            .map(
+              (value) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(dialogContext, value),
+                child: Text(context.tr('messageReport_$value')),
+              ),
+            )
+            .toList(),
+      ),
+    );
+    if (category == null || !mounted) return;
+    final descriptionController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.tr('reportMessage')),
+        content: TextField(
+          controller: descriptionController,
+          maxLength: 1000,
+          maxLines: 4,
+          decoration: InputDecoration(
+            hintText: context.tr('reportDescription'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.tr('eventCoverCancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.tr('submitFeedback')),
+          ),
+        ],
+      ),
+    );
+    final description = descriptionController.text.trim();
+    descriptionController.dispose();
+    if (confirmed != true || !mounted) return;
+    final token = AuthScope.of(context).token;
+    if (token == null) return;
+    try {
+      await SocialService.reportMessage(
+        token,
+        widget.conversation.id,
+        message.id,
+        category,
+        description.isEmpty ? null : description,
+      );
+      if (mounted) {
+        _showMessageError(context, context.tr('messageReportSubmitted'));
+      }
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
     }
   }
 }
@@ -4532,10 +4961,26 @@ void _showMessageError(BuildContext context, String message) {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.text, required this.mine, this.sender});
+  const _Bubble({
+    required this.text,
+    required this.mine,
+    this.sender,
+    this.pending = false,
+    this.failed = false,
+    this.recalled = false,
+    this.mediaUrl,
+    this.replyText,
+    this.onLongPress,
+  });
   final String text;
   final bool mine;
   final String? sender;
+  final bool pending;
+  final bool failed;
+  final bool recalled;
+  final String? mediaUrl;
+  final String? replyText;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) => Align(
@@ -4553,20 +4998,76 @@ class _Bubble extends StatelessWidget {
               style: const TextStyle(fontSize: 11, color: Colors.black54),
             ),
           ),
-        Container(
-          constraints: const BoxConstraints(maxWidth: 280),
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
-          decoration: BoxDecoration(
-            color: mine ? _green : Colors.white,
-            borderRadius: BorderRadius.circular(18).copyWith(
-              bottomRight: mine ? const Radius.circular(4) : null,
-              bottomLeft: mine ? null : const Radius.circular(4),
+        GestureDetector(
+          onLongPress: onLongPress,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 280),
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+            decoration: BoxDecoration(
+              color: mine ? _green : Colors.white,
+              borderRadius: BorderRadius.circular(18).copyWith(
+                bottomRight: mine ? const Radius.circular(4) : null,
+                bottomLeft: mine ? null : const Radius.circular(4),
+              ),
             ),
-          ),
-          child: Text(
-            text,
-            style: TextStyle(color: mine ? Colors.white : _ink),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (replyText != null)
+                  Container(
+                    width: 220,
+                    margin: const EdgeInsets.only(bottom: 7),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: mine ? Colors.white12 : _cream,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      replyText!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: mine ? Colors.white70 : Colors.black54,
+                      ),
+                    ),
+                  ),
+                if (mediaUrl != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      mediaUrl!,
+                      width: 220,
+                      height: 165,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const SizedBox(
+                        width: 220,
+                        height: 80,
+                        child: Icon(Icons.broken_image_outlined),
+                      ),
+                    ),
+                  ),
+                if (text.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(top: mediaUrl == null ? 0 : 8),
+                    child: Text(
+                      text,
+                      style: TextStyle(
+                        color: mine ? Colors.white : _ink,
+                        fontStyle: recalled ? FontStyle.italic : null,
+                      ),
+                    ),
+                  ),
+                if (pending)
+                  Icon(
+                    failed ? Icons.error_outline : Icons.schedule,
+                    size: 14,
+                    color: mine ? Colors.white70 : Colors.black45,
+                  ),
+              ],
+            ),
           ),
         ),
       ],

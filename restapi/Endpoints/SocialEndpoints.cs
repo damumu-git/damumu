@@ -26,7 +26,11 @@ public static class SocialEndpoints
                        (
                            SELECT count(*) FROM message unread
                            WHERE unread.conversation_id=c.id
-                             AND unread.created_at > COALESCE(cm.last_read_at, '-infinity')
+                             AND (cm.last_read_message_id IS NULL OR
+                                  (unread.created_at, unread.id) > (
+                                    COALESCE((SELECT marker.created_at FROM message marker
+                                              WHERE marker.id=cm.last_read_message_id), cm.last_read_at, '-infinity'),
+                                    cm.last_read_message_id))
                              AND unread.sender_user_id IS DISTINCT FROM @userId
                              AND unread.deleted_at IS NULL
                        ) AS unread_count
@@ -49,6 +53,7 @@ public static class SocialEndpoints
                     ORDER BY m.created_at DESC LIMIT 1
                 ) lm ON true
                 WHERE cm.user_id=@userId AND cm.left_at IS NULL AND cm.hidden_at IS NULL
+                  AND c.status<>'archived'
                 ORDER BY lm.created_at DESC NULLS LAST, c.updated_at DESC
                 LIMIT @limit
                 """, new { userId, limit = take }, ct));
@@ -86,7 +91,8 @@ public static class SocialEndpoints
         });
 
         api.MapGet("/conversations/{id:guid}/messages", async (
-            Guid id, HttpContext context, Db db, DateTime? before, int? limit, CancellationToken ct) =>
+            Guid id, HttpContext context, Db db, string? cursor, DateTime? before,
+            int? limit, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var member = await db.ScalarAsync<long>(
@@ -96,18 +102,123 @@ public static class SocialEndpoints
                 """, new { id, userId }, ct);
             if (member == 0) throw new ApiException(403, "forbidden", "无权访问该会话");
             var take = Math.Clamp(limit ?? 50, 1, 100);
-            return ApiSupport.Ok(await db.QueryAsync(
+            var position = MessageCursor.Decode(cursor);
+            var rows = await db.QueryAsync(
                 """
                 SELECT m.id, m.sender_user_id, m.message_type, m.body, m.media_asset_id,
-                       m.reply_to_message_id, m.edited_at, m.recalled_at, m.created_at,
-                       up.nickname AS sender_name, up.avatar_url AS sender_avatar
+                       m.reply_to_message_id, m.client_message_id,
+                       m.edited_at, m.recalled_at, m.created_at,
+                       up.nickname AS sender_name, up.avatar_url AS sender_avatar,
+                       reply.body AS reply_to_body, reply.recalled_at AS reply_to_recalled_at,
+                       CASE WHEN ma.id IS NULL THEN NULL ELSE '/uploads/' || ma.storage_key END AS media_url,
+                       ma.mime_type AS media_mime_type
                 FROM message m
                 LEFT JOIN user_profile up ON up.user_id=m.sender_user_id
+                LEFT JOIN message reply ON reply.id=m.reply_to_message_id
+                LEFT JOIN media_asset ma ON ma.id=m.media_asset_id AND ma.deleted_at IS NULL
                 WHERE m.conversation_id=@id AND m.deleted_at IS NULL
                   AND (CAST(@before AS timestamptz) IS NULL OR m.created_at < @before)
+                  AND (@hasCursor=false OR (m.created_at, m.id) < (@cursorCreatedAt, @cursorMessageId))
                 ORDER BY m.created_at DESC, m.id DESC
                 LIMIT @limit
-                """, new { id, before, limit = take }, ct));
+                """, new
+                {
+                    id,
+                    before,
+                    hasCursor = position is not null,
+                    cursorCreatedAt = position?.CreatedAt ?? DateTime.UnixEpoch,
+                    cursorMessageId = position?.MessageId ?? Guid.Empty,
+                    limit = take + 1
+                }, ct);
+            var hasMore = rows.Count > take;
+            if (hasMore) rows.RemoveAt(rows.Count - 1);
+            string? nextCursor = null;
+            if (hasMore && rows.Count > 0)
+            {
+                var last = rows[^1];
+                nextCursor = MessageCursor.Encode((DateTime)last["created_at"]!, (Guid)last["id"]!);
+            }
+            return ApiSupport.Ok(new { items = rows, nextCursor, hasMore });
+        });
+
+        api.MapPost("/conversations/{id:guid}/media", async (
+            Guid id, HttpContext context, IFormFile image, Db db,
+            IWebHostEnvironment environment, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var allowed = await db.ScalarAsync<long>(
+                """
+                SELECT count(*) FROM conversation_member cm
+                JOIN conversation c ON c.id=cm.conversation_id
+                WHERE cm.conversation_id=@id AND cm.user_id=@userId
+                  AND cm.left_at IS NULL AND c.status='active'
+                """, new { id, userId }, ct);
+            if (allowed == 0) throw new ApiException(403, "forbidden", "无权在该会话上传附件");
+            if (image.Length is <= 0 or > 5 * 1024 * 1024)
+                throw new ApiException(400, "invalid_chat_image", "聊天图片需要小于 5 MB");
+            var mimeType = image.ContentType.ToLowerInvariant();
+            var extension = mimeType switch
+            {
+                "image/jpeg" => ".jpg",
+                "image/png" => ".png",
+                "image/webp" => ".webp",
+                _ => throw new ApiException(400, "invalid_chat_image", "仅支持 JPEG、PNG 或 WebP 图片")
+            };
+            var header = new byte[12];
+            await using (var input = image.OpenReadStream())
+            {
+                if (await input.ReadAsync(header, ct) < 12)
+                    throw new ApiException(400, "invalid_chat_image", "图片文件无效");
+            }
+            var signatureMatches = mimeType switch
+            {
+                "image/jpeg" => header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff,
+                "image/png" => header.AsSpan(0, 8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }),
+                "image/webp" => header.AsSpan(0, 4).SequenceEqual("RIFF"u8) && header.AsSpan(8, 4).SequenceEqual("WEBP"u8),
+                _ => false
+            };
+            if (!signatureMatches)
+                throw new ApiException(400, "invalid_chat_image", "图片内容与文件类型不匹配");
+            var mediaId = Guid.NewGuid();
+            var storageKey = $"messages/{userId:N}/{mediaId:N}{extension}";
+            var path = Path.Combine(environment.ContentRootPath, "uploads", "messages",
+                userId.ToString("N"), $"{mediaId:N}{extension}");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            try
+            {
+                await using (var output = File.Create(path)) await image.CopyToAsync(output, ct);
+                await db.ExecuteAsync(
+                    """
+                    INSERT INTO media_asset (id, owner_user_id, storage_key, mime_type, byte_size, status)
+                    VALUES (@mediaId, @userId, @storageKey, @mimeType, @byteSize, 'ready')
+                    """, new { mediaId, userId, storageKey, mimeType, byteSize = image.Length }, ct);
+            }
+            catch
+            {
+                if (File.Exists(path)) File.Delete(path);
+                throw;
+            }
+            return ApiSupport.Ok(new { mediaAssetId = mediaId, mediaUrl = $"/uploads/{storageKey}" });
+        }).DisableAntiforgery();
+
+        api.MapDelete("/conversations/{id:guid}/media/{mediaId:guid}", async (
+            Guid id, Guid mediaId, HttpContext context, Db db,
+            IWebHostEnvironment environment, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var asset = await db.QueryOneAsync(
+                """
+                UPDATE media_asset SET deleted_at=now()
+                WHERE id=@mediaId AND owner_user_id=@userId AND deleted_at IS NULL
+                  AND NOT EXISTS (SELECT 1 FROM message WHERE media_asset_id=@mediaId AND deleted_at IS NULL)
+                RETURNING storage_key
+                """, new { mediaId, userId }, ct);
+            if (asset is null) return Results.NoContent();
+            var relative = ((string)asset["storage_key"]!).Replace('/', Path.DirectorySeparatorChar);
+            var path = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "uploads", relative));
+            var uploads = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "uploads"));
+            if (path.StartsWith(uploads, StringComparison.OrdinalIgnoreCase) && File.Exists(path)) File.Delete(path);
+            return Results.NoContent();
         });
 
         api.MapPost("/conversations/{id:guid}/messages", async (
@@ -116,91 +227,106 @@ public static class SocialEndpoints
             CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
-            var allowed = await db.ScalarAsync<long>(
-                """
-                SELECT count(*)
-                FROM conversation_member cm
-                JOIN conversation c ON c.id=cm.conversation_id
-                WHERE cm.conversation_id=@id AND cm.user_id=@userId
-                  AND cm.left_at IS NULL AND c.status='active'
-                """, new { id, userId }, ct);
-            if (allowed == 0) throw new ApiException(403, "forbidden", "无权在该会话发言");
-            if (request.MessageType == "event_cancelled")
+            var messageType = request.MessageType ?? "text";
+            if (messageType is not ("text" or "image" or "file"))
                 throw new ApiException(400, "reserved_message_type", "不能发送系统活动通知");
-            if (string.IsNullOrWhiteSpace(request.Body) && request.MediaAssetId is null)
+            var body = request.Body?.Trim();
+            if (string.IsNullOrWhiteSpace(body) && request.MediaAssetId is null)
                 throw new ApiException(400, "empty_message", "消息不能为空");
+            if (body?.Length > 4000)
+                throw new ApiException(400, "message_too_long", "消息最多 4000 字");
 
+            var result = await db.SendMessageAsync(id, userId, messageType, body,
+                request.MediaAssetId, request.ReplyToMessageId,
+                request.ClientMessageId ?? Guid.NewGuid(), ct);
+            var messageId = (Guid)result.Message["id"]!;
+            if (result.Created)
+            {
+                await realtime.PublishAsync(result.RecipientIds, "message.created",
+                    new { conversationId = id, messageId }, ct);
+                var pushRecipients = result.RecipientIds.Where(recipientId => recipientId != userId);
+                await push.SendToUsersAsync(db, pushRecipients, "收到新消息",
+                    string.IsNullOrWhiteSpace(body) ? "收到一条新消息" : body,
+                    new Dictionary<string, string>
+                    {
+                        ["type"] = "message.created",
+                        ["conversationId"] = id.ToString(),
+                        ["messageId"] = messageId.ToString()
+                    }, ct);
+            }
+            return result.Created
+                ? ApiSupport.Created($"/api/v1/conversations/{id}/messages/{messageId}", result.Message)
+                : ApiSupport.Ok(result.Message);
+        });
+
+        api.MapPost("/conversations/{id:guid}/messages/{messageId:guid}/recall", async (
+            Guid id, Guid messageId, HttpContext context, Db db,
+            RealtimeConnectionManager realtime, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
             var message = await db.QueryOneAsync(
                 """
-                INSERT INTO message (
-                    conversation_id, sender_user_id, message_type, body,
-                    media_asset_id, reply_to_message_id, client_message_id
-                )
-                VALUES (
-                    @id, @userId, @messageType, @body,
-                    @mediaAssetId, @replyToMessageId, @clientMessageId
-                )
+                UPDATE message m SET recalled_at=now(), body=NULL, media_asset_id=NULL, updated_at=now()
+                WHERE m.id=@messageId AND m.conversation_id=@id AND m.sender_user_id=@userId
+                  AND m.deleted_at IS NULL AND m.recalled_at IS NULL
+                  AND m.created_at >= now() - interval '5 minutes'
+                  AND EXISTS (SELECT 1 FROM conversation_member cm
+                              WHERE cm.conversation_id=@id AND cm.user_id=@userId AND cm.left_at IS NULL)
                 RETURNING id, conversation_id, sender_user_id, message_type, body,
-                          media_asset_id, reply_to_message_id, created_at
-                """, new
-                {
-                    id,
-                    userId,
-                    messageType = request.MessageType ?? "text",
-                    request.Body,
-                    request.MediaAssetId,
-                    request.ReplyToMessageId,
-                    request.ClientMessageId
-                }, ct);
-            await db.ExecuteAsync(
-                "UPDATE conversation SET updated_at=now() WHERE id=@id", new { id }, ct);
-            await db.ExecuteAsync(
-                """
-                UPDATE conversation_member cm
-                SET hidden_at=NULL
-                FROM conversation c
-                WHERE cm.conversation_id=@id AND c.id=cm.conversation_id
-                  AND c.conversation_type='direct' AND cm.left_at IS NULL
-                """, new { id }, ct);
-            await db.ExecuteAsync(
-                """
-                INSERT INTO notification (user_id, notification_type, title, body, data)
-                SELECT cm.user_id, 'new_message',
-                       CASE WHEN c.conversation_type='event' THEN '活动群有新消息' ELSE '收到新消息' END,
-                       COALESCE(NULLIF(@body, ''), '收到一条新消息'),
-                       jsonb_build_object('conversationId', c.id, 'messageId', @messageId)
-                FROM conversation_member cm
-                JOIN conversation c ON c.id=cm.conversation_id
-                WHERE cm.conversation_id=@id AND cm.left_at IS NULL AND cm.user_id<>@userId
-                """, new
-                {
-                    id,
-                    userId,
-                    body = request.Body?.Trim(),
-                    messageId = (Guid)message!["id"]!
-                }, ct);
+                          reply_to_message_id, client_message_id, recalled_at, created_at
+                """, new { id, messageId, userId }, ct);
+            if (message is null)
+                throw new ApiException(409, "cannot_recall", "消息不存在、已撤回或超过 5 分钟");
             var recipients = await db.QueryAsync(
+                "SELECT user_id FROM conversation_member WHERE conversation_id=@id AND left_at IS NULL",
+                new { id }, ct);
+            await realtime.PublishAsync(recipients.Select(row => (Guid)row["user_id"]!),
+                "message.updated", new { conversationId = id, messageId }, ct);
+            return ApiSupport.Ok(message);
+        });
+
+        api.MapPatch("/conversations/{id:guid}/messages/{messageId:guid}", async (
+            Guid id, Guid messageId, HttpContext context, EditMessageRequest request,
+            Db db, RealtimeConnectionManager realtime, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var body = request.Body?.Trim();
+            if (string.IsNullOrEmpty(body) || body.Length > 4000)
+                throw new ApiException(400, "invalid_message", "消息内容需要为 1–4000 字");
+            var message = await db.QueryOneAsync(
                 """
-                SELECT user_id FROM conversation_member
-                WHERE conversation_id=@id AND left_at IS NULL
-                """, new { id }, ct);
-            var recipientIds = recipients
-                .Select(row => (Guid)row["user_id"]!)
-                .ToArray();
-            await realtime.PublishAsync(recipientIds, "message.created", new
-            {
-                conversationId = id,
-                messageId = (Guid)message!["id"]!
-            }, ct);
-            var pushRecipients = recipientIds.Where(recipientId => recipientId != userId).ToArray();
-            var pushBody = string.IsNullOrWhiteSpace(request.Body) ? "收到一条新消息" : request.Body.Trim();
-            await push.SendToUsersAsync(db, pushRecipients, "收到新消息", pushBody, new Dictionary<string, string>
-            {
-                ["type"] = "message.created",
-                ["conversationId"] = id.ToString(),
-                ["messageId"] = ((Guid)message!["id"]!).ToString()
-            }, ct);
-            return ApiSupport.Created($"/api/v1/conversations/{id}/messages/{message!["id"]}", message);
+                UPDATE message m SET body=@body, edited_at=now(), updated_at=now()
+                WHERE m.id=@messageId AND m.conversation_id=@id AND m.sender_user_id=@userId
+                  AND m.message_type='text' AND m.deleted_at IS NULL AND m.recalled_at IS NULL
+                  AND m.created_at >= now() - interval '15 minutes'
+                  AND EXISTS (SELECT 1 FROM conversation_member cm
+                              WHERE cm.conversation_id=@id AND cm.user_id=@userId AND cm.left_at IS NULL)
+                RETURNING id, conversation_id, sender_user_id, message_type, body,
+                          reply_to_message_id, client_message_id, edited_at, recalled_at, created_at
+                """, new { id, messageId, userId, body }, ct);
+            if (message is null)
+                throw new ApiException(409, "cannot_edit", "消息不存在、已撤回或超过 15 分钟");
+            var recipients = await db.QueryAsync(
+                "SELECT user_id FROM conversation_member WHERE conversation_id=@id AND left_at IS NULL",
+                new { id }, ct);
+            await realtime.PublishAsync(recipients.Select(row => (Guid)row["user_id"]!),
+                "message.updated", new { conversationId = id, messageId }, ct);
+            return ApiSupport.Ok(message);
+        });
+
+        api.MapPost("/conversations/{id:guid}/messages/{messageId:guid}/report", async (
+            Guid id, Guid messageId, HttpContext context, ReportMessageRequest request,
+            Db db, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var allowedCategories = new[] { "harassment", "inappropriate_content", "spam", "fraud", "privacy_violation", "unsafe_behavior" };
+            if (!allowedCategories.Contains(request.CategoryCode))
+                throw new ApiException(400, "invalid_report_category", "请选择有效的举报原因");
+            var description = request.Description?.Trim();
+            if (description?.Length > 1000)
+                throw new ApiException(400, "report_description_too_long", "举报说明最多 1000 字");
+            return ApiSupport.Created($"/api/v1/reports", await db.ReportMessageAsync(
+                id, messageId, userId, request.CategoryCode, description, ct));
         });
 
         api.MapPost("/conversations/{id:guid}/read-latest", async (
@@ -211,9 +337,8 @@ public static class SocialEndpoints
             var updated = await db.ExecuteAsync(
                 """
                 UPDATE conversation_member cm
-                SET last_read_at=now(),
-                    last_read_message_id=(
-                        SELECT m.id FROM message m
+                SET (last_read_at, last_read_message_id)=(
+                        SELECT m.created_at, m.id FROM message m
                         WHERE m.conversation_id=cm.conversation_id AND m.deleted_at IS NULL
                         ORDER BY m.created_at DESC, m.id DESC LIMIT 1
                     )
@@ -284,7 +409,11 @@ public static class SocialEndpoints
                   (SELECT count(*) FROM message m
                    JOIN conversation_member cm ON cm.conversation_id=m.conversation_id
                    WHERE cm.user_id=@userId AND cm.left_at IS NULL AND cm.hidden_at IS NULL
-                     AND m.created_at > COALESCE(cm.last_read_at, '-infinity')
+                     AND (cm.last_read_message_id IS NULL OR
+                          (m.created_at, m.id) > (
+                            COALESCE((SELECT marker.created_at FROM message marker
+                                      WHERE marker.id=cm.last_read_message_id), cm.last_read_at, '-infinity'),
+                            cm.last_read_message_id))
                      AND m.sender_user_id IS DISTINCT FROM @userId
                      AND m.deleted_at IS NULL) AS message_count
                 """, new { userId }, ct);
@@ -299,9 +428,8 @@ public static class SocialEndpoints
             var count = await db.ExecuteAsync(
                 """
                 UPDATE conversation_member cm
-                SET last_read_at=now(),
-                    last_read_message_id=(
-                        SELECT m.id FROM message m
+                SET (last_read_at, last_read_message_id)=(
+                        SELECT m.created_at, m.id FROM message m
                         WHERE m.conversation_id=cm.conversation_id AND m.deleted_at IS NULL
                         ORDER BY m.created_at DESC, m.id DESC LIMIT 1
                     )
@@ -319,9 +447,15 @@ public static class SocialEndpoints
             var count = await db.ExecuteAsync(
                 """
                 UPDATE conversation_member cm
-                SET last_read_message_id=@messageId, last_read_at=now()
+                SET last_read_message_id=target.id, last_read_at=target.created_at
+                FROM message target
                 WHERE cm.conversation_id=@id AND cm.user_id=@userId AND cm.left_at IS NULL
-                  AND EXISTS (SELECT 1 FROM message m WHERE m.id=@messageId AND m.conversation_id=@id)
+                  AND target.id=@messageId AND target.conversation_id=@id
+                  AND (cm.last_read_message_id IS NULL OR
+                       (target.created_at, target.id) >= (
+                         COALESCE((SELECT marker.created_at FROM message marker
+                                   WHERE marker.id=cm.last_read_message_id), cm.last_read_at, '-infinity'),
+                         cm.last_read_message_id))
                 """, new { id, userId, messageId = request.MessageId }, ct);
             if (count == 0) throw new ApiException(404, "conversation_not_found", "会话不存在");
             await db.ExecuteAsync(
@@ -386,6 +520,8 @@ public sealed record SendMessageRequest(
     Guid? ReplyToMessageId,
     Guid? ClientMessageId);
 public sealed record ReadConversationRequest(Guid MessageId);
+public sealed record EditMessageRequest(string? Body);
+public sealed record ReportMessageRequest(string CategoryCode, string? Description);
 public sealed record CreateReviewRequest(
     Guid EventId,
     Guid ToUserId,

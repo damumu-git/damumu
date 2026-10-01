@@ -4,6 +4,17 @@ using Muda.Api.Infrastructure;
 
 CancellationChecks.ValidateReasons();
 FeedbackChecks.Validate();
+if (args.FirstOrDefault() == "--chat-db")
+{
+    await ChatChecks.RunDatabase();
+    return;
+}
+if (args.FirstOrDefault() is "--chat-migration-check" or "--chat-migration-apply")
+{
+    if (args.Length != 2) throw new Exception("Usage: --chat-migration-check|--chat-migration-apply <migration>");
+    await ChatChecks.RunMigration(args[1], args[0] == "--chat-migration-apply");
+    return;
+}
 if (args.FirstOrDefault() == "--feedback-db")
 {
     if (args.Length != 3) throw new Exception("Usage: --feedback-db <settings> <migration>");
@@ -37,6 +48,19 @@ foreach (var invalid in new[] { "", " ", "%%%", "a", new string('a', 513),
     catch (ApiException error) { Check(error.StatusCode == 400 && error.Code == "invalid_cursor", "Unsafe cursor error"); }
 }
 Console.WriteLine("PASS: cursor roundtrip, microsecond precision, malformed/oversized/version/UUID/time validation");
+
+var messageId = Guid.Parse("87654321-4321-4321-4321-cba987654321");
+var messageCursor = MessageCursor.Encode(timestamp, messageId);
+var decodedMessageCursor = MessageCursor.Decode(messageCursor)!;
+Check(decodedMessageCursor.CreatedAt == timestamp && decodedMessageCursor.MessageId == messageId,
+    "Message cursor roundtrip lost precision");
+foreach (var invalid in new[] { "", "%%%", new string('a', 513),
+    WebEncoders.Base64UrlEncode("{}"u8.ToArray()) })
+{
+    try { MessageCursor.Decode(invalid); throw new Exception("Invalid message cursor accepted"); }
+    catch (ApiException error) { Check(error.StatusCode == 400 && error.Code == "invalid_message_cursor", "Unsafe message cursor error"); }
+}
+Console.WriteLine("PASS: message cursor roundtrip and malformed/oversized validation");
 
 if (args.Length > 1) await DatabaseChecks.Run(args[1]);
 if (args.Length == 0) return;

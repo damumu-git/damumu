@@ -29,7 +29,7 @@ DAMUMU（中文 UI 名称“搭慕慕”）是一款面向韩国本地生活场�
 - Admin：React 19、Vite 8。
 - Infrastructure：本地开发服务加 Tailscale 可达的 PostgreSQL 主机。
 - Object Storage：尚未确定，头像当前使用 API 本地持久化目录。
-- Realtime：ASP.NET Core 原生 WebSocket；数据库和 REST API 仍是消息事实来源，WebSocket 只发送同步事件。
+- Realtime：ASP.NET Core 原生 WebSocket；数据库和 REST API 仍是消息事实来源，WebSocket 只发送同步事件，多 API 实例通过 PostgreSQL `LISTEN/NOTIFY` 转发轻量事件。
 - Push：Firebase Cloud Messaging（FCM）；缺少 Firebase 项目配置时自动停用，不影响站内消息和前台 WebSocket。
 
 ## 长期业务规则
@@ -42,6 +42,7 @@ DAMUMU（中文 UI 名称“搭慕慕”）是一款面向韩国本地生活场�
 - 活动封面选填一张；用户可直接选择设备照片，客户端预缩图、按 4:3 裁剪并输出 1280×960 JPEG。2 MB 是处理后上传文件的上限，不是原照片的选择限制。
 - 活动容量包含组织者本人；组织者是第一个已批准参与者。
 - 每个活动有唯一活动群聊；组织者以及状态为 `approved`、`attended` 的成员默认可以访问，成员状态变化会同步群聊成员资格，用户主动退出群聊后不会被自动重新加入。
+- 活动群在最后一段日程结束后保留 7 天可发言期，之后只读，并在结束 180 天后归档；取消活动在写入取消通知后立即只读。
 - 喜欢与举报只允许同一活动中状态为 `approved` 或 `attended` 的成员在活动结束后提交，每人对同一活动或同一成员各一条；活动反馈计入组织者，成员反馈计入目标用户。喜欢总数和高频正向标签可公开展示；举报不公开原始数量和举报人，只有同一标签得到至少 3 名不同参与者举报时才显示该标签，已驳回举报不参与提示。
 - API 使用统一的 `{ data, meta, error, traceId }` 响应封装，不向客户端泄露 SQL、堆栈、凭据或内部连接信息。
 - 用户端服务器读取失败时使用统一内容区错误状态，不显示原始 HTTP、解析器或数据库异常。

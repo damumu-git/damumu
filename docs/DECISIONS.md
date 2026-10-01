@@ -15,6 +15,7 @@
 | ADR-015 | 各大分类的自定义叶子与活动封面规格 | 已采用 | 2026-09-18 |
 | ADR-016 | 活动群聊成员跟随有效参与状态 | 已采用 | 2026-09-21 |
 | ADR-017 | REST 存储、WebSocket 实时同步与 FCM 后台推送 | 已采用 | 2026-09-21 |
+| ADR-018 | 聊天可靠发送、生命周期与跨实例事件转发 | 已采用 | 2026-10-01 |
 | ADR-008 | 用户位置标签跟随 App 语言 | 已采用 | 2026-09-07 |
 | ADR-009 | 活动容量包含组织者 | 已采用 | 2026-09-08 |
 | ADR-010 | 远端业务数据库使用 damumu 名称 | 已采用 | 2026-09-11 |
@@ -26,7 +27,7 @@
 
 ## ADR-001：产品品牌统一为 DAMUMU
 
-状态：已采用  
+状态：已采用
 日期：2026-09-11
 
 ### 背景
@@ -506,3 +507,36 @@ offset 会随列表头部插入/删除发生位置偏移；创建时间与 UUID 
 - `restapi/Endpoints/FeedbackEndpoints.cs`
 - `restapi/Migrations/017_post_event_feedback.sql`
 - `app/lib/feedback.dart`
+
+## ADR-018：聊天可靠发送、生命周期与跨实例事件转发
+
+状态：已采用
+日期：2026-10-01
+
+### 决定
+
+- 消息、会话更新时间和接收者站内通知在同一个 PostgreSQL 事务中写入。客户端为每次发送生成 `client_message_id`，网络重试返回原消息，不重复创建消息或通知。
+- 历史消息以 `(created_at, id)` 复合游标分页。客户端缓存最近 100 条消息，并按用户与会话隔离；未确认消息持久化在本机，恢复网络或重新进入会话时使用原客户端 ID 重试。
+- 文本消息可在 15 分钟内编辑、5 分钟内撤回。消息举报保存举报时的目标消息和相邻上下文快照；聊天图片存为当前 API 的本地媒体资产，消息只引用媒体 ID。
+- 活动群在最后日程结束 7 天后只读，结束 180 天后归档；活动取消通知写入后立即只读。后台每小时刷新生命周期，API 仍在写入时校验会话状态。
+- 多 API 实例使用 PostgreSQL `LISTEN/NOTIFY` 转发轻量实时同步事件。每个实例只向自己的 WebSocket 连接发送事件，实例来源 ID 防止本机重复投递；REST 和数据库仍是权威来源。
+
+### 原因
+
+事务与幂等键解决弱网重试造成的重复和“消息已保存但客户端显示失败”。复合游标避免相同时间戳消息被跳过。PostgreSQL 通知复用现有基础设施，足以支撑当前轻量同步事件，并避免在现阶段新增 Redis 运维依赖。
+
+### 影响
+
+- PostgreSQL 通知负载只允许轻量 ID 事件，不承载消息正文或业务成功状态；客户端收到事件后仍通过 REST 同步。
+- 本地图片目录仍需在多 API 实例部署前迁移到共享对象存储。
+- 所有数据库环境需应用 `018_chat_reliability.sql`。
+
+### 相关位置
+
+- `restapi/Migrations/018_chat_reliability.sql`
+- `restapi/Infrastructure/Db.cs`
+- `restapi/Infrastructure/RealtimeConnectionManager.cs`
+- `restapi/Infrastructure/RealtimeRelayService.cs`
+- `restapi/Infrastructure/ConversationLifecycleService.cs`
+- `restapi/Endpoints/SocialEndpoints.cs`
+- `app/lib/social_service.dart`、`app/lib/main.dart`

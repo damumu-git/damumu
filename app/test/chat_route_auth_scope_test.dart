@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zaihandazi/auth.dart';
 import 'package:zaihandazi/main.dart';
 import 'package:zaihandazi/social_service.dart';
@@ -12,6 +13,7 @@ void main() {
   testWidgets('chat route keeps access to the authenticated session', (
     tester,
   ) async {
+    SharedPreferences.setMockInitialValues({});
     final auth = AuthController()
       ..token = 'test-token'
       ..user = const AuthUser(
@@ -52,8 +54,12 @@ void main() {
         ),
       );
       await tester.tap(find.text('打开群聊'));
-      await tester.pumpAndSettle();
-
+      // The authenticated app owns long-lived realtime retry timers, so this
+      // route test advances the fetch explicitly instead of waiting for every
+      // timer in the app to settle.
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
       expect(find.text('还没有消息，打个招呼吧'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);
     }, () => client);
