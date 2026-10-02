@@ -27,17 +27,26 @@ FirebaseOptions get _firebaseOptions => FirebaseOptions(
   storageBucket: _firebaseStorageBucket.isEmpty ? null : _firebaseStorageBucket,
 );
 
-bool get _firebaseConfigured =>
-    _firebaseApiKey.isNotEmpty &&
-    _firebaseAppId.isNotEmpty &&
-    _firebaseMessagingSenderId.isNotEmpty &&
-    _firebaseProjectId.isNotEmpty;
+bool get _firebaseConfigured {
+  if (!kIsWeb) {
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
+  return _firebaseApiKey.isNotEmpty &&
+      _firebaseAppId.isNotEmpty &&
+      _firebaseMessagingSenderId.isNotEmpty &&
+      _firebaseProjectId.isNotEmpty;
+}
+
+Future<void> _initializeFirebaseApp() => kIsWeb
+    ? Firebase.initializeApp(options: _firebaseOptions)
+    : Firebase.initializeApp();
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (!_firebaseConfigured) return;
   if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(options: _firebaseOptions);
+    await _initializeFirebaseApp();
   }
 }
 
@@ -58,7 +67,7 @@ class PushNotificationService {
   static Future<void> initializeFirebase() async {
     if (!_firebaseConfigured || Firebase.apps.isNotEmpty) return;
     try {
-      await Firebase.initializeApp(options: _firebaseOptions);
+      await _initializeFirebaseApp();
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     } catch (_) {
       // The app remains usable when a platform-specific Firebase setup is absent.

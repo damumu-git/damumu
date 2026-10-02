@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "134205632255",
+    "project_id": "damumu-app",
+    "storage_bucket": "damumu-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:134205632255:android:193f6c8ad42c379e3866ca",
+        "android_client_info": {
+          "package_name": "com.damumu.damu"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPLEPeaZQXrtWtoYfGCGyIGggFNY6mJqs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,4 +1,4 @@
-package com.example.zaihandazi
+package com.damumu.damu
 
 import io.flutter.embedding.android.FlutterActivity
 

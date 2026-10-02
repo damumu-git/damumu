@@ -167,7 +167,9 @@ $env:GOOGLE_APPLICATION_CREDENTIALS = 'C:\安全目录\firebase-service-account.
 ./dev.ps1 --services
 ```
 
-Flutter 构建需要使用对应平台 Firebase App 的公开配置。Web 还需要 VAPID 公钥：
+Android 已从 `android/app/google-services.json` 读取配置，iOS 已从
+`ios/Runner/GoogleService-Info.plist` 读取配置；两个原生平台不需要额外传 Firebase
+`--dart-define`。Web 仍需要对应 Web App 的公开配置和 VAPID 公钥：
 
 ```powershell
 flutter run -d chrome --web-port 3000 `
@@ -181,12 +183,13 @@ flutter run -d chrome --web-port 3000 `
   --dart-define=FIREBASE_WEB_VAPID_KEY=...
 ```
 
-Android、iOS 和 Web 的 `FIREBASE_APP_ID` 通常不同，构建各平台时使用该平台 App 的值。
-iOS 还须在 Xcode 启用 Push Notifications、Background fetch 和 Remote notifications；Web
+Android、iOS 和 Web 的 Firebase App ID 各不相同，但可以属于同一个 Firebase 项目。
+iOS 工程已启用 Push Notifications、Background fetch 和 Remote notifications；Firebase
+控制台仍须上传 Apple Developer 账号生成的 APNs `.p8` 密钥。Web
 后台通知须按 Firebase 文档提供 `web/firebase-messaging-sw.js`。服务账号 JSON、VAPID 私钥及
 其他秘密不得写进 Git；上述客户端 Firebase 配置和 VAPID 公钥不是服务端凭据。
 
-已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `017`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
+已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `018`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
 
 正式用户接口包括：
 
