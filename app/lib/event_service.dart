@@ -309,7 +309,9 @@ class EventService {
   static Future<ActivityPage> list({
     double? latitude,
     double? longitude,
-    int radiusMeters = 10000,
+    String? token,
+    String? region,
+    int radiusMeters = 1000000,
     int limit = 20,
     String? cursor,
   }) async {
@@ -317,6 +319,7 @@ class EventService {
       'limit': limit.toString(),
       'cursor': ?cursor,
     };
+    if (region != null && region.isNotEmpty) query['region'] = region;
     if (latitude != null && longitude != null) {
       query.addAll({
         'latitude': latitude.toString(),
@@ -325,7 +328,10 @@ class EventService {
       });
     }
     final response = await http
-        .get(Uri.parse('$_apiBase/activities').replace(queryParameters: query))
+        .get(
+          Uri.parse('$_apiBase/activities').replace(queryParameters: query),
+          headers: token == null ? null : {'Authorization': 'Bearer $token'},
+        )
         .timeout(const Duration(seconds: 10));
     final decoded = _decodeResponse(response, '活动暂时无法加载，请稍后再试');
     final data = decoded['data'];

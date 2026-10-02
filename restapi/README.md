@@ -193,7 +193,7 @@ Authentication Key 也已上传到 Firebase Cloud Messaging。Web
 后台通知须按 Firebase 文档提供 `web/firebase-messaging-sw.js`。服务账号 JSON、VAPID 私钥及
 其他秘密不得写进 Git；上述客户端 Firebase 配置和 VAPID 公钥不是服务端凭据。
 
-已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `019`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
+已有数据库升级时先核对已应用的迁移，再按编号执行缺失的 `Migrations/*.sql`；不要只执行 `002` 和 `003`。当前迁移文件到 `020`。测试脚本默认不会持久应用迁移，显式传入 `-ApplyMigrations` 才会执行。
 
 正式用户接口包括：
 
@@ -240,7 +240,8 @@ X-Admin-Key: muda-admin-local
 ## APP 活动列表 Cursor 分页
 
 ```http
-GET /api/v1/activities?limit=20
+GET /api/v1/activities?limit=20&latitude=37.48&longitude=126.95
+GET /api/v1/activities?limit=20&region=KR-11620
 GET /api/v1/activities?limit=20&cursor=<上一页 data.nextCursor>
 ```
 
@@ -272,7 +273,7 @@ HTTP 400，`error.code=invalid_cursor`。活动列表永不返回精确集合点
 `Migrations/018_chat_reliability.sql` 与
 `Migrations/019_media_thumbnails.sql`；`010` 增加公开活动创建时间/UUID
 部分索引，`011` 增加分类图标键与活动自定义小分类列，`012` 为各一级分类增加“其它”叶子及标识。
-升级 API 前必须先应用 `011` 至 `019` 的缺失迁移，否则活动、分类、消息操作、活动群聊、活动后反馈或图片缩略图行为不完整。
+升级 API 前必须先应用 `011` 至 `020` 的缺失迁移，否则活动、分类、消息操作、活动群聊、活动后反馈、图片缩略图或行政区推荐行为不完整。
 活动封面上传接口 `POST /api/v1/events/covers` 接受登录用户的一张 1280×960 JPEG，最大 1.5 MB；返回媒体 ID 后在 `POST /events` 传入 `coverMediaId`。文件存于 API 本地 `uploads/events`。
 API 为活动封面生成最长边 640px 的 WebP，为聊天图片生成最长边 320px 的 WebP，缩略图不超过 200 KB。处理后的可放大图片不超过 1.5 MB。列表和聊天记录返回缩略图，活动详情及聊天图片预览保留原图 URL，并在点击放大时加载。所有 `/uploads` URL 使用 UUID 不可变文件名和一年长期缓存。当前媒体接口只接受静态 JPEG、PNG、WebP，不提供视频或 Live Photo 上传下载。月度出站流量达到 2 TB 时评估对象存储/CDN。
 原 `/events` 及后台分页接口保持兼容。

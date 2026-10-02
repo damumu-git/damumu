@@ -26,10 +26,17 @@ void main() {
       );
     });
     await http.runWithClient(() async {
-      final first = await EventService.list(latitude: 37.5, longitude: 127);
+      final first = await EventService.list(
+        latitude: 37.5,
+        longitude: 127,
+        token: 'token-1',
+        region: 'KR-11620',
+      );
       final last = await EventService.list(
         latitude: 37.5,
         longitude: 127,
+        token: 'token-1',
+        region: 'KR-11620',
         cursor: first.nextCursor,
       );
       expect(first.items, hasLength(20));
@@ -43,6 +50,7 @@ void main() {
       expect(uri.queryParameters['limit'], '20');
       expect(uri.queryParameters['latitude'], '37.5');
       expect(uri.queryParameters['longitude'], '127.0');
+      expect(uri.queryParameters['region'], 'KR-11620');
     }
   });
 

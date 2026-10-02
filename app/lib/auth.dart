@@ -40,6 +40,8 @@ class AuthUser {
     required this.email,
     this.avatarUrl,
     this.avatarImageUrl,
+    this.cityCode,
+    this.districtCode,
   });
 
   final String id;
@@ -47,6 +49,8 @@ class AuthUser {
   final String email;
   final String? avatarUrl;
   final String? avatarImageUrl;
+  final String? cityCode;
+  final String? districtCode;
 
   AuthUser copyWith({
     String? nickname,
@@ -58,6 +62,8 @@ class AuthUser {
     email: email,
     avatarUrl: avatarUrl ?? this.avatarUrl,
     avatarImageUrl: avatarImageUrl ?? this.avatarImageUrl,
+    cityCode: cityCode,
+    districtCode: districtCode,
   );
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
@@ -66,6 +72,8 @@ class AuthUser {
     email: '${json['email'] ?? ''}',
     avatarUrl: json['avatarUrl'] as String?,
     avatarImageUrl: json['avatarImageUrl'] as String?,
+    cityCode: json['city_code'] as String?,
+    districtCode: json['district_code'] as String?,
   );
 }
 

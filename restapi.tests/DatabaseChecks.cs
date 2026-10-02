@@ -21,8 +21,8 @@ internal static class DatabaseChecks
         foreach (var table in new[]
         {
             "event", "category", "app_user", "user_profile", "trust_snapshot",
-            "place", "administrative_region", "event_schedule", "event_tag", "interest",
-            "report"
+            "place", "administrative_region", "region_proximity", "event_schedule", "event_tag", "interest", "user_interest",
+            "media_asset", "report"
         })
         {
             await Execute($"CREATE TEMP TABLE {table} ON COMMIT DROP AS SELECT * FROM public.{table} WITH NO DATA");
@@ -51,30 +51,32 @@ internal static class DatabaseChecks
         }
         foreach (var number in new[] { 1, 2, 3, 4, 5 }) await Seed(number, time);
         await Execute("CREATE INDEX ix_cursor_test ON event (created_at DESC, id DESC) WHERE deleted_at IS NULL AND visibility='public' AND status IN ('published', 'full')");
+        var anchor = time.AddDays(1);
         async Task<List<ActivityCursor>> Read(ActivityCursor? cursor)
         {
             await using var command = new NpgsqlCommand(ActivityQueries.List, connection, transaction);
-            foreach (var name in new[] { "city", "district", "q" }) command.Parameters.Add(name, NpgsqlDbType.Text).Value = DBNull.Value;
+            foreach (var name in new[] { "city", "district", "q", "requestedRegion", "cursorOrigin" }) command.Parameters.Add(name, NpgsqlDbType.Text).Value = DBNull.Value;
             command.Parameters.Add("categoryId", NpgsqlDbType.Uuid).Value = DBNull.Value;
+            command.Parameters.Add("viewerUserId", NpgsqlDbType.Uuid).Value = DBNull.Value;
             foreach (var name in new[] { "from", "to" }) command.Parameters.Add(name, NpgsqlDbType.TimestampTz).Value = DBNull.Value;
-            command.Parameters.AddWithValue("hasGeo", false);
-            command.Parameters.AddWithValue("latitude", 0d);
-            command.Parameters.AddWithValue("longitude", 0d);
-            command.Parameters.AddWithValue("radius", 10000);
-            command.Parameters.AddWithValue("limit", 3); // pageSize + 1
-            command.Parameters.AddWithValue("hasCursor", cursor is not null);
-            command.Parameters.AddWithValue("cursorCreatedAt", cursor?.CreatedAt ?? DateTime.UnixEpoch);
-            command.Parameters.AddWithValue("cursorActivityId", cursor?.ActivityId ?? Guid.Empty);
+            command.Parameters.AddWithValue("hasGeo", false); command.Parameters.AddWithValue("latitude", 0d); command.Parameters.AddWithValue("longitude", 0d);
+            command.Parameters.AddWithValue("radius", 100000); command.Parameters.AddWithValue("anchorAt", cursor?.AnchorAt ?? anchor);
+            command.Parameters.AddWithValue("limit", 3); command.Parameters.AddWithValue("hasCursor", cursor is not null);
+            command.Parameters.AddWithValue("cursorScore", cursor?.ScoreKey ?? 0); command.Parameters.AddWithValue("cursorRing", cursor?.RegionRing ?? 0);
+            command.Parameters.AddWithValue("cursorStartsAt", cursor?.SortStartsAt ?? DateTime.UnixEpoch);
+            command.Parameters.AddWithValue("cursorCreatedAt", cursor?.CreatedAt ?? DateTime.UnixEpoch); command.Parameters.AddWithValue("cursorActivityId", cursor?.ActivityId ?? Guid.Empty);
             var result = new List<ActivityCursor>();
             await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync()) result.Add(new(reader.GetDateTime(reader.GetOrdinal("created_at")), reader.GetGuid(reader.GetOrdinal("id"))));
+            while (await reader.ReadAsync()) result.Add(new(
+                cursor?.AnchorAt ?? anchor, null, reader.GetInt32(reader.GetOrdinal("score_key")), reader.GetInt32(reader.GetOrdinal("region_ring")),
+                reader.GetDateTime(reader.GetOrdinal("sort_starts_at")), reader.GetDateTime(reader.GetOrdinal("created_at")), reader.GetGuid(reader.GetOrdinal("id"))));
             return result;
         }
         var first = await Read(null);
         if (first.Count != 3 || !first[0].ActivityId.ToString().EndsWith("000000000005")) throw new Exception("First page or UUID tie-break failed");
-        var boundary = ActivityCursor.Decode(ActivityCursor.Encode(first[1].CreatedAt, first[1].ActivityId));
-        await Seed(6, time.AddSeconds(1)); // Concurrent insert at the head.
-        await Execute("DELETE FROM event WHERE id='00000000-0000-0000-0000-000000000004'"); // Deleted boundary remains usable.
+        var boundary = ActivityCursor.Decode(ActivityCursor.Encode(first[1]));
+        await Seed(6, time.AddSeconds(1));
+        await Execute("DELETE FROM event WHERE id='00000000-0000-0000-0000-000000000004'");
         var second = await Read(boundary);
         if (second.Count != 3 || !second[0].ActivityId.ToString().EndsWith("000000000003") || !second[1].ActivityId.ToString().EndsWith("000000000002")) throw new Exception("Insert/delete shifted keyset page");
         var last = await Read(second[1]);

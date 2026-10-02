@@ -63,20 +63,26 @@ static void Check(bool condition, string message)
 
 var id = Guid.Parse("12345678-1234-1234-1234-123456789abc");
 var timestamp = new DateTime(2026, 9, 11, 12, 30, 15, DateTimeKind.Utc).AddTicks(1234560);
-var encoded = ActivityCursor.Encode(timestamp, id);
+var cursorValue = new ActivityCursor(timestamp, "KR-11620", 875, 1, timestamp.AddDays(2), timestamp, id);
+var encoded = ActivityCursor.Encode(cursorValue);
 var decoded = ActivityCursor.Decode(encoded)!;
-Check(decoded.CreatedAt == timestamp && decoded.ActivityId == id, "Cursor roundtrip lost precision");
+Check(decoded == cursorValue, "Cursor roundtrip lost ranking keys or precision");
 Check(ActivityCursor.Decode(null) is null, "First page should have no cursor");
 string Payload(int version, DateTime time, Guid key) => WebEncoders.Base64UrlEncode(
-    JsonSerializer.SerializeToUtf8Bytes(new { Version = version, CreatedAt = time, ActivityId = key }));
-foreach (var invalid in new[] { "", " ", "%%%", "a", new string('a', 513),
-    WebEncoders.Base64UrlEncode("{}"u8.ToArray()), Payload(2, timestamp, id),
-    Payload(1, timestamp, Guid.Empty), Payload(1, DateTime.SpecifyKind(timestamp, DateTimeKind.Unspecified), id) })
+    JsonSerializer.SerializeToUtf8Bytes(new { Version = version, AnchorAt = time, OriginRegionCode = "KR-11620", ScoreKey = 1, RegionRing = 0, SortStartsAt = time, CreatedAt = time, ActivityId = key }));
+foreach (var invalid in new[] { "", " ", "%%%", "a", new string('a', 1025),
+    WebEncoders.Base64UrlEncode("{}"u8.ToArray()), Payload(1, timestamp, id),
+    Payload(2, timestamp, Guid.Empty), Payload(2, DateTime.SpecifyKind(timestamp, DateTimeKind.Unspecified), id) })
 {
     try { ActivityCursor.Decode(invalid); throw new Exception("Invalid cursor accepted"); }
     catch (ApiException error) { Check(error.StatusCode == 400 && error.Code == "invalid_cursor", "Unsafe cursor error"); }
 }
 Console.WriteLine("PASS: cursor roundtrip, microsecond precision, malformed/oversized/version/UUID/time validation");
+
+Check(ActivityQueries.List.Contains("ST_DWithin", StringComparison.Ordinal), "Nearby candidate query must use ST_DWithin");
+Check(!ActivityQueries.List.Contains("public_geo", StringComparison.Ordinal), "Recommendation query must not use exact activity coordinates");
+Check(ActivityQueries.List.Contains("user_interest", StringComparison.Ordinal) && ActivityQueries.List.Contains("trust_score", StringComparison.Ordinal), "Recommendation factors are incomplete");
+Console.WriteLine("PASS: recommendation query uses region geography and all ranking factors without exact activity coordinates");
 
 var messageId = Guid.Parse("87654321-4321-4321-4321-cba987654321");
 var messageCursor = MessageCursor.Encode(timestamp, messageId);

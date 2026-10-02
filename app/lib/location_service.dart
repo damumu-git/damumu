@@ -4,26 +4,32 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+const _apiBase = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'http://localhost:8080/api/v1',
+);
+
 class AppLocation {
   const AppLocation({
-    required this.latitude,
-    required this.longitude,
+    required this.regionCode,
     required this.label,
+    this.latitude,
+    this.longitude,
   });
 
-  final double latitude;
-  final double longitude;
+  final String regionCode;
   final String label;
+  // Coordinates live in memory only long enough to request the first page. They
+  // are never written to preferences or exposed in the activity UI.
+  final double? latitude;
+  final double? longitude;
 }
 
 class LocationService {
   LocationService({http.Client? client}) : _client = client ?? http.Client();
 
-  // v3 separates labels by App language and invalidates older locale-agnostic
-  // labels, which could keep showing Traditional Chinese after a language change.
-  static const _cacheVersion = 'v3';
+  static const _cacheVersion = 'v4_region_only';
   static const _cacheLifetime = Duration(minutes: 30);
-
   final http.Client _client;
 
   Future<AppLocation> locate({
@@ -34,99 +40,81 @@ class LocationService {
       final cached = await _readCache(languageCode);
       if (cached != null) return cached;
     }
-
-    final enabled = await Geolocator.isLocationServiceEnabled();
-    if (!enabled) {
+    if (!await Geolocator.isLocationServiceEnabled()) {
       throw const LocationFailure('请先开启设备定位服务');
     }
-
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.denied) {
-      throw const LocationFailure('未获得定位权限，点击可重试');
+      throw const LocationFailure('未获得定位权限，已使用你选择的地区');
     }
     if (permission == LocationPermission.deniedForever) {
-      throw const LocationFailure('定位权限已被永久关闭，请在系统设置中开启');
+      throw const LocationFailure('定位权限已关闭，已使用你选择的地区');
     }
-
     final position = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.medium,
         timeLimit: Duration(seconds: 12),
       ),
     );
-    final label = await _reverseGeocode(
+    final result = await resolveRegion(
       position.latitude,
       position.longitude,
-      languageCode,
-    );
-    final result = AppLocation(
-      latitude: position.latitude,
-      longitude: position.longitude,
-      label: label,
+      languageCode: languageCode,
     );
     await _writeCache(result, languageCode);
-    return result;
+    return AppLocation(
+      regionCode: result.regionCode,
+      label: result.label,
+      latitude: position.latitude,
+      longitude: position.longitude,
+    );
   }
 
-  Future<String> _reverseGeocode(
+  Future<AppLocation> resolveRegion(
     double latitude,
-    double longitude,
-    String languageCode,
-  ) async {
-    final acceptedLanguages = switch (languageCode) {
-      'ko' => 'ko-KR,ko,en',
-      'en' => 'en-US,en',
-      _ => 'zh-CN,zh-Hans-CN,zh-Hans,en',
+    double longitude, {
+    required String languageCode,
+  }) async {
+    final response = await _client
+        .get(
+          Uri.parse('$_apiBase/regions/resolve').replace(
+            queryParameters: {
+              'latitude': latitude.toStringAsFixed(7),
+              'longitude': longitude.toStringAsFixed(7),
+            },
+          ),
+        )
+        .timeout(const Duration(seconds: 8));
+    if (response.statusCode != 200) {
+      throw const LocationFailure('当前位置无法识别，已使用你选择的地区');
+    }
+    final envelope = jsonDecode(utf8.decode(response.bodyBytes)) as Map;
+    final data = (envelope['data'] as Map).cast<String, dynamic>();
+    final nameKey = switch (languageCode) {
+      'ko' => 'name_ko_kr',
+      'en' => 'name_en_us',
+      _ => 'name_zh_cn',
     };
-    final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
-      'format': 'jsonv2',
-      'lat': latitude.toStringAsFixed(7),
-      'lon': longitude.toStringAsFixed(7),
-      'zoom': '12',
-      'addressdetails': '1',
-      'accept-language': acceptedLanguages,
-    });
-    try {
-      final response = await _client
-          .get(
-            uri,
-            headers: const {'User-Agent': 'DAMUMU/0.1 (location@muda.app)'},
-          )
-          .timeout(const Duration(seconds: 8));
-      if (response.statusCode != 200) return '当前位置';
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
-      final address = json['address'] as Map<String, dynamic>? ?? const {};
-      final city = _first(address, const [
-        'city',
-        'municipality',
-        'state',
-        'province',
-      ]);
-      final district = _first(address, const [
-        'borough',
-        'city_district',
-        'suburb',
-        'county',
-        'town',
-      ]);
-      if (city != null && district != null && city != district) {
-        return '$city · $district';
-      }
-      return district ?? city ?? (json['display_name'] as String?) ?? '当前位置';
-    } catch (_) {
-      return '当前位置';
-    }
-  }
-
-  String? _first(Map<String, dynamic> address, List<String> keys) {
-    for (final key in keys) {
-      final value = address[key]?.toString().trim();
-      if (value != null && value.isNotEmpty) return value;
-    }
-    return null;
+    final cityKey = switch (languageCode) {
+      'ko' => 'city_name_ko_kr',
+      'en' => 'city_name_en_us',
+      _ => 'city_name_zh_cn',
+    };
+    final city = data[cityKey]?.toString().trim();
+    final district = data[nameKey]?.toString().trim();
+    final label = [
+      if (city != null && city.isNotEmpty && city != district) city,
+      if (district != null && district.isNotEmpty) district,
+    ].join(' · ');
+    return AppLocation(
+      regionCode: data['code'] as String,
+      label: label.isEmpty ? '当前位置' : label,
+      latitude: latitude,
+      longitude: longitude,
+    );
   }
 
   String _cacheKey(String field, String languageCode) =>
@@ -135,34 +123,24 @@ class LocationService {
   Future<AppLocation?> _readCache(String languageCode) async {
     final preferences = await SharedPreferences.getInstance();
     final cachedAt = preferences.getInt(_cacheKey('cached_at', languageCode));
-    final latitude = preferences.getDouble(_cacheKey('latitude', languageCode));
-    final longitude = preferences.getDouble(
-      _cacheKey('longitude', languageCode),
+    final regionCode = preferences.getString(
+      _cacheKey('region_code', languageCode),
     );
     final label = preferences.getString(_cacheKey('label', languageCode));
-    if (cachedAt == null ||
-        latitude == null ||
-        longitude == null ||
-        label == null) {
-      return null;
-    }
+    if (cachedAt == null || regionCode == null || label == null) return null;
     final age = DateTime.now().difference(
       DateTime.fromMillisecondsSinceEpoch(cachedAt),
     );
     if (age > _cacheLifetime) return null;
-    return AppLocation(latitude: latitude, longitude: longitude, label: label);
+    return AppLocation(regionCode: regionCode, label: label);
   }
 
   Future<void> _writeCache(AppLocation location, String languageCode) async {
     final preferences = await SharedPreferences.getInstance();
     await Future.wait([
-      preferences.setDouble(
-        _cacheKey('latitude', languageCode),
-        location.latitude,
-      ),
-      preferences.setDouble(
-        _cacheKey('longitude', languageCode),
-        location.longitude,
+      preferences.setString(
+        _cacheKey('region_code', languageCode),
+        location.regionCode,
       ),
       preferences.setString(_cacheKey('label', languageCode), location.label),
       preferences.setInt(
@@ -175,6 +153,5 @@ class LocationService {
 
 class LocationFailure implements Exception {
   const LocationFailure(this.message);
-
   final String message;
 }

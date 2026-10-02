@@ -571,3 +571,34 @@ offset 会随列表头部插入/删除发生位置偏移；创建时间与 UUID 
 - `restapi/Endpoints/EventEndpoints.cs`
 - `restapi/Endpoints/SocialEndpoints.cs`
 - `app/lib/main.dart`、`app/lib/social_service.dart`
+
+## ADR-020：行政区级隐私推荐与稳定推荐游标
+
+状态：已采用
+日期：2026-10-02
+
+### 决定
+
+- 设备前台定位只用于 API 将坐标解析为韩国法定市／区；客户端只缓存行政区代码和名称，不持久化原始经纬度，也不向其他用户展示定位。
+- 参与获批前的活动推荐只使用活动的 `city_code`／`district_code` 与行政区边界、代表点和邻接关系。活动集合点坐标不参与候选生成、距离提示或排序。
+- 行政区边界用 `ST_DWithin` 生成直接邻区；同区为第 0 层、接壤或 1.5 km 内为第 1 层，其余以代表点每 25 km 扩展一层。客户端只显示离散区域层级。
+- 推荐排序由兴趣匹配、区域层级、活动时间和组织者信誉组成。Cursor 固定首次请求时间、解析后的行政区以及全部排序键，以 `(score, ring, starts_at, created_at, id)` 做稳定 keyset 分页。
+- 定位不可用时使用用户资料中选择的区，未选择区时使用市。
+
+### 原因
+
+精确用户坐标和未公开集合点会造成不必要的隐私暴露。行政区边界与邻接层级足以表达“冠岳区、周边区、再向外”的发现顺序，并允许同一距离层中的多个活动由兴趣、时间与信誉共同排序。固定快照和完整排序键可避免翻页时重复或漏项。
+
+### 影响
+
+- 所有数据库环境需应用 `020_private_region_recommendations.sql`。
+- 行政区代码来自韩国行政安全部法定洞代码，边界源自 SGIS 的 2026-07-01 SGG 数据；边界数据按 CC BY 4.0 标注。
+- 原始经纬度仍会随首次 HTTPS 请求短暂到达 API 以完成区解析，但不写入用户资料、活动列表响应或客户端持久缓存。
+
+### 相关位置
+
+- `restapi/Migrations/020_private_region_recommendations.sql`
+- `restapi/Infrastructure/ActivityQueries.cs`
+- `restapi/Infrastructure/ActivityCursor.cs`
+- `restapi/Endpoints/CatalogEndpoints.cs`
+- `app/lib/location_service.dart`

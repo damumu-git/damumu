@@ -345,6 +345,8 @@ typedef ActivityPageLoader =
     Future<ActivityPage> Function({
       double? latitude,
       double? longitude,
+      String? token,
+      String? region,
       required int limit,
       String? cursor,
     });
@@ -381,6 +383,7 @@ class _AppShellState extends State<AppShell> {
   final Set<String> _loadedEventIds = {};
   double? _latitude;
   double? _longitude;
+  String? _regionCode;
   StreamSubscription<RealtimeEvent>? _realtimeSubscription;
   StreamSubscription<void>? _pushSubscription;
 
@@ -424,7 +427,6 @@ class _AppShellState extends State<AppShell> {
     _activeShell = this;
     _events = List<EventItem>.of(widget.initialEvents ?? const []);
     _eventsLoading = widget.loadRemoteEvents;
-    if (widget.loadRemoteEvents || widget.eventLoader != null) _loadEvents();
     _realtimeSubscription = RealtimeService.instance.events.listen((_) {
       _loadUnread();
     });
@@ -432,6 +434,9 @@ class _AppShellState extends State<AppShell> {
       _loadUnread();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (widget.loadRemoteEvents || widget.eventLoader != null) {
+        await _loadEvents();
+      }
       await _loadUnread();
       if (!mounted) return;
       final token = AuthScope.of(context).token;
@@ -492,9 +497,14 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _fetchEventPage(int generation, {required bool append}) async {
     try {
+      final auth = AuthScope.of(context);
+      final fallbackRegion =
+          _regionCode ?? auth.user?.districtCode ?? auth.user?.cityCode;
       final page = await (widget.eventLoader ?? EventService.list)(
         latitude: _latitude,
         longitude: _longitude,
+        token: auth.token,
+        region: fallbackRegion,
         limit: _pageSize,
         cursor: _nextEventCursor,
       );
@@ -547,7 +557,7 @@ class _AppShellState extends State<AppShell> {
         : '${startsAt.month}月${startsAt.day}日 ${two(startsAt.hour)}:${two(startsAt.minute)}';
     final city = '${json['city_name'] ?? json['city_code'] ?? ''}';
     final district = '${json['district_name'] ?? json['district_code'] ?? ''}';
-    final distanceMeters = json['distance_meters'] as num?;
+    final proximity = json['proximity_level']?.toString();
     final priceAmount = (json['price_amount'] as num?)?.toInt() ?? 0;
     final currentUserId = AuthScope.of(context).user?.id;
     return EventItem(
@@ -560,9 +570,9 @@ class _AppShellState extends State<AppShell> {
       category: '${json['category_name'] ?? ''}',
       time: time,
       area: [city, district].where((value) => value.isNotEmpty).join(' · '),
-      distance: distanceMeters == null
-          ? '距离待计算'
-          : '${(distanceMeters / 1000).toStringAsFixed(1)} km',
+      distance: proximity == null
+          ? context.tr('distance_pending')
+          : context.tr(proximity),
       host: '${json['organizer_name'] ?? '活动组织者'}',
       organizerUserId: json['organizer_user_id']?.toString(),
       organizerAvatar: json['organizer_avatar'] as String?,
@@ -619,11 +629,11 @@ class _AppShellState extends State<AppShell> {
 
   void _locationChanged(AppLocation location) {
     final changed =
-        _latitude == null ||
-        _longitude == null ||
-        (_latitude! - location.latitude).abs() > .0001 ||
-        (_longitude! - location.longitude).abs() > .0001;
+        _regionCode != location.regionCode ||
+        _latitude != location.latitude ||
+        _longitude != location.longitude;
     if (!changed) return;
+    _regionCode = location.regionCode;
     _latitude = location.latitude;
     _longitude = location.longitude;
     _loadEvents();
