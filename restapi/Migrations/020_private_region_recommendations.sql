@@ -4,6 +4,7 @@
 BEGIN;
 ALTER TABLE administrative_region DROP CONSTRAINT IF EXISTS administrative_region_level_check;
 ALTER TABLE administrative_region DROP CONSTRAINT IF EXISTS administrative_region_check;
+ALTER TABLE administrative_region DROP CONSTRAINT IF EXISTS administrative_region_parent_check;
 ALTER TABLE administrative_region ADD CONSTRAINT administrative_region_level_check CHECK (level IN (1,2,3));
 ALTER TABLE administrative_region ADD CONSTRAINT administrative_region_parent_check CHECK ((level=1 AND parent_code IS NULL) OR (level IN (2,3) AND parent_code IS NOT NULL));
 ALTER TABLE administrative_region ADD COLUMN IF NOT EXISTS official_code varchar(10);
@@ -562,6 +563,9 @@ UPDATE administrative_region r SET boundary=ST_Multi(ST_SetSRID(ST_GeomFromGeoJS
 UPDATE administrative_region p SET boundary=c.boundary,source_updated_at=DATE '2026-07-01',updated_at=now() FROM (SELECT parent_code,ST_Multi(ST_Union(boundary::geometry))::geography boundary FROM administrative_region WHERE level=3 AND boundary IS NOT NULL GROUP BY parent_code)c WHERE p.code=c.parent_code;
 UPDATE administrative_region p SET boundary=c.boundary,source_updated_at=DATE '2026-07-01',updated_at=now() FROM (SELECT parent_code,ST_Multi(ST_Union(boundary::geometry))::geography boundary FROM administrative_region WHERE level=2 AND boundary IS NOT NULL GROUP BY parent_code)c WHERE p.code=c.parent_code;
 UPDATE administrative_region SET representative_geo=ST_PointOnSurface(boundary::geometry)::geography WHERE boundary IS NOT NULL;
+-- Retire numeric catalog rows that are absent from the current official snapshot.
+UPDATE administrative_region SET is_active=false,updated_at=now()
+WHERE code ~ '^KR-[0-9]+$' AND source_updated_at IS DISTINCT FROM DATE '2026-07-01';
 CREATE TABLE IF NOT EXISTS region_neighbor(region_code varchar(32) NOT NULL REFERENCES administrative_region(code) ON DELETE CASCADE,neighbor_code varchar(32) NOT NULL REFERENCES administrative_region(code) ON DELETE CASCADE,relation_type varchar(20) NOT NULL CHECK(relation_type IN('self','border','nearby')),boundary_distance_meters integer NOT NULL CHECK(boundary_distance_meters>=0),PRIMARY KEY(region_code,neighbor_code));
 CREATE INDEX IF NOT EXISTS ix_region_neighbor_neighbor ON region_neighbor(neighbor_code,region_code);
 CREATE TABLE IF NOT EXISTS region_proximity(origin_region_code varchar(32) NOT NULL REFERENCES administrative_region(code) ON DELETE CASCADE,target_region_code varchar(32) NOT NULL REFERENCES administrative_region(code) ON DELETE CASCADE,ring_level smallint NOT NULL CHECK(ring_level>=0),approximate_distance_meters integer NOT NULL CHECK(approximate_distance_meters>=0),PRIMARY KEY(origin_region_code,target_region_code));

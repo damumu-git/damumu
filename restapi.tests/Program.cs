@@ -101,7 +101,10 @@ if (args.Length > 1) await DatabaseChecks.Run(args[1]);
 if (args.Length == 0) return;
 using var client = new HttpClient { BaseAddress = new Uri(args[0]) };
 var seen = new HashSet<Guid>();
-DateTime? previousTime = null;
+int? previousScore = null;
+int? previousRing = null;
+DateTime? previousStarts = null;
+DateTime? previousCreated = null;
 string? previousId = null;
 string? cursor = null;
 var pages = 0;
@@ -117,14 +120,24 @@ do
     foreach (var item in items.EnumerateArray())
     {
         var itemId = item.GetProperty("id").GetGuid();
+        var score = item.GetProperty("score_key").GetInt32();
+        var ring = item.GetProperty("region_ring").GetInt32();
+        var starts = item.GetProperty("sort_starts_at").GetDateTime();
         var created = item.GetProperty("created_at").GetDateTime();
         var key = itemId.ToString("N");
         Check(seen.Add(itemId), "Duplicate activity across pages");
-        Check(previousTime is null || created < previousTime ||
-            (created == previousTime && string.CompareOrdinal(key, previousId) < 0), "Incorrect keyset order");
+        Check(previousScore is null || score < previousScore
+            || (score == previousScore && ring > previousRing)
+            || (score == previousScore && ring == previousRing && starts > previousStarts)
+            || (score == previousScore && ring == previousRing && starts == previousStarts && created < previousCreated)
+            || (score == previousScore && ring == previousRing && starts == previousStarts && created == previousCreated
+                && string.CompareOrdinal(key, previousId) < 0), "Incorrect recommendation keyset order");
         Check(item.GetProperty("place_name").ValueKind == JsonValueKind.Null &&
             item.GetProperty("address_public").ValueKind == JsonValueKind.Null, "Exact meeting point exposed");
-        previousTime = created;
+        previousScore = score;
+        previousRing = ring;
+        previousStarts = starts;
+        previousCreated = created;
         previousId = key;
     }
     var hasMore = data.GetProperty("hasMore").GetBoolean();
