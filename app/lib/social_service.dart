@@ -78,6 +78,7 @@ class ChatMessage {
     this.recalledAt,
     this.mediaAssetId,
     this.mediaUrl,
+    this.mediaThumbnailUrl,
     this.pending = false,
     this.failed = false,
   });
@@ -94,6 +95,7 @@ class ChatMessage {
   final DateTime? recalledAt;
   final String? mediaAssetId;
   final String? mediaUrl;
+  final String? mediaThumbnailUrl;
   final bool pending;
   final bool failed;
 
@@ -111,6 +113,7 @@ class ChatMessage {
     recalledAt: recalledAt,
     mediaAssetId: mediaAssetId,
     mediaUrl: mediaUrl,
+    mediaThumbnailUrl: mediaThumbnailUrl,
     pending: pending ?? this.pending,
     failed: failed ?? this.failed,
   );
@@ -129,6 +132,7 @@ class ChatMessage {
     'recalled_at': recalledAt?.toUtc().toIso8601String(),
     'media_asset_id': mediaAssetId,
     'media_url': mediaUrl,
+    'media_thumbnail_url': mediaThumbnailUrl,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -145,6 +149,9 @@ class ChatMessage {
     recalledAt: DateTime.tryParse('${json['recalled_at'] ?? ''}')?.toLocal(),
     mediaAssetId: json['media_asset_id']?.toString(),
     mediaUrl: _absoluteMediaUrl(json['media_url']?.toString()),
+    mediaThumbnailUrl: _absoluteMediaUrl(
+      json['media_thumbnail_url']?.toString(),
+    ),
   );
 }
 
@@ -354,6 +361,7 @@ class SocialService {
     return {
       'mediaAssetId': '${data['mediaAssetId']}',
       'mediaUrl': '${data['mediaUrl']}',
+      'mediaThumbnailUrl': '${data['mediaThumbnailUrl']}',
     };
   }
 

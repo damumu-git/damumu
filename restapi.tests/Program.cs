@@ -6,6 +6,17 @@ using Muda.Api.Infrastructure;
 
 CancellationChecks.ValidateReasons();
 FeedbackChecks.Validate();
+if (args.FirstOrDefault() == "--thumbnail-check")
+{
+    await MediaChecks.ValidateThumbnails();
+    return;
+}
+if (args.FirstOrDefault() is "--media-migration-check" or "--media-migration-apply")
+{
+    if (args.Length != 2) throw new Exception("Usage: --media-migration-check|--media-migration-apply <migration>");
+    await MediaChecks.RunMigration(args[1], args[0] == "--media-migration-apply");
+    return;
+}
 if (args.FirstOrDefault() == "--firebase-check")
 {
     var configuration = new ConfigurationBuilder()

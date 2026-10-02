@@ -54,7 +54,7 @@ void main() {
     },
   );
 
-  test('accepts a source over 2 MB and limits only the processed upload', () {
+  test('accepts a large source and limits only the processed upload', () {
     final random = Random(17);
     final source = img.Image(width: 1000, height: 750);
     for (var y = 0; y < source.height; y++) {

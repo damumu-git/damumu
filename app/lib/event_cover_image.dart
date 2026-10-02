@@ -4,7 +4,7 @@ import 'package:image/image.dart' as img;
 
 const eventCoverWidth = 1280;
 const eventCoverHeight = 960;
-const eventCoverMaxBytes = 2 * 1024 * 1024;
+const eventCoverMaxBytes = 1500 * 1024;
 
 Uint8List prepareEventCover(Uint8List source) {
   img.Image? decoded;

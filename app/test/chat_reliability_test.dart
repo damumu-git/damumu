@@ -20,6 +20,8 @@ void main() {
                 'id': 'newer',
                 'body': 'newer',
                 'message_type': 'text',
+                'media_url': '/uploads/messages/original.jpg',
+                'media_thumbnail_url': '/uploads/messages/thumbnail.webp',
                 'created_at': '2026-10-01T10:00:01Z',
               },
               {
@@ -43,6 +45,14 @@ void main() {
         cursor: 'cursor-1',
       );
       expect(page.items.map((item) => item.id), ['older', 'newer']);
+      expect(
+        page.items.last.mediaUrl,
+        endsWith('/uploads/messages/original.jpg'),
+      );
+      expect(
+        page.items.last.mediaThumbnailUrl,
+        endsWith('/uploads/messages/thumbnail.webp'),
+      );
       expect(page.nextCursor, 'cursor-2');
       expect(page.hasMore, isTrue);
     }, () => client);

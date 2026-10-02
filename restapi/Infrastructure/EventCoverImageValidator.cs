@@ -4,8 +4,8 @@ public static class EventCoverImageValidator
 {
     public static void Validate(IFormFile image)
     {
-        if (image.Length is <= 0 or > 2_097_152)
-            throw new ApiException(400, "cover_size_invalid", "活动图片不得超过 2 MB");
+        if (image.Length is <= 0 or > 1_536_000)
+            throw new ApiException(400, "cover_size_invalid", "活动图片压缩后不得超过 1.5 MB");
         if (!string.Equals(image.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
             throw new ApiException(400, "cover_format_invalid", "活动图片仅支持 1280×960 JPEG");
 

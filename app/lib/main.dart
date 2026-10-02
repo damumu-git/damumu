@@ -1861,6 +1861,9 @@ class _EventDetailPageState extends State<EventDetailPage> {
     final e = widget.event;
     final full = e.joined >= e.capacity;
     final cancelled = _detail?['status'] == 'cancelled';
+    final originalCoverUrl = _detail?['cover_original_url']?.toString();
+    final canOpenOriginal =
+        originalCoverUrl != null && originalCoverUrl.isNotEmpty;
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -1890,13 +1893,30 @@ class _EventDetailPageState extends State<EventDetailPage> {
                 ),
                 child: e.coverUrl == null
                     ? Text(e.emoji, style: const TextStyle(fontSize: 84))
-                    : Image.network(
-                        absoluteImageUrl(e.coverUrl!),
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: double.infinity,
-                        errorBuilder: (_, _, _) =>
-                            Text(e.emoji, style: const TextStyle(fontSize: 84)),
+                    : GestureDetector(
+                        onTap: canOpenOriginal
+                            ? () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => ChatImagePreviewPage(
+                                    imageUrl: absoluteImageUrl(
+                                      originalCoverUrl,
+                                    ),
+                                    titleKey: 'eventCoverPreview',
+                                    heroTag: 'event-cover-$originalCoverUrl',
+                                  ),
+                                ),
+                              )
+                            : null,
+                        child: Image.network(
+                          absoluteImageUrl(e.coverUrl!),
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          errorBuilder: (_, _, _) => Text(
+                            e.emoji,
+                            style: const TextStyle(fontSize: 84),
+                          ),
+                        ),
                       ),
               ),
             ),
@@ -4512,7 +4532,8 @@ class _ChatPageState extends State<ChatPage> {
                       pending: message.pending,
                       failed: message.failed,
                       recalled: message.recalledAt != null,
-                      mediaUrl: message.mediaUrl,
+                      mediaUrl: message.mediaThumbnailUrl ?? message.mediaUrl,
+                      mediaPreviewUrl: message.mediaUrl,
                       replyText: message.replyToMessageId == null
                           ? null
                           : (message.replyToBody ??
@@ -4697,7 +4718,7 @@ class _ChatPageState extends State<ChatPage> {
     try {
       final originalBytes = await picked.readAsBytes();
       final bytes = await compressChatImage(originalBytes);
-      if (bytes.length > 5 * 1024 * 1024) {
+      if (bytes.length > chatImageTargetBytes) {
         throw Exception(tooLargeMessage);
       }
       final uploaded = await SocialService.uploadChatImage(
@@ -4997,6 +5018,7 @@ class _Bubble extends StatelessWidget {
     this.failed = false,
     this.recalled = false,
     this.mediaUrl,
+    this.mediaPreviewUrl,
     this.replyText,
     this.onLongPress,
   });
@@ -5007,6 +5029,7 @@ class _Bubble extends StatelessWidget {
   final bool failed;
   final bool recalled;
   final String? mediaUrl;
+  final String? mediaPreviewUrl;
   final String? replyText;
   final VoidCallback? onLongPress;
 
@@ -5064,15 +5087,16 @@ class _Bubble extends StatelessWidget {
                   ),
                 if (mediaUrl != null)
                   GestureDetector(
-                    key: ValueKey('chat-image-$mediaUrl'),
+                    key: ValueKey('chat-image-${mediaPreviewUrl ?? mediaUrl}'),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder: (_) =>
-                            ChatImagePreviewPage(imageUrl: mediaUrl!),
+                        builder: (_) => ChatImagePreviewPage(
+                          imageUrl: mediaPreviewUrl ?? mediaUrl!,
+                        ),
                       ),
                     ),
                     child: Hero(
-                      tag: 'chat-image-$mediaUrl',
+                      tag: 'chat-image-${mediaPreviewUrl ?? mediaUrl}',
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: Image.network(
@@ -5116,9 +5140,16 @@ class _Bubble extends StatelessWidget {
 }
 
 class ChatImagePreviewPage extends StatelessWidget {
-  const ChatImagePreviewPage({required this.imageUrl, super.key});
+  const ChatImagePreviewPage({
+    required this.imageUrl,
+    this.titleKey = 'chatImagePreview',
+    this.heroTag,
+    super.key,
+  });
 
   final String imageUrl;
+  final String titleKey;
+  final String? heroTag;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -5126,7 +5157,7 @@ class ChatImagePreviewPage extends StatelessWidget {
     appBar: AppBar(
       backgroundColor: Colors.black,
       foregroundColor: Colors.white,
-      title: Text(context.tr('chatImagePreview')),
+      title: Text(context.tr(titleKey)),
     ),
     body: SafeArea(
       child: SizedBox.expand(
@@ -5135,7 +5166,7 @@ class ChatImagePreviewPage extends StatelessWidget {
           maxScale: 5,
           child: Center(
             child: Hero(
-              tag: 'chat-image-$imageUrl',
+              tag: heroTag ?? 'chat-image-$imageUrl',
               child: Image.network(
                 imageUrl,
                 fit: BoxFit.contain,

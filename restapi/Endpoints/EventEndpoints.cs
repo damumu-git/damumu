@@ -32,7 +32,9 @@ public static class EventEndpoints
                        e.min_participants, e.capacity, e.approved_count, e.waitlist_count,
                        e.price_min, e.price_max, e.price_amount,
                        e.price_currency, e.city_code, e.district_code, e.language_codes,
-                       e.cover_media_id, CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || cover.storage_key END AS cover_url, e.published_at,
+                       e.cover_media_id,
+                       CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || COALESCE(cover.thumbnail_storage_key, cover.storage_key) END AS cover_url,
+                       e.published_at,
                        c.id AS category_id,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
                        c.icon AS category_icon,
@@ -128,7 +130,9 @@ public static class EventEndpoints
             var viewerId = ApiSupport.GetOptionalUserId(context);
             var item = await db.QueryOneAsync(
                 """
-                SELECT e.*, CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || cover.storage_key END AS cover_url,
+                SELECT e.*,
+                       CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || COALESCE(cover.thumbnail_storage_key, cover.storage_key) END AS cover_url,
+                       CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || cover.storage_key END AS cover_original_url,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
                        c.icon AS category_icon,
                        CASE WHEN e.organizer_user_id=@viewerId OR EXISTS (
@@ -246,25 +250,48 @@ public static class EventEndpoints
             EventCoverImageValidator.Validate(cover);
             var mediaId = Guid.NewGuid();
             var storageKey = $"events/{userId:N}/{mediaId:N}.jpg";
+            var thumbnailStorageKey = $"events/{userId:N}/{mediaId:N}.thumb.webp";
             var path = Path.Combine(environment.ContentRootPath, "uploads", "events",
                 userId.ToString("N"), $"{mediaId:N}.jpg");
+            var thumbnailPath = Path.Combine(environment.ContentRootPath, "uploads", "events",
+                userId.ToString("N"), $"{mediaId:N}.thumb.webp");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             try
             {
                 await using (var output = File.Create(path))
                     await cover.CopyToAsync(output, ct);
+                var thumbnail = await ImageThumbnailService.CreateWebpAsync(
+                    path, thumbnailPath, 640, 480, ct);
                 await db.ExecuteAsync(
                     """
-                    INSERT INTO media_asset (id, owner_user_id, storage_key, mime_type, byte_size, width, height, status)
-                    VALUES (@mediaId, @userId, @storageKey, 'image/jpeg', @byteSize, 1280, 960, 'ready')
-                    """, new { mediaId, userId, storageKey, byteSize = cover.Length }, ct);
+                    INSERT INTO media_asset (
+                        id, owner_user_id, storage_key, mime_type, byte_size, width, height,
+                        thumbnail_storage_key, thumbnail_mime_type, thumbnail_byte_size,
+                        thumbnail_width, thumbnail_height, status)
+                    VALUES (
+                        @mediaId, @userId, @storageKey, 'image/jpeg', @byteSize, 1280, 960,
+                        @thumbnailStorageKey, 'image/webp', @thumbnailByteSize,
+                        @thumbnailWidth, @thumbnailHeight, 'ready')
+                    """, new
+                    {
+                        mediaId, userId, storageKey, byteSize = cover.Length, thumbnailStorageKey,
+                        thumbnailByteSize = thumbnail.ByteSize,
+                        thumbnailWidth = thumbnail.Width,
+                        thumbnailHeight = thumbnail.Height
+                    }, ct);
             }
             catch
             {
                 if (File.Exists(path)) File.Delete(path);
+                if (File.Exists(thumbnailPath)) File.Delete(thumbnailPath);
                 throw;
             }
-            return ApiSupport.Ok(new { coverMediaId = mediaId, coverUrl = $"/uploads/{storageKey}" });
+            return ApiSupport.Ok(new
+            {
+                coverMediaId = mediaId,
+                coverUrl = $"/uploads/{thumbnailStorageKey}",
+                coverOriginalUrl = $"/uploads/{storageKey}"
+            });
         }).DisableAntiforgery();
 
         api.MapDelete("/events/covers/{id:guid}", async (
@@ -272,17 +299,19 @@ public static class EventEndpoints
             CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
-            var deleted = await db.ExecuteAsync(
+            var deleted = await db.QueryOneAsync(
                 """
                 UPDATE media_asset SET deleted_at=now()
                 WHERE id=@id AND owner_user_id=@userId AND deleted_at IS NULL
                   AND NOT EXISTS (SELECT 1 FROM event WHERE cover_media_id=@id AND deleted_at IS NULL)
+                RETURNING storage_key, thumbnail_storage_key
                 """, new { id, userId }, ct);
-            if (deleted == 0)
+            if (deleted is null)
                 throw new ApiException(404, "cover_not_found", "图片不存在或已被活动使用");
-            var path = Path.Combine(environment.ContentRootPath, "uploads", "events",
-                userId.ToString("N"), $"{id:N}.jpg");
-            if (File.Exists(path)) File.Delete(path);
+            ImageThumbnailService.DeleteStoredFile(
+                environment.ContentRootPath, (string?)deleted["storage_key"]);
+            ImageThumbnailService.DeleteStoredFile(
+                environment.ContentRootPath, (string?)deleted["thumbnail_storage_key"]);
             return ApiSupport.Ok(new { id });
         });
 

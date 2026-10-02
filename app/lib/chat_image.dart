@@ -40,19 +40,25 @@ Uint8List _compressChatImage(Uint8List source) {
     }
   }
 
-  final longestOpaqueEdge = opaque.width > opaque.height
-      ? opaque.width
-      : opaque.height;
-  if (longestOpaqueEdge > 1200) {
-    final scale = 1200 / longestOpaqueEdge;
-    opaque = img.copyResize(
-      opaque,
-      width: (opaque.width * scale).round(),
-      height: (opaque.height * scale).round(),
-      interpolation: img.Interpolation.average,
-    );
+  for (final edge in const [1200, 960, 720]) {
+    final longestOpaqueEdge = opaque.width > opaque.height
+        ? opaque.width
+        : opaque.height;
+    if (longestOpaqueEdge > edge) {
+      final scale = edge / longestOpaqueEdge;
+      opaque = img.copyResize(
+        opaque,
+        width: (opaque.width * scale).round(),
+        height: (opaque.height * scale).round(),
+        interpolation: img.Interpolation.average,
+      );
+    }
+    for (final quality in const [58, 50, 42]) {
+      final encoded = img.encodeJpg(opaque, quality: quality);
+      if (encoded.length <= chatImageTargetBytes) return encoded;
+    }
   }
-  return img.encodeJpg(opaque, quality: 58);
+  throw const FormatException('Compressed image exceeds limit');
 }
 
 img.Image _flattenOnWhite(img.Image source) {

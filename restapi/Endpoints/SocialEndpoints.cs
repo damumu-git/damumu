@@ -111,6 +111,7 @@ public static class SocialEndpoints
                        up.nickname AS sender_name, up.avatar_url AS sender_avatar,
                        reply.body AS reply_to_body, reply.recalled_at AS reply_to_recalled_at,
                        CASE WHEN ma.id IS NULL THEN NULL ELSE '/uploads/' || ma.storage_key END AS media_url,
+                       CASE WHEN ma.id IS NULL THEN NULL ELSE '/uploads/' || COALESCE(ma.thumbnail_storage_key, ma.storage_key) END AS media_thumbnail_url,
                        ma.mime_type AS media_mime_type
                 FROM message m
                 LEFT JOIN user_profile up ON up.user_id=m.sender_user_id
@@ -154,15 +155,15 @@ public static class SocialEndpoints
                   AND cm.left_at IS NULL AND c.status='active'
                 """, new { id, userId }, ct);
             if (allowed == 0) throw new ApiException(403, "forbidden", "无权在该会话上传附件");
-            if (image.Length is <= 0 or > 5 * 1024 * 1024)
-                throw new ApiException(400, "invalid_chat_image", "聊天图片需要小于 5 MB");
+            if (image.Length is <= 0 or > 1500 * 1024)
+                throw new ApiException(400, "invalid_chat_image", "聊天图片压缩后需要小于 1.5 MB");
             var mimeType = image.ContentType.ToLowerInvariant();
             var extension = mimeType switch
             {
                 "image/jpeg" => ".jpg",
                 "image/png" => ".png",
                 "image/webp" => ".webp",
-                _ => throw new ApiException(400, "invalid_chat_image", "仅支持 JPEG、PNG 或 WebP 图片")
+                _ => throw new ApiException(400, "invalid_chat_image", "仅支持静态 JPEG、PNG 或 WebP 图片，不支持视频或 Live Photo")
             };
             var header = new byte[12];
             await using (var input = image.OpenReadStream())
@@ -181,24 +182,48 @@ public static class SocialEndpoints
                 throw new ApiException(400, "invalid_chat_image", "图片内容与文件类型不匹配");
             var mediaId = Guid.NewGuid();
             var storageKey = $"messages/{userId:N}/{mediaId:N}{extension}";
+            var thumbnailStorageKey = $"messages/{userId:N}/{mediaId:N}.thumb.webp";
             var path = Path.Combine(environment.ContentRootPath, "uploads", "messages",
                 userId.ToString("N"), $"{mediaId:N}{extension}");
+            var thumbnailPath = Path.Combine(environment.ContentRootPath, "uploads", "messages",
+                userId.ToString("N"), $"{mediaId:N}.thumb.webp");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             try
             {
                 await using (var output = File.Create(path)) await image.CopyToAsync(output, ct);
+                var thumbnail = await ImageThumbnailService.CreateWebpAsync(
+                    path, thumbnailPath, 320, 320, ct);
                 await db.ExecuteAsync(
                     """
-                    INSERT INTO media_asset (id, owner_user_id, storage_key, mime_type, byte_size, status)
-                    VALUES (@mediaId, @userId, @storageKey, @mimeType, @byteSize, 'ready')
-                    """, new { mediaId, userId, storageKey, mimeType, byteSize = image.Length }, ct);
+                    INSERT INTO media_asset (
+                        id, owner_user_id, storage_key, mime_type, byte_size,
+                        thumbnail_storage_key, thumbnail_mime_type, thumbnail_byte_size,
+                        thumbnail_width, thumbnail_height, status)
+                    VALUES (
+                        @mediaId, @userId, @storageKey, @mimeType, @byteSize,
+                        @thumbnailStorageKey, 'image/webp', @thumbnailByteSize,
+                        @thumbnailWidth, @thumbnailHeight, 'ready')
+                    """, new
+                    {
+                        mediaId, userId, storageKey, mimeType, byteSize = image.Length,
+                        thumbnailStorageKey,
+                        thumbnailByteSize = thumbnail.ByteSize,
+                        thumbnailWidth = thumbnail.Width,
+                        thumbnailHeight = thumbnail.Height
+                    }, ct);
             }
             catch
             {
                 if (File.Exists(path)) File.Delete(path);
+                if (File.Exists(thumbnailPath)) File.Delete(thumbnailPath);
                 throw;
             }
-            return ApiSupport.Ok(new { mediaAssetId = mediaId, mediaUrl = $"/uploads/{storageKey}" });
+            return ApiSupport.Ok(new
+            {
+                mediaAssetId = mediaId,
+                mediaUrl = $"/uploads/{storageKey}",
+                mediaThumbnailUrl = $"/uploads/{thumbnailStorageKey}"
+            });
         }).DisableAntiforgery();
 
         api.MapDelete("/conversations/{id:guid}/media/{mediaId:guid}", async (
@@ -211,13 +236,13 @@ public static class SocialEndpoints
                 UPDATE media_asset SET deleted_at=now()
                 WHERE id=@mediaId AND owner_user_id=@userId AND deleted_at IS NULL
                   AND NOT EXISTS (SELECT 1 FROM message WHERE media_asset_id=@mediaId AND deleted_at IS NULL)
-                RETURNING storage_key
+                RETURNING storage_key, thumbnail_storage_key
                 """, new { mediaId, userId }, ct);
             if (asset is null) return Results.NoContent();
-            var relative = ((string)asset["storage_key"]!).Replace('/', Path.DirectorySeparatorChar);
-            var path = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "uploads", relative));
-            var uploads = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "uploads"));
-            if (path.StartsWith(uploads, StringComparison.OrdinalIgnoreCase) && File.Exists(path)) File.Delete(path);
+            ImageThumbnailService.DeleteStoredFile(
+                environment.ContentRootPath, (string?)asset["storage_key"]);
+            ImageThumbnailService.DeleteStoredFile(
+                environment.ContentRootPath, (string?)asset["thumbnail_storage_key"]);
             return Results.NoContent();
         });
 

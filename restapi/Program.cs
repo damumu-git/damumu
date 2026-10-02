@@ -63,7 +63,12 @@ app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSecond
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(uploadsRoot),
-    RequestPath = "/uploads"
+    RequestPath = "/uploads",
+    OnPrepareResponse = context =>
+    {
+        context.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
+        context.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    }
 });
 app.MapOpenApi();
 

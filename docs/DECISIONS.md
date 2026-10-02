@@ -16,6 +16,7 @@
 | ADR-016 | 活动群聊成员跟随有效参与状态 | 已采用 | 2026-09-21 |
 | ADR-017 | REST 存储、WebSocket 实时同步与 FCM 后台推送 | 已采用 | 2026-09-21 |
 | ADR-018 | 聊天可靠发送、生命周期与跨实例事件转发 | 已采用 | 2026-10-01 |
+| ADR-019 | 图片缩略图、不可变缓存与流量升级阈值 | 已采用 | 2026-10-02 |
 | ADR-008 | 用户位置标签跟随 App 语言 | 已采用 | 2026-09-07 |
 | ADR-009 | 活动容量包含组织者 | 已采用 | 2026-09-08 |
 | ADR-010 | 远端业务数据库使用 damumu 名称 | 已采用 | 2026-09-11 |
@@ -540,3 +541,33 @@ offset 会随列表头部插入/删除发生位置偏移；创建时间与 UUID 
 - `restapi/Infrastructure/ConversationLifecycleService.cs`
 - `restapi/Endpoints/SocialEndpoints.cs`
 - `app/lib/social_service.dart`、`app/lib/main.dart`
+
+## ADR-019：图片缩略图、不可变缓存与流量升级阈值
+
+状态：已采用
+日期：2026-10-02
+
+### 决定
+
+- 新活动封面和聊天图片在保留原图的同时，由 API 生成 WebP 缩略图；活动使用最长边 640px，聊天使用最长边 320px，缩略图目标范围为 50–200 KB，强制上限 200 KB。
+- 活动列表、聊天记录和图片气泡默认返回并加载缩略图。只有用户主动打开大图预览时，客户端才请求原图。历史媒体没有缩略图时回退原图，避免迁移后内容失效。
+- 本地媒体使用 UUID 文件名且禁止覆盖，`/uploads` 使用一年 `Cache-Control: public, immutable`。媒体发生变化时创建新资产 URL。
+- 当前只接受静态 JPEG、PNG 和 WebP 图片，不增加视频或 Live Photo 的上传、下载和转码链路。
+- 每月出站流量达到 2 TB 时，结合缓存命中率、源站带宽和运营成本评估对象存储/CDN；达到阈值不自动改变基础设施。
+
+### 原因
+
+列表滚动和聊天历史会重复显示大量图片，缩略图与浏览器长期缓存能直接减少 API 服务器的出站流量。保留按需原图保证查看体验，同时避免现阶段承担视频的带宽与转码成本。
+
+### 影响
+
+- 所有数据库环境需应用 `019_media_thumbnails.sql`。
+- 本地文件目录仍是单实例部署方案；采用多 API 实例或达到流量阈值后，需要把原图与缩略图迁移到共享对象存储，并保持不可变 URL 合约。
+
+### 相关位置
+
+- `restapi/Migrations/019_media_thumbnails.sql`
+- `restapi/Infrastructure/ImageThumbnailService.cs`
+- `restapi/Endpoints/EventEndpoints.cs`
+- `restapi/Endpoints/SocialEndpoints.cs`
+- `app/lib/main.dart`、`app/lib/social_service.dart`

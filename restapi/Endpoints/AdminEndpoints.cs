@@ -202,7 +202,7 @@ public static class AdminEndpoints
                        p.address_public, up.nickname AS organizer_name,
                        up.avatar_url AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_trust_score,
-                       CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || cover.storage_key END AS cover_url,
+                       CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || COALESCE(cover.thumbnail_storage_key, cover.storage_key) END AS cover_url,
                        (SELECT count(*) FROM report r
                         WHERE r.target_type IN ('event','activity') AND r.target_id=e.id) AS report_count
                 FROM event e
