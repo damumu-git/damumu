@@ -188,8 +188,8 @@ flutter run -d chrome --web-port 3000 `
 ```
 
 Android、iOS 和 Web 的 Firebase App ID 各不相同，但可以属于同一个 Firebase 项目。
-iOS 工程已启用 Push Notifications、Background fetch 和 Remote notifications；Firebase
-控制台仍须上传 Apple Developer 账号生成的 APNs `.p8` 密钥。Web
+iOS 工程已启用 Push Notifications、Background fetch 和 Remote notifications，APNs
+Authentication Key 也已上传到 Firebase Cloud Messaging。Web
 后台通知须按 Firebase 文档提供 `web/firebase-messaging-sw.js`。服务账号 JSON、VAPID 私钥及
 其他秘密不得写进 Git；上述客户端 Firebase 配置和 VAPID 公钥不是服务端凭据。
 

@@ -31,9 +31,9 @@
 
 ## 接下来做什么
 
-- 重启 API 并更新 App 后，使用组织者和已入群成员账号验收头像图片缩放、取消活动以及跨账号通知；Firebase 未配置时后台推送仍不可用。
+- 重启 API 并更新 App 后，使用组织者和已入群成员账号验收头像图片缩放、取消活动以及跨账号通知；移动端 Firebase 已配置，待具备 Android SDK 或 macOS/Xcode 真机环境后验证后台推送。
 
-1. 配置 Firebase 项目、各平台 App、Web VAPID Key 与 API 服务器 Application Default Credentials，应用 `015_push_devices.sql`；然后使用多个浏览器会话登录 DEMO 账号，验证实时未读、活动群聊、私信、审批后的群聊资格和前后台推送。
+1. 生产服务器部署 Firebase Application Default Credentials；如果需要 Web 后台推送，再配置 Web App、VAPID Key 和 `firebase-messaging-sw.js`。移动端在具备 Android SDK 或 macOS/Xcode 真机环境后验证 FCM Token 注册及前后台推送。
 2. 在真实活动列表中刷新 App，确认“过去活动”标记和报名按钮状态。其他数据库环境部署时须按顺序应用 `010`、`011`、`012`。
 3. 将 Flutter 的 `EventItem.id` 从整数/hash 完整改成数据库 UUID 字符串，移除当前兼容字段。
 4. 完成候补递补和组织者完整成员管理。
@@ -43,7 +43,7 @@
 
 - 2026-10-01 聊天升级通过 API 零警告编译、游标和策略自动化检查、Flutter 静态分析与聊天页面测试。开发 PostgreSQL 中的独立临时 schema 已验证事务发送、重复请求去重、通知不重复、举报上下文快照和只读限制，并在测试后删除；真实业务消息未被测试修改。聊天图片当前仍使用 API 本地目录，多实例部署前需要共享对象存储。
 - 2026-10-02 聊天图片来源菜单、设备端压缩、损坏图片兜底和缩放预览通过 Flutter 静态分析及 11 项相关回归测试。
-- 2026-10-02 Firebase 原生客户端配置已接入 `damumu-app`：Android 与 iOS 应用标识统一为 `com.damumu.damu`，Android 使用 Google Services Gradle 插件，iOS 已绑定配置资源并启用推送和后台远程通知能力。服务端发送仍需部署环境提供 Firebase 服务账号，iOS 还需在 Firebase 控制台上传 APNs 密钥。
+- 2026-10-02 Firebase 原生客户端配置已接入 `damumu-app`：Android 与 iOS 应用标识统一为 `com.damumu.damu`，Android 使用 Google Services Gradle 插件，iOS 已绑定配置资源并启用推送和后台远程通知能力；APNs Authentication Key 已上传 Firebase Cloud Messaging。
 - 2026-10-02 本地 Firebase Admin 服务账号已保存到 Git 忽略的 `.dev-data`，开发启动脚本会自动注入凭据；生产部署仍需在服务器单独配置同一项目的服务账号。
 
 - 2026-10-01 Admin 活动申请审批通过前端 ESLint、Vite 生产构建、API 零警告编译及现有 API 自动化检查。审批按钮仅对待审核成员显示；尚未使用真实申请执行管理员审批联调，以避免改变开发数据库中的演示申请状态。
@@ -56,7 +56,7 @@
 - 搜索、分类和日期筛选仍仅覆盖已加载页面，尚不是服务端全量筛选。
 - Flutter 的活动模型仍保留旧整数/hash ID 供现有页面键值使用，同时以 `apiId` 承载详情及参与 API 的 UUID。
 - 用户令牌和管理员静态 API Key 仍属开发阶段方案；头像文件使用 API 本地目录。
-- 本地 Firebase Admin 已配置；生产服务器尚需单独部署服务账号，iOS 还需上传 APNs 密钥。缺少这些外部配置时 FCM 自动停用，但站内通知、前台 WebSocket 和 PostgreSQL 跨实例事件转发不受影响。统计和部分安全治理 UI 仍含演示数据或占位说明。
+- 本地 Firebase Admin 与 iOS APNs 已配置；生产服务器尚需单独部署服务账号，Android/iOS 重新构建和真机推送验证保留为环境验收项。缺少生产凭据时 FCM 自动停用，但站内通知、前台 WebSocket 和 PostgreSQL 跨实例事件转发不受影响。统计和部分安全治理 UI 仍含演示数据或占位说明。
 - 其他数据库环境仍须按顺序应用 `013_notifications_event_chat.sql` 至 `018_chat_reliability.sql`；`014` 修复活动与组织者成员在同一 SQL 语句创建时，成员触发器看不到新群聊的问题。
 - 原有注册 Golden 测试引用 macOS 专用字体路径，在 Windows 上不能通过；不要仅为通过测试更新快照。
 - 加载失败状态在窄面板中改为紧凑重试按钮，避免文字按钮横向溢出。
