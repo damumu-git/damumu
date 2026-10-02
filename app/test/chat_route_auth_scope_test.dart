@@ -62,6 +62,14 @@ void main() {
       await tester.pump();
       expect(find.text('还没有消息，打个招呼吧'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      await tester.tap(find.byIcon(Icons.add_circle_outline));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text('拍摄照片'), findsOneWidget);
+      expect(find.text('从相册选择'), findsOneWidget);
+      await tester.tap(find.text('从相册选择'));
+      await tester.pump();
     }, () => client);
   });
 }

@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'auth.dart';
 import 'activity_interactions.dart';
 import 'category_service.dart';
+import 'chat_image.dart';
 import 'event_service.dart';
 import 'feedback.dart';
 import 'feedback_model.dart';
@@ -4563,7 +4564,7 @@ class _ChatPageState extends State<ChatPage> {
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: _sending ? null : _pickChatImage,
+                    onPressed: _sending ? null : _chooseChatImageSource,
                     icon: const Icon(Icons.add_circle_outline),
                   ),
                   Expanded(
@@ -4649,37 +4650,62 @@ class _ChatPageState extends State<ChatPage> {
     if (mounted) setState(() => _sending = false);
   }
 
-  Future<void> _pickChatImage() async {
+  Future<void> _chooseChatImageSource() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(context.tr('takePhoto')),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(context.tr('chooseFromGallery')),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source != null && mounted) await _pickChatImage(source);
+  }
+
+  Future<void> _pickChatImage(ImageSource source) async {
     final token = AuthScope.of(context).token;
     if (token == null || _sending) return;
     final tooLargeMessage = context.tr('chatImageTooLarge');
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 82,
-      maxWidth: 1600,
-    );
+    final processFailedMessage = context.tr('chatImageProcessFailed');
+    XFile? picked;
+    try {
+      picked = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 90,
+        maxWidth: 2400,
+        maxHeight: 2400,
+      );
+    } catch (_) {
+      if (mounted) _showMessageError(context, processFailedMessage);
+      return;
+    }
     if (picked == null || !mounted) return;
     setState(() => _sending = true);
     String? uploadedMediaId;
     try {
-      final bytes = await picked.readAsBytes();
+      final originalBytes = await picked.readAsBytes();
+      final bytes = await compressChatImage(originalBytes);
       if (bytes.length > 5 * 1024 * 1024) {
         throw Exception(tooLargeMessage);
       }
-      final filename = picked.name.toLowerCase();
-      final mimeType =
-          picked.mimeType ??
-          (filename.endsWith('.png')
-              ? 'image/png'
-              : filename.endsWith('.webp')
-              ? 'image/webp'
-              : 'image/jpeg');
       final uploaded = await SocialService.uploadChatImage(
         token,
         widget.conversation.id,
         bytes,
-        picked.name,
-        mimeType,
+        'chat-${DateTime.now().millisecondsSinceEpoch}.jpg',
+        'image/jpeg',
       );
       uploadedMediaId = uploaded['mediaAssetId'];
       await SocialService.sendMessage(
@@ -4691,6 +4717,8 @@ class _ChatPageState extends State<ChatPage> {
       );
       uploadedMediaId = null;
       await _load(showProgress: false);
+    } on FormatException {
+      if (mounted) _showMessageError(context, processFailedMessage);
     } catch (error) {
       if (uploadedMediaId != null) {
         try {
@@ -5035,17 +5063,29 @@ class _Bubble extends StatelessWidget {
                     ),
                   ),
                 if (mediaUrl != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      mediaUrl!,
-                      width: 220,
-                      height: 165,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const SizedBox(
-                        width: 220,
-                        height: 80,
-                        child: Icon(Icons.broken_image_outlined),
+                  GestureDetector(
+                    key: ValueKey('chat-image-$mediaUrl'),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            ChatImagePreviewPage(imageUrl: mediaUrl!),
+                      ),
+                    ),
+                    child: Hero(
+                      tag: 'chat-image-$mediaUrl',
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          mediaUrl!,
+                          width: 220,
+                          height: 165,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const SizedBox(
+                            width: 220,
+                            height: 80,
+                            child: Icon(Icons.broken_image_outlined),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -5071,6 +5111,47 @@ class _Bubble extends StatelessWidget {
           ),
         ),
       ],
+    ),
+  );
+}
+
+class ChatImagePreviewPage extends StatelessWidget {
+  const ChatImagePreviewPage({required this.imageUrl, super.key});
+
+  final String imageUrl;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.black,
+    appBar: AppBar(
+      backgroundColor: Colors.black,
+      foregroundColor: Colors.white,
+      title: Text(context.tr('chatImagePreview')),
+    ),
+    body: SafeArea(
+      child: SizedBox.expand(
+        child: InteractiveViewer(
+          minScale: 0.8,
+          maxScale: 5,
+          child: Center(
+            child: Hero(
+              tag: 'chat-image-$imageUrl',
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                loadingBuilder: (_, child, progress) => progress == null
+                    ? child
+                    : const Center(child: CircularProgressIndicator()),
+                errorBuilder: (_, _, _) => const Icon(
+                  Icons.broken_image_outlined,
+                  color: Colors.white70,
+                  size: 64,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     ),
   );
 }

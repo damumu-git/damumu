@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>用于拍摄并设置个人头像</string>
+	<string>用于拍摄聊天图片、活动图片和个人头像</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>用于显示你所在的地区并推荐附近活动</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>用于从相册选择个人头像</string>
+	<string>用于从相册选择聊天图片、活动图片和个人头像</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
