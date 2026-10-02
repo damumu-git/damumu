@@ -167,6 +167,10 @@ $env:GOOGLE_APPLICATION_CREDENTIALS = 'C:\安全目录\firebase-service-account.
 ./dev.ps1 --services
 ```
 
+本地开发也可把服务账号保存为仓库根目录下的
+`.dev-data/firebase-service-account.json`；该目录已被 Git 忽略，`dev.ps1` 会在没有显式设置
+`GOOGLE_APPLICATION_CREDENTIALS` 时自动使用它。部署环境仍应通过主机密钥存储或环境变量提供。
+
 Android 已从 `android/app/google-services.json` 读取配置，iOS 已从
 `ios/Runner/GoogleService-Info.plist` 读取配置；两个原生平台不需要额外传 Firebase
 `--dart-define`。Web 仍需要对应 Web App 的公开配置和 VAPID 公钥：

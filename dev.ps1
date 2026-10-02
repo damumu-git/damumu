@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = $PSScriptRoot
 $logDirectory = Join-Path $repositoryRoot '.dev-logs'
+$localFirebaseCredential = Join-Path $repositoryRoot '.dev-data/firebase-service-account.json'
 $apiPort = if ($env:API_PORT) { $env:API_PORT } else { '8080' }
 $adminPort = if ($env:ADMIN_PORT) { $env:ADMIN_PORT } else { '5173' }
 $apiBaseUrl = if ($env:API_BASE_URL) {
@@ -151,12 +152,17 @@ $previousAspNetEnvironment = $env:ASPNETCORE_ENVIRONMENT
 $previousAspNetUrls = $env:ASPNETCORE_URLS
 $previousViteApiBase = $env:VITE_API_BASE
 $previousDatabaseConnection = $env:ConnectionStrings__Muda
+$previousGoogleApplicationCredentials = $env:GOOGLE_APPLICATION_CREDENTIALS
 
 try {
     Write-Host "启动 REST API：http://localhost:$apiPort/api/v1"
     $env:ASPNETCORE_ENVIRONMENT = 'Development'
     $env:ASPNETCORE_URLS = "http://localhost:$apiPort"
     $env:ConnectionStrings__Muda = $databaseConnection
+    if ([string]::IsNullOrWhiteSpace($env:GOOGLE_APPLICATION_CREDENTIALS) -and
+        (Test-Path -LiteralPath $localFirebaseCredential)) {
+        $env:GOOGLE_APPLICATION_CREDENTIALS = $localFirebaseCredential
+    }
     $apiProcess = Start-Process -FilePath $dotnet -WindowStyle Hidden -PassThru `
         -WorkingDirectory (Join-Path $repositoryRoot 'restapi') `
         -ArgumentList @('run', '--no-launch-profile') `
@@ -164,6 +170,7 @@ try {
     $env:ASPNETCORE_ENVIRONMENT = $previousAspNetEnvironment
     $env:ASPNETCORE_URLS = $previousAspNetUrls
     $env:ConnectionStrings__Muda = $previousDatabaseConnection
+    $env:GOOGLE_APPLICATION_CREDENTIALS = $previousGoogleApplicationCredentials
 
     Write-Host "启动 Admin：http://localhost:$adminPort"
     $env:VITE_API_BASE = "http://localhost:$apiPort/api/v1"
@@ -205,6 +212,7 @@ try {
     $env:ASPNETCORE_URLS = $previousAspNetUrls
     $env:VITE_API_BASE = $previousViteApiBase
     $env:ConnectionStrings__Muda = $previousDatabaseConnection
+    $env:GOOGLE_APPLICATION_CREDENTIALS = $previousGoogleApplicationCredentials
     Write-Host '正在停止 DAMUMU 开发服务…'
     try {
         if (Test-Path -LiteralPath $processFile) {

@@ -27,6 +27,7 @@ public sealed class PushNotificationService
                 ProjectId = projectId
             }, "damumu-push");
             _messaging = FirebaseMessaging.GetMessaging(app);
+            logger.LogInformation("Firebase push initialized for project {ProjectId}", projectId);
         }
         catch (Exception exception)
         {

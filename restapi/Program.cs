@@ -68,10 +68,10 @@ app.UseStaticFiles(new StaticFileOptions
 app.MapOpenApi();
 
 var api = app.MapGroup("/api/v1");
-api.MapGet("/health", async (Db db, CancellationToken ct) =>
+api.MapGet("/health", async (Db db, PushNotificationService push, CancellationToken ct) =>
 {
     var databaseTime = await db.ScalarAsync<DateTime>("SELECT now()", cancellationToken: ct);
-    return ApiSupport.Ok(new { status = "healthy", databaseTime });
+    return ApiSupport.Ok(new { status = "healthy", databaseTime, pushConfigured = push.IsConfigured });
 });
 
 api.MapCatalogEndpoints();

@@ -1,9 +1,27 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Muda.Api.Infrastructure;
 
 CancellationChecks.ValidateReasons();
 FeedbackChecks.Validate();
+if (args.FirstOrDefault() == "--firebase-check")
+{
+    var configuration = new ConfigurationBuilder()
+        .AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Firebase:ProjectId"] = "damumu-app"
+        })
+        .Build();
+    using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+    var push = new PushNotificationService(
+        configuration,
+        loggerFactory.CreateLogger<PushNotificationService>());
+    if (!push.IsConfigured) throw new Exception("Firebase Admin initialization failed");
+    Console.WriteLine("PASS: Firebase Admin service account initialized for damumu-app");
+    return;
+}
 if (args.FirstOrDefault() == "--chat-db")
 {
     await ChatChecks.RunDatabase();
