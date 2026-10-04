@@ -345,6 +345,8 @@ typedef ActivityPageLoader =
     Future<ActivityPage> Function({
       double? latitude,
       double? longitude,
+      String? city,
+      String? district,
       required int limit,
       String? cursor,
     });
@@ -381,6 +383,8 @@ class _AppShellState extends State<AppShell> {
   final Set<String> _loadedEventIds = {};
   double? _latitude;
   double? _longitude;
+  String? _cityCode;
+  String? _districtCode;
   StreamSubscription<RealtimeEvent>? _realtimeSubscription;
   StreamSubscription<void>? _pushSubscription;
 
@@ -495,6 +499,8 @@ class _AppShellState extends State<AppShell> {
       final page = await (widget.eventLoader ?? EventService.list)(
         latitude: _latitude,
         longitude: _longitude,
+        city: _cityCode,
+        district: _districtCode,
         limit: _pageSize,
         cursor: _nextEventCursor,
       );
@@ -619,13 +625,15 @@ class _AppShellState extends State<AppShell> {
 
   void _locationChanged(AppLocation location) {
     final changed =
-        _latitude == null ||
-        _longitude == null ||
-        (_latitude! - location.latitude).abs() > .0001 ||
-        (_longitude! - location.longitude).abs() > .0001;
+        _latitude != location.latitude ||
+        _longitude != location.longitude ||
+        _cityCode != location.cityCode ||
+        _districtCode != location.districtCode;
     if (!changed) return;
     _latitude = location.latitude;
     _longitude = location.longitude;
+    _cityCode = location.cityCode;
+    _districtCode = location.districtCode;
     _loadEvents();
   }
 
@@ -873,6 +881,7 @@ class _HomePageState extends State<HomePage> {
   String _locationLabel = '正在定位…';
   bool _locating = true;
   bool _hasResolvedLocation = false;
+  bool _manualLocation = false;
   String? _locationLanguage;
 
   @override
@@ -881,7 +890,7 @@ class _HomePageState extends State<HomePage> {
     final language = Localizations.localeOf(context).languageCode;
     if (_locationLanguage == language) return;
     _locationLanguage = language;
-    _locate(forceRefresh: true);
+    _restoreLocation();
   }
 
   @override
@@ -965,7 +974,64 @@ class _HomePageState extends State<HomePage> {
     setState(_selectedFilters.clear);
   }
 
-  Future<void> _locate({bool forceRefresh = false}) async {
+  Future<void> _restoreLocation() async {
+    final saved = await _locationService.readManualRegion();
+    if (!mounted || saved == null) {
+      if (mounted) await _locate(forceRefresh: true, offerManual: true);
+      return;
+    }
+    try {
+      final regions = await RegionService.load();
+      if (!mounted) return;
+      final location = _manualAppLocation(saved, regions);
+      if (location == null) {
+        await _locationService.clearManualRegion();
+        await _locate(forceRefresh: true, offerManual: true);
+        return;
+      }
+      _applyLocation(location);
+    } catch (_) {
+      if (mounted) await _locate(forceRefresh: true, offerManual: true);
+    }
+  }
+
+  AppLocation? _manualAppLocation(
+    ManualRegionSelection selection,
+    List<AdministrativeRegion> regions,
+  ) {
+    AdministrativeRegion? city;
+    AdministrativeRegion? district;
+    for (final region in regions) {
+      if (region.code == selection.cityCode && region.level == 1) city = region;
+      if (region.code == selection.districtCode) district = region;
+    }
+    if (city == null) return null;
+    final language = _locationLanguage ?? 'zh';
+    final label = [
+      city.displayName(language),
+      if (district != null) district.displayName(language),
+    ].join(' · ');
+    return AppLocation(
+      label: label,
+      cityCode: city.code,
+      districtCode: district?.code,
+    );
+  }
+
+  void _applyLocation(AppLocation location) {
+    setState(() {
+      _locationLabel = location.label;
+      _hasResolvedLocation = true;
+      _manualLocation = location.isManual;
+      _locating = false;
+    });
+    widget.onLocationChanged?.call(location);
+  }
+
+  Future<void> _locate({
+    bool forceRefresh = false,
+    bool offerManual = false,
+  }) async {
     setState(() {
       _locating = true;
       if (forceRefresh) {
@@ -979,20 +1045,91 @@ class _HomePageState extends State<HomePage> {
         forceRefresh: forceRefresh,
       );
       if (!mounted) return;
-      setState(() {
-        _locationLabel = location.label;
-        _hasResolvedLocation = true;
-      });
-      widget.onLocationChanged?.call(location);
+      await _locationService.clearManualRegion();
+      if (!mounted) return;
+      _applyLocation(location);
     } on LocationFailure catch (error) {
       if (!mounted) return;
       setState(() => _locationLabel = error.message);
+      if (offerManual) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _chooseManualLocation();
+        });
+      }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _locationLabel = '定位失败，点击重试');
+      setState(() => _locationLabel = context.tr('locationFailed'));
+      if (offerManual) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _chooseManualLocation();
+        });
+      }
     } finally {
       if (mounted) setState(() => _locating = false);
     }
+  }
+
+  Future<void> _showLocationOptions() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.my_location),
+              title: Text(context.tr('useAutomaticLocation')),
+              onTap: () => Navigator.pop(context, 'automatic'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.map_outlined),
+              title: Text(context.tr('chooseLocationManually')),
+              onTap: () => Navigator.pop(context, 'manual'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'automatic') {
+      await _locate(forceRefresh: true, offerManual: true);
+    } else if (action == 'manual') {
+      await _chooseManualLocation();
+    }
+  }
+
+  Future<void> _chooseManualLocation() async {
+    List<AdministrativeRegion> regions;
+    try {
+      regions = await RegionService.load();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('regionsLoadFailed'))));
+      return;
+    }
+    if (!mounted) return;
+    final saved = await _locationService.readManualRegion();
+    if (!mounted) return;
+    final selection = await showModalBottomSheet<ManualRegionSelection>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _ManualLocationSheet(
+        regions: regions,
+        languageCode: _locationLanguage ?? 'zh',
+        initialSelection: saved,
+      ),
+    );
+    if (!mounted || selection == null) return;
+    final location = _manualAppLocation(selection, regions);
+    if (location == null) return;
+    await _locationService.saveManualRegion(selection);
+    if (!mounted) return;
+    _applyLocation(location);
   }
 
   @override
@@ -1012,9 +1149,7 @@ class _HomePageState extends State<HomePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           InkWell(
-                            onTap: _locating
-                                ? null
-                                : () => _locate(forceRefresh: true),
+                            onTap: _locating ? null : _showLocationOptions,
                             borderRadius: BorderRadius.circular(8),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 3),
@@ -1031,10 +1166,12 @@ class _HomePageState extends State<HomePage> {
                                       ),
                                     )
                                   else
-                                    const Padding(
+                                    Padding(
                                       padding: EdgeInsets.only(right: 5),
                                       child: Icon(
-                                        Icons.my_location,
+                                        _manualLocation
+                                            ? Icons.location_on_outlined
+                                            : Icons.my_location,
                                         size: 15,
                                         color: _green,
                                       ),
@@ -1050,7 +1187,7 @@ class _HomePageState extends State<HomePage> {
                                     ),
                                   ),
                                   const SizedBox(width: 3),
-                                  const Icon(Icons.refresh, size: 14),
+                                  const Icon(Icons.expand_more, size: 16),
                                 ],
                               ),
                             ),
@@ -1281,6 +1418,122 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
+
+class _ManualLocationSheet extends StatefulWidget {
+  const _ManualLocationSheet({
+    required this.regions,
+    required this.languageCode,
+    this.initialSelection,
+  });
+
+  final List<AdministrativeRegion> regions;
+  final String languageCode;
+  final ManualRegionSelection? initialSelection;
+
+  @override
+  State<_ManualLocationSheet> createState() => _ManualLocationSheetState();
+}
+
+class _ManualLocationSheetState extends State<_ManualLocationSheet> {
+  String? _cityCode;
+  String? _districtCode;
+
+  List<AdministrativeRegion> get _cities =>
+      widget.regions.where((region) => region.level == 1).toList();
+
+  List<AdministrativeRegion> get _districts =>
+      widget.regions.where((region) => region.parentCode == _cityCode).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    final cities = _cities;
+    final initialCity = widget.initialSelection?.cityCode;
+    _cityCode = cities.any((city) => city.code == initialCity)
+        ? initialCity
+        : (cities.isEmpty ? null : cities.first.code);
+    final districts = _districts;
+    final initialDistrict = widget.initialSelection?.districtCode;
+    _districtCode =
+        districts.any((district) => district.code == initialDistrict)
+        ? initialDistrict
+        : (districts.isEmpty ? null : districts.first.code);
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(
+        24,
+        0,
+        24,
+        24 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            context.tr('chooseLocationManually'),
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            context.tr('manualLocationHint'),
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 20),
+          DropdownButtonFormField<String>(
+            initialValue: _cityCode,
+            decoration: InputDecoration(labelText: context.tr('city')),
+            items: _cities
+                .map(
+                  (city) => DropdownMenuItem(
+                    value: city.code,
+                    child: Text(city.displayName(widget.languageCode)),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) => setState(() {
+              _cityCode = value;
+              final districts = _districts;
+              _districtCode = districts.isEmpty ? null : districts.first.code;
+            }),
+          ),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<String>(
+            key: ValueKey(_cityCode),
+            initialValue: _districtCode,
+            decoration: InputDecoration(labelText: context.tr('district')),
+            items: _districts
+                .map(
+                  (district) => DropdownMenuItem(
+                    value: district.code,
+                    child: Text(district.displayName(widget.languageCode)),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) => setState(() => _districtCode = value),
+          ),
+          const SizedBox(height: 22),
+          FilledButton.icon(
+            onPressed: _cityCode == null
+                ? null
+                : () => Navigator.pop(
+                    context,
+                    ManualRegionSelection(
+                      cityCode: _cityCode!,
+                      districtCode: _districtCode,
+                    ),
+                  ),
+            icon: const Icon(Icons.check),
+            label: Text(context.tr('useSelectedLocation')),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class FilterChipLabel extends StatelessWidget {

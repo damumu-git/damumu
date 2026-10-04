@@ -56,6 +56,8 @@ void main() {
       await mount(tester, ({
         latitude,
         longitude,
+        city,
+        district,
         required limit,
         cursor,
       }) async {
@@ -84,7 +86,14 @@ void main() {
   testWidgets('refresh supersedes an in-flight next page', (tester) async {
     final pending = Completer<ActivityPage>();
     final calls = <String?>[];
-    await mount(tester, ({latitude, longitude, required limit, cursor}) {
+    await mount(tester, ({
+      latitude,
+      longitude,
+      city,
+      district,
+      required limit,
+      cursor,
+    }) {
       calls.add(cursor);
       if (cursor != null) return pending.future;
       return Future.value(

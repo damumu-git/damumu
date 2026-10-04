@@ -6,14 +6,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AppLocation {
   const AppLocation({
-    required this.latitude,
-    required this.longitude,
+    this.latitude,
+    this.longitude,
     required this.label,
+    this.cityCode,
+    this.districtCode,
   });
 
-  final double latitude;
-  final double longitude;
+  final double? latitude;
+  final double? longitude;
   final String label;
+  final String? cityCode;
+  final String? districtCode;
+
+  bool get isManual => cityCode != null;
+}
+
+class ManualRegionSelection {
+  const ManualRegionSelection({required this.cityCode, this.districtCode});
+
+  final String cityCode;
+  final String? districtCode;
 }
 
 class LocationService {
@@ -25,6 +38,38 @@ class LocationService {
   static const _cacheLifetime = Duration(minutes: 30);
 
   final http.Client _client;
+
+  static const _manualCityKey = 'manual_location_city_v1';
+  static const _manualDistrictKey = 'manual_location_district_v1';
+
+  Future<ManualRegionSelection?> readManualRegion() async {
+    final preferences = await SharedPreferences.getInstance();
+    final cityCode = preferences.getString(_manualCityKey);
+    if (cityCode == null || cityCode.isEmpty) return null;
+    return ManualRegionSelection(
+      cityCode: cityCode,
+      districtCode: preferences.getString(_manualDistrictKey),
+    );
+  }
+
+  Future<void> saveManualRegion(ManualRegionSelection selection) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_manualCityKey, selection.cityCode);
+    final districtCode = selection.districtCode;
+    if (districtCode == null || districtCode.isEmpty) {
+      await preferences.remove(_manualDistrictKey);
+    } else {
+      await preferences.setString(_manualDistrictKey, districtCode);
+    }
+  }
+
+  Future<void> clearManualRegion() async {
+    final preferences = await SharedPreferences.getInstance();
+    await Future.wait([
+      preferences.remove(_manualCityKey),
+      preferences.remove(_manualDistrictKey),
+    ]);
+  }
 
   Future<AppLocation> locate({
     required String languageCode,
@@ -158,11 +203,11 @@ class LocationService {
     await Future.wait([
       preferences.setDouble(
         _cacheKey('latitude', languageCode),
-        location.latitude,
+        location.latitude!,
       ),
       preferences.setDouble(
         _cacheKey('longitude', languageCode),
-        location.longitude,
+        location.longitude!,
       ),
       preferences.setString(_cacheKey('label', languageCode), location.label),
       preferences.setInt(

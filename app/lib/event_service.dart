@@ -68,6 +68,8 @@ class AdministrativeRegion {
     required this.code,
     required this.level,
     required this.nameZhCn,
+    required this.nameKoKr,
+    required this.nameEnUs,
     this.parentCode,
   });
 
@@ -75,6 +77,14 @@ class AdministrativeRegion {
   final String? parentCode;
   final int level;
   final String nameZhCn;
+  final String nameKoKr;
+  final String nameEnUs;
+
+  String displayName(String languageCode) => switch (languageCode) {
+    'ko' when nameKoKr.trim().isNotEmpty => nameKoKr,
+    'en' when nameEnUs.trim().isNotEmpty => nameEnUs,
+    _ => nameZhCn,
+  };
 
   factory AdministrativeRegion.fromJson(Map<String, dynamic> json) =>
       AdministrativeRegion(
@@ -82,6 +92,8 @@ class AdministrativeRegion {
         parentCode: json['parent_code'] as String?,
         level: json['level'] as int,
         nameZhCn: json['name_zh_cn'] as String,
+        nameKoKr: json['name_ko_kr'] as String? ?? '',
+        nameEnUs: json['name_en_us'] as String? ?? '',
       );
 }
 
@@ -309,6 +321,8 @@ class EventService {
   static Future<ActivityPage> list({
     double? latitude,
     double? longitude,
+    String? city,
+    String? district,
     int radiusMeters = 10000,
     int limit = 20,
     String? cursor,
@@ -324,6 +338,8 @@ class EventService {
         'radiusMeters': radiusMeters.toString(),
       });
     }
+    if (city != null && city.isNotEmpty) query['city'] = city;
+    if (district != null && district.isNotEmpty) query['district'] = district;
     final response = await http
         .get(Uri.parse('$_apiBase/activities').replace(queryParameters: query))
         .timeout(const Duration(seconds: 10));
