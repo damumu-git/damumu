@@ -23,7 +23,7 @@ void main() {
     expect(await service.readManualRegion(), isNull);
   });
 
-  test('administrative region uses the app language with Chinese fallback', () {
+  test('administrative region never mixes another language as fallback', () {
     const region = AdministrativeRegion(
       code: 'KR-11',
       level: 1,
@@ -42,6 +42,6 @@ void main() {
     expect(region.displayName('ko'), '서울특별시');
     expect(region.displayName('en'), 'Seoul');
     expect(region.displayName('zh'), '首尔特别市');
-    expect(fallback.displayName('en'), '测试地区');
+    expect(fallback.displayName('en'), 'KR-00');
   });
 }

@@ -83,7 +83,8 @@ class AdministrativeRegion {
   String displayName(String languageCode) => switch (languageCode) {
     'ko' when nameKoKr.trim().isNotEmpty => nameKoKr,
     'en' when nameEnUs.trim().isNotEmpty => nameEnUs,
-    _ => nameZhCn,
+    'ko' || 'en' => code,
+    _ => nameZhCn.trim().isEmpty ? code : nameZhCn,
   };
 
   factory AdministrativeRegion.fromJson(Map<String, dynamic> json) =>

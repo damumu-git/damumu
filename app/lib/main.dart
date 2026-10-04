@@ -351,6 +351,25 @@ typedef ActivityPageLoader =
       String? cursor,
     });
 
+String _localizedRegionName(
+  Map<String, dynamic> json,
+  String prefix,
+  String languageCode,
+) {
+  final localizedKey = switch (languageCode) {
+    'ko' => '${prefix}_name_ko_kr',
+    'en' => '${prefix}_name_en_us',
+    _ => '${prefix}_name',
+  };
+  final localized = json[localizedKey]?.toString().trim();
+  if (localized != null && localized.isNotEmpty) return localized;
+  if (languageCode == 'zh') {
+    final chinese = json['${prefix}_name']?.toString().trim();
+    if (chinese != null && chinese.isNotEmpty) return chinese;
+  }
+  return json['${prefix}_code']?.toString() ?? '';
+}
+
 class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
@@ -551,8 +570,9 @@ class _AppShellState extends State<AppShell> {
     final time = startsAt == null
         ? '时间待定'
         : '${startsAt.month}月${startsAt.day}日 ${two(startsAt.hour)}:${two(startsAt.minute)}';
-    final city = '${json['city_name'] ?? json['city_code'] ?? ''}';
-    final district = '${json['district_name'] ?? json['district_code'] ?? ''}';
+    final language = Localizations.localeOf(context).languageCode;
+    final city = _localizedRegionName(json, 'city', language);
+    final district = _localizedRegionName(json, 'district', language);
     final distanceMeters = json['distance_meters'] as num?;
     final priceAmount = (json['price_amount'] as num?)?.toInt() ?? 0;
     final currentUserId = AuthScope.of(context).user?.id;
@@ -3516,6 +3536,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
             );
           }
           final regions = snapshot.data ?? const <AdministrativeRegion>[];
+          final language = Localizations.localeOf(context).languageCode;
           final cities = regions.where((region) => region.level == 1).toList();
           if (cities.isEmpty) return const Text('暂无可选择的地区');
           if (!cities.any((region) => region.code == _cityCode)) {
@@ -3529,11 +3550,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
           }
           _city = cities
               .firstWhere((region) => region.code == _cityCode)
-              .nameZhCn;
+              .displayName(language);
           if (_districtCode != null) {
             _district = districts
                 .firstWhere((region) => region.code == _districtCode)
-                .nameZhCn;
+                .displayName(language);
           }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3548,7 +3569,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     .map(
                       (city) => DropdownMenuItem(
                         value: city.code,
-                        child: Text(city.nameZhCn),
+                        child: Text(city.displayName(language)),
                       ),
                     )
                     .toList(),
@@ -3570,7 +3591,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     .map(
                       (district) => DropdownMenuItem(
                         value: district.code,
-                        child: Text(district.nameZhCn),
+                        child: Text(district.displayName(language)),
                       ),
                     )
                     .toList(),
@@ -5835,7 +5856,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               subtitle: Text(
-                '${row['city_name'] ?? row['city_code']} · ${row['district_name'] ?? row['district_code']}\n'
+                '${_localizedRegionName(row, 'city', Localizations.localeOf(context).languageCode)} · ${_localizedRegionName(row, 'district', Localizations.localeOf(context).languageCode)}\n'
                 '${_formatActivityDate(startsAt)} · ${price == 0 ? '免费' : '预计 ₩$price/人'}',
               ),
               isThreeLine: true,
@@ -5940,7 +5961,7 @@ class _MyActivityRecordPageState extends State<_MyActivityRecordPage> {
             leading: const Icon(Icons.location_on_outlined),
             title: const Text('活动区域'),
             subtitle: Text(
-              '${activity['city_name'] ?? activity['city_code']} · ${activity['district_name'] ?? activity['district_code']}',
+              '${_localizedRegionName(activity, 'city', Localizations.localeOf(context).languageCode)} · ${_localizedRegionName(activity, 'district', Localizations.localeOf(context).languageCode)}',
             ),
           ),
           ListTile(

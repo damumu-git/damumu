@@ -308,7 +308,12 @@ public static class UserEndpoints
                        em.status AS membership_status, em.member_role, em.checked_in_at,
                        s.starts_at, s.ends_at,
                        c.name_zh_cn AS category_name, c.icon AS category_icon,
-                       city.name_zh_cn AS city_name, district.name_zh_cn AS district_name
+                       city.name_zh_cn AS city_name,
+                       city.name_ko_kr AS city_name_ko_kr,
+                       city.name_en_us AS city_name_en_us,
+                       district.name_zh_cn AS district_name,
+                       district.name_ko_kr AS district_name_ko_kr,
+                       district.name_en_us AS district_name_en_us
                 FROM event_member em
                 JOIN event e ON e.id=em.event_id
                 JOIN category c ON c.id=e.category_id
