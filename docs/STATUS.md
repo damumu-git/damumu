@@ -4,6 +4,8 @@
 
 ## 当前已接通
 
+- Lightsail 测试数据库已改为宿主机 PostgreSQL 18/PostGIS；API 容器通过固定的 `172.30.0.0/24` Compose 内网和 `host.docker.internal` 访问，宿主机 `pg_hba.conf` 与 UFW 只允许该网段的 `damumu_app` 连接，公网防火墙不开放 5432。
+
 - Lightsail 单机测试部署配置已进入仓库：Flutter Web、Admin 和 API 使用独立多阶段镜像，Compose 只绑定宿主机回环端口，宿主机 Nginx统一代理 API、上传文件、WebSocket、Flutter Web 和 `/admin/`。上传目录使用命名卷，Admin 页面和管理 API 在现有静态 Key 外增加 Basic Auth；正式上线前仍必须替换为管理员登录、短时 Cookie、RBAC 和二次验证。
 
 - App 定位被拒绝、永久关闭、设备定位未开启或定位失败时，会提供使用后台行政区数据的手动城市／区域选择；选择结果保存为稳定地区代码，首页活动列表按该城市与区域筛选。首页定位栏可随时在自动定位和手动地区之间切换；定位栏、活动列表、活动记录和发布表单的地区名称统一随 App 中英韩语言显示，目标语言名称缺失时显示稳定地区代码，避免混入另一种语言。
@@ -37,7 +39,7 @@
 
 ## 接下来做什么
 
-- 让 Lightsail 测试实例加入当前 PostgreSQL 所在 Tailnet，确认能访问 PostgreSQL/PostGIS 后，再创建服务器端 `deploy/.env` 并首次构建；不得把 5432 暴露到公网。
+- 在 Lightsail 创建服务器端 `deploy/.env`，首次构建 Flutter Web、Admin 和 API 容器，验证宿主机 PostgreSQL、上传、WebSocket 以及 Admin Basic Auth；不得把 5432 暴露到公网。
 
 - 部署 API 前应用 `019_media_thumbnails.sql`；月度出站流量达到 2 TB 时，根据热门图片命中率、源站带宽和存储成本评估对象存储/CDN，API 服务器继续只承担当前静态图片，不增加视频传输。
 - 重启 API 并更新 App 后，使用组织者和已入群成员账号验收头像图片缩放、取消活动以及跨账号通知；移动端 Firebase 已配置，待具备 Android SDK 或 macOS/Xcode 真机环境后验证后台推送。

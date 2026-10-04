@@ -7,9 +7,35 @@ API、Flutter Web 和 Admin 容器分别绑定 `127.0.0.1:8080`、`8081`、`8082
 
 - Docker Engine 与 Compose 插件已安装。
 - 宿主机 Nginx 已安装，只开放 80/443；SSH 由 Lightsail Browser SSH 限制。
-- PostgreSQL/PostGIS 可从实例访问。当前开发数据库位于 Tailscale 私网，必须先让
-  Lightsail 加入同一 Tailnet；不要把 PostgreSQL 5432 暴露到公网。
+- PostgreSQL 18/PostGIS 运行在 Lightsail 宿主机。API 使用固定的
+  `172.30.0.0/24` Compose 内网访问；不要把 PostgreSQL 5432 暴露到公网。
 - 已按顺序应用 `restapi/Migrations/*.sql`。
+
+## 宿主机 PostgreSQL
+
+PostgreSQL 需要监听 Docker 网桥，但只接受应用数据库账号从固定 Compose 网段连接。
+在 `/etc/postgresql/18/main/postgresql.conf` 设置：
+
+```conf
+listen_addresses = '*'
+password_encryption = 'scram-sha-256'
+```
+
+在 `/etc/postgresql/18/main/pg_hba.conf` 添加：
+
+```conf
+host    damumu    damumu_app    172.30.0.0/24    scram-sha-256
+```
+
+然后执行：
+
+```bash
+sudo ufw allow in from 172.30.0.0/24 to any port 5432 proto tcp comment 'DAMUMU Docker to PostgreSQL'
+sudo systemctl restart postgresql
+```
+
+Lightsail 公网防火墙不得添加 5432。`pg_hba.conf` 不得添加 `0.0.0.0/0`，UFW
+不得允许任意来源访问 5432。
 
 ## 首次部署
 
@@ -17,7 +43,8 @@ API、Flutter Web 和 Admin 容器分别绑定 `127.0.0.1:8080`、`8081`、`8082
 sudo apt-get install -y apache2-utils
 sudo mkdir -p /opt/damumu
 sudo chown "$USER":"$USER" /opt/damumu
-git clone https://github.com/damumu-git/damumu.git /opt/damumu/repo
+git clone --branch fix/lightsail-host-postgres \
+  https://github.com/damumu-git/damumu.git /opt/damumu/repo
 cd /opt/damumu/repo
 
 cp deploy/.env.example deploy/.env

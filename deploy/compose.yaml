@@ -14,6 +14,10 @@ services:
       Firebase__ProjectId: ${FIREBASE_PROJECT_ID:-}
     ports:
       - 127.0.0.1:8080:8080
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - backend
     volumes:
       - damumu_uploads:/app/uploads
     healthcheck:
@@ -62,3 +66,9 @@ services:
 
 volumes:
   damumu_uploads:
+
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
