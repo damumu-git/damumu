@@ -582,7 +582,7 @@ offset 会随列表头部插入/删除发生位置偏移；创建时间与 UUID 
 
 ### 决定
 
-- 测试环境先使用一台 Ubuntu Lightsail 实例。宿主机 Nginx 是唯一公网入口，Flutter Web、Admin 和 API 容器只绑定回环地址，不直接开放容器端口。
+- 测试环境先使用一台 Ubuntu Lightsail 实例。宿主机 Nginx 是唯一公网入口，Admin 和 API 容器只绑定回环地址，不直接开放容器端口；Flutter `app/` 只作为 Android/iOS 客户端构建，不部署 Flutter Web。
 - `/api/v1/realtime` 保留 WebSocket Upgrade；`/uploads` 和 API 同源。API 的 `uploads` 使用 Docker 命名卷，在单实例阶段保持持久化。
 - 当前 PostgreSQL 位于 Tailscale 私网，Lightsail 必须加入同一 Tailnet；不得为了部署开放公网 5432。
 - 测试 Admin 在现有静态 API Key 外增加 Nginx Basic Auth。该组合不视为正式生产认证，正式上线前必须改为管理员登录、短时 Cookie、RBAC 和二次验证。
@@ -596,14 +596,13 @@ offset 会随列表头部插入/删除发生位置偏移；创建时间与 UUID 
 
 - 多 API 实例前必须把上传目录迁移到共享对象存储。
 - Lightsail 自动快照不能替代数据库独立备份；升级或删除实例前保留手动快照。
-- `PUBLIC_ORIGIN` 从 IP 切换为正式 HTTPS 域名后，必须重新构建 Flutter Web 和 Admin。
+- `PUBLIC_ORIGIN` 从 IP 切换为正式 HTTPS 域名后，必须重新构建 Admin，并重新构建 Android/iOS 客户端指向正式 API 地址。
 
 ### 相关位置
 
 - `deploy/compose.yaml`
 - `deploy/nginx/damumu.conf`
 - `deploy/README.md`
-- `app/Dockerfile`
 - `admin/Dockerfile`
 
 ## ADR-021：Lightsail 测试数据库运行在宿主机

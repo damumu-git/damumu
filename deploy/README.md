@@ -1,7 +1,8 @@
 # Lightsail 单机测试部署
 
 本目录用于 Ubuntu 24.04 Lightsail 单机测试环境。公网只访问宿主机 Nginx；
-API、Flutter Web 和 Admin 容器分别绑定 `127.0.0.1:8080`、`8081`、`8082`。
+API 和 Admin 容器分别绑定 `127.0.0.1:8080`、`8082`。Flutter `app/` 只构建
+Android/iOS 客户端，不作为服务器容器部署。
 
 ## 前置条件
 
@@ -87,13 +88,14 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml ps
 
 ```bash
 curl --fail http://127.0.0.1:8080/api/v1/health
-curl --fail http://127.0.0.1:8081/healthz
 curl --fail http://127.0.0.1:8082/healthz
 curl --fail http://127.0.0.1/api/v1/health
+curl --fail http://127.0.0.1/healthz
 ```
 
-外部访问首页 `PUBLIC_ORIGIN`；Admin 位于 `PUBLIC_ORIGIN/admin/`，先通过
-Nginx Basic Auth，再由现有 Admin API Key 调用管理 API。
+根路径不提供 Flutter Web 页面并返回 404。Admin 位于 `PUBLIC_ORIGIN/admin/`，先通过
+Nginx Basic Auth，再由现有 Admin API Key 调用管理 API；Android/iOS App 使用
+`PUBLIC_ORIGIN/api/v1` 和同源 WebSocket 地址。
 
 ## 更新与回滚
 

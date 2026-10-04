@@ -1,6 +1,0 @@
-.dart_tool
-.git
-.idea
-.vscode
-build
-test/failures

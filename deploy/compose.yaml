@@ -27,27 +27,6 @@ services:
       retries: 5
       start_period: 20s
 
-  web:
-    build:
-      context: ../app
-      args:
-        API_BASE_URL: ${PUBLIC_ORIGIN}/api/v1
-        FIREBASE_API_KEY: ${FIREBASE_API_KEY:-}
-        FIREBASE_APP_ID: ${FIREBASE_APP_ID:-}
-        FIREBASE_MESSAGING_SENDER_ID: ${FIREBASE_MESSAGING_SENDER_ID:-}
-        FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
-        FIREBASE_AUTH_DOMAIN: ${FIREBASE_AUTH_DOMAIN:-}
-        FIREBASE_STORAGE_BUCKET: ${FIREBASE_STORAGE_BUCKET:-}
-        FIREBASE_WEB_VAPID_KEY: ${FIREBASE_WEB_VAPID_KEY:-}
-    restart: unless-stopped
-    ports:
-      - 127.0.0.1:8081:80
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
   admin:
     build:
       context: ../admin
