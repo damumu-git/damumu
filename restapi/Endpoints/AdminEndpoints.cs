@@ -1,4 +1,5 @@
 using Muda.Api.Infrastructure;
+using System.Text.RegularExpressions;
 
 namespace Muda.Api.Endpoints;
 
@@ -845,6 +846,12 @@ public static class AdminEndpoints
     private static async Task ValidateRegion(
         AdminRegionRequest request, Db db, CancellationToken ct)
     {
+        var nameZhCn = Required(request.NameZhCn, "请输入中文名称");
+        var nameKoKr = Required(request.NameKoKr, "请输入韩文名称");
+        if (Regex.IsMatch(nameZhCn, "[가-힣]") || !Regex.IsMatch(nameZhCn, "[一-龥]"))
+            throw new ApiException(400, "region_name_language_invalid", "中文名称必须填写中文，不能填写韩文名称");
+        if (!Regex.IsMatch(nameKoKr, "[가-힣]"))
+            throw new ApiException(400, "region_name_language_invalid", "韩文名称必须填写韩文");
         if (request.Level is not (1 or 2))
             throw new ApiException(400, "region_level_invalid", "地区层级只能是城市或区县");
         if ((request.Level == 1) != string.IsNullOrWhiteSpace(request.ParentCode))

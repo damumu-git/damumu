@@ -38,10 +38,18 @@ void main() {
       nameKoKr: '',
       nameEnUs: '',
     );
+    const invalidChinese = AdministrativeRegion(
+      code: 'KR-99',
+      level: 2,
+      nameZhCn: '의정부시',
+      nameKoKr: '의정부시',
+      nameEnUs: 'Uijeongbu-si',
+    );
 
     expect(region.displayName('ko'), '서울특별시');
     expect(region.displayName('en'), 'Seoul');
     expect(region.displayName('zh'), '首尔特别市');
     expect(fallback.displayName('en'), 'KR-00');
+    expect(invalidChinese.displayName('zh'), 'KR-99');
   });
 }

@@ -84,7 +84,10 @@ class AdministrativeRegion {
     'ko' when nameKoKr.trim().isNotEmpty => nameKoKr,
     'en' when nameEnUs.trim().isNotEmpty => nameEnUs,
     'ko' || 'en' => code,
-    _ => nameZhCn.trim().isEmpty ? code : nameZhCn,
+    _ =>
+      nameZhCn.trim().isEmpty || RegExp(r'[가-힣]').hasMatch(nameZhCn)
+          ? code
+          : nameZhCn,
   };
 
   factory AdministrativeRegion.fromJson(Map<String, dynamic> json) =>

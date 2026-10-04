@@ -362,7 +362,13 @@ String _localizedRegionName(
     _ => '${prefix}_name',
   };
   final localized = json[localizedKey]?.toString().trim();
-  if (localized != null && localized.isNotEmpty) return localized;
+  final wrongScript =
+      localized != null &&
+      ((languageCode == 'zh' && RegExp(r'[가-힣]').hasMatch(localized)) ||
+          (languageCode == 'en' && RegExp(r'[가-힣]').hasMatch(localized)));
+  if (localized != null && localized.isNotEmpty && !wrongScript) {
+    return localized;
+  }
   if (languageCode == 'zh') {
     final chinese = json['${prefix}_name']?.toString().trim();
     if (chinese != null && chinese.isNotEmpty) return chinese;
