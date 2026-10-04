@@ -1,0 +1,92 @@
+# Lightsail 单机测试部署
+
+本目录用于 Ubuntu 24.04 Lightsail 单机测试环境。公网只访问宿主机 Nginx；
+API、Flutter Web 和 Admin 容器分别绑定 `127.0.0.1:8080`、`8081`、`8082`。
+
+## 前置条件
+
+- Docker Engine 与 Compose 插件已安装。
+- 宿主机 Nginx 已安装，只开放 80/443；SSH 由 Lightsail Browser SSH 限制。
+- PostgreSQL/PostGIS 可从实例访问。当前开发数据库位于 Tailscale 私网，必须先让
+  Lightsail 加入同一 Tailnet；不要把 PostgreSQL 5432 暴露到公网。
+- 已按顺序应用 `restapi/Migrations/*.sql`。
+
+## 首次部署
+
+```bash
+sudo apt-get install -y apache2-utils
+sudo mkdir -p /opt/damumu
+sudo chown "$USER":"$USER" /opt/damumu
+git clone https://github.com/damumu-git/damumu.git /opt/damumu/repo
+cd /opt/damumu/repo
+
+cp deploy/.env.example deploy/.env
+chmod 600 deploy/.env
+```
+
+编辑 `deploy/.env`，至少配置 `PUBLIC_ORIGIN`、`DATABASE_CONNECTION`、
+`AUTH_TOKEN_KEY` 和 `ADMIN_API_KEY`。生成两个不同的随机密钥：
+
+```bash
+openssl rand -hex 32
+openssl rand -hex 32
+```
+
+不要把 `.env`、Firebase 服务账号或数据库密码提交到 Git。
+
+为测试阶段 Admin 设置额外的 Basic Auth：
+
+```bash
+sudo htpasswd -c /etc/nginx/.htpasswd-damumu-admin damumu-admin
+sudo chmod 640 /etc/nginx/.htpasswd-damumu-admin
+sudo chown root:www-data /etc/nginx/.htpasswd-damumu-admin
+```
+
+安装宿主机 Nginx 配置并构建：
+
+```bash
+sudo cp deploy/nginx/damumu.conf /etc/nginx/sites-available/damumu
+sudo ln -sfn /etc/nginx/sites-available/damumu /etc/nginx/sites-enabled/damumu
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl reload nginx
+
+docker compose --env-file deploy/.env -f deploy/compose.yaml build
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d
+docker compose --env-file deploy/.env -f deploy/compose.yaml ps
+```
+
+## 验证
+
+```bash
+curl --fail http://127.0.0.1:8080/api/v1/health
+curl --fail http://127.0.0.1:8081/healthz
+curl --fail http://127.0.0.1:8082/healthz
+curl --fail http://127.0.0.1/api/v1/health
+```
+
+外部访问首页 `PUBLIC_ORIGIN`；Admin 位于 `PUBLIC_ORIGIN/admin/`，先通过
+Nginx Basic Auth，再由现有 Admin API Key 调用管理 API。
+
+## 更新与回滚
+
+更新前先创建 Lightsail 快照。然后：
+
+```bash
+cd /opt/damumu/repo
+git pull --ff-only
+docker compose --env-file deploy/.env -f deploy/compose.yaml build
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --remove-orphans
+docker image prune -f
+```
+
+`damumu_uploads` 是 Docker 命名卷，重建容器不会删除；不要执行
+`docker compose down -v`。数据库仍需独立备份。自动 Lightsail 快照会备份实例磁盘，
+但删除实例时自动快照也会被删除，重要版本应另存手动快照。
+
+## 当前安全边界
+
+- 这是测试部署。Admin 静态 API Key 会编译进 Admin 前端，因此必须保留 Basic Auth。
+- 正式上线前需实现管理员登录、短时 Cookie、RBAC 和二次验证，移除浏览器内静态 Key。
+- 正式域名确定后，把 `PUBLIC_ORIGIN` 改为 HTTPS 地址并重新构建 Web/Admin。
+- Firebase 服务账号必须作为服务器外部秘密挂载；本编排在未配置时保持 FCM 关闭。

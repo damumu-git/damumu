@@ -8,6 +8,7 @@
 .env
 .env.*
 !.env.example
+!deploy/.env.example
 .dev-logs/
 .dev-data/
 /dev.local.sh

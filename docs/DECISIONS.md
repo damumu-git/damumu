@@ -17,6 +17,7 @@
 | ADR-017 | REST 存储、WebSocket 实时同步与 FCM 后台推送 | 已采用 | 2026-09-21 |
 | ADR-018 | 聊天可靠发送、生命周期与跨实例事件转发 | 已采用 | 2026-10-01 |
 | ADR-019 | 图片缩略图、不可变缓存与流量升级阈值 | 已采用 | 2026-10-02 |
+| ADR-020 | Lightsail 单机测试部署边界 | 已采用 | 2026-10-04 |
 | ADR-008 | 用户位置标签跟随 App 语言 | 已采用 | 2026-09-07 |
 | ADR-009 | 活动容量包含组织者 | 已采用 | 2026-09-08 |
 | ADR-010 | 远端业务数据库使用 damumu 名称 | 已采用 | 2026-09-11 |
@@ -572,3 +573,34 @@ offset 会随列表头部插入/删除发生位置偏移；创建时间与 UUID 
 - `restapi/Endpoints/EventEndpoints.cs`
 - `restapi/Endpoints/SocialEndpoints.cs`
 - `app/lib/main.dart`、`app/lib/social_service.dart`
+
+## ADR-020：Lightsail 单机测试部署边界
+
+状态：已采用
+日期：2026-10-04
+
+### 决定
+
+- 测试环境先使用一台 Ubuntu Lightsail 实例。宿主机 Nginx 是唯一公网入口，Flutter Web、Admin 和 API 容器只绑定回环地址，不直接开放容器端口。
+- `/api/v1/realtime` 保留 WebSocket Upgrade；`/uploads` 和 API 同源。API 的 `uploads` 使用 Docker 命名卷，在单实例阶段保持持久化。
+- 当前 PostgreSQL 位于 Tailscale 私网，Lightsail 必须加入同一 Tailnet；不得为了部署开放公网 5432。
+- 测试 Admin 在现有静态 API Key 外增加 Nginx Basic Auth。该组合不视为正式生产认证，正式上线前必须改为管理员登录、短时 Cookie、RBAC 和二次验证。
+- 部署秘密只存在于服务器权限为 600 的 `deploy/.env` 或外部凭据文件，不进入镜像源文件或 Git。
+
+### 原因
+
+单机编排符合当前测试流量和本地媒体存储约束，也能以最少基础设施验证真实域名、HTTPS、WebSocket、上传和推送链路。回环端口与双层 Admin 保护降低测试阶段暴露开发接口和静态 Key 的风险。
+
+### 影响
+
+- 多 API 实例前必须把上传目录迁移到共享对象存储。
+- Lightsail 自动快照不能替代数据库独立备份；升级或删除实例前保留手动快照。
+- `PUBLIC_ORIGIN` 从 IP 切换为正式 HTTPS 域名后，必须重新构建 Flutter Web 和 Admin。
+
+### 相关位置
+
+- `deploy/compose.yaml`
+- `deploy/nginx/damumu.conf`
+- `deploy/README.md`
+- `app/Dockerfile`
+- `admin/Dockerfile`

@@ -1,0 +1,64 @@
+name: damumu
+
+services:
+  api:
+    build:
+      context: ../restapi
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Muda: ${DATABASE_CONNECTION}
+      Auth__TokenKey: ${AUTH_TOKEN_KEY}
+      Admin__ApiKey: ${ADMIN_API_KEY}
+      Firebase__ProjectId: ${FIREBASE_PROJECT_ID:-}
+    ports:
+      - 127.0.0.1:8080:8080
+    volumes:
+      - damumu_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build:
+      context: ../app
+      args:
+        API_BASE_URL: ${PUBLIC_ORIGIN}/api/v1
+        FIREBASE_API_KEY: ${FIREBASE_API_KEY:-}
+        FIREBASE_APP_ID: ${FIREBASE_APP_ID:-}
+        FIREBASE_MESSAGING_SENDER_ID: ${FIREBASE_MESSAGING_SENDER_ID:-}
+        FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+        FIREBASE_AUTH_DOMAIN: ${FIREBASE_AUTH_DOMAIN:-}
+        FIREBASE_STORAGE_BUCKET: ${FIREBASE_STORAGE_BUCKET:-}
+        FIREBASE_WEB_VAPID_KEY: ${FIREBASE_WEB_VAPID_KEY:-}
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:8081:80
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  admin:
+    build:
+      context: ../admin
+      args:
+        VITE_API_BASE: ${PUBLIC_ORIGIN}/api/v1
+        VITE_BASE: /admin/
+        VITE_ADMIN_KEY: ${ADMIN_API_KEY}
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:8082:80
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  damumu_uploads:
