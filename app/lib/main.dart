@@ -5487,9 +5487,21 @@ class ProfilePage extends StatelessWidget {
             IconButton(
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => const _ProfileInfoPage(
-                    title: '设置',
-                    message: '账号、通知、隐私和语言设置可以在这里统一管理。',
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: Text(context.tr('settings'))),
+                    body: ListView(
+                      children: [
+                        ListTile(
+                          title: Text(context.tr('accountManagement')),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => _PrivacyAccountPage(auth: auth),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -5678,10 +5690,10 @@ class ProfilePage extends StatelessWidget {
                 icon: Icons.privacy_tip_outlined,
                 title: context.tr('privacyAccount'),
                 subtitle: context.tr('privacySubtitle'),
-                onTap: () => _openInfo(
-                  context,
-                  context.tr('privacyAccount'),
-                  '准确集合点仅对组织者和报名成功的参与者开放。账号注销和隐私数据管理将在此页面提供。',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => _PrivacyAccountPage(auth: auth),
+                  ),
                 ),
               ),
               const Divider(height: 1, indent: 58),
@@ -5714,6 +5726,119 @@ class ProfilePage extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PrivacyAccountPage extends StatefulWidget {
+  const _PrivacyAccountPage({required this.auth});
+
+  final AuthController auth;
+
+  @override
+  State<_PrivacyAccountPage> createState() => _PrivacyAccountPageState();
+}
+
+class _PrivacyAccountPageState extends State<_PrivacyAccountPage> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _deleteAccount() async {
+    if (_email.text.trim().toLowerCase() !=
+        widget.auth.user!.email.trim().toLowerCase()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('deleteAccountEmailMismatch'))),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.tr('deleteAccount')),
+        content: Text(context.tr('deleteAccountWarning')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.tr('deleteAccountConfirm')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _submitting = true);
+    try {
+      await widget.auth.requestAccountDeletion(_email.text, _password.text);
+      if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('deleteAccountFailed'))),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(context.tr('privacyAccount'))),
+    body: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text(
+          context.tr('deleteAccount'),
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 10),
+        Text(context.tr('deleteAccountDescription')),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _email,
+          keyboardType: TextInputType.emailAddress,
+          autocorrect: false,
+          decoration: InputDecoration(
+            labelText: context.tr('registeredEmail'),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _password,
+          obscureText: true,
+          enabled: !_submitting,
+          decoration: InputDecoration(
+            labelText: context.tr('password'),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 14),
+        FilledButton.icon(
+          onPressed: _submitting ? null : _deleteAccount,
+          icon: _submitting
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.delete_outline),
+          label: Text(context.tr('deleteAccountConfirm')),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          context.tr('deleteAccountWarning'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    ),
+  );
 }
 
 Future<void> _openSimilarEvent(BuildContext context, String eventId) async {

@@ -73,6 +73,24 @@ app.UseStaticFiles(new StaticFileOptions
 app.MapOpenApi();
 
 var api = app.MapGroup("/api/v1");
+api.AddEndpointFilter(async (invocation, next) =>
+{
+    var context = invocation.HttpContext;
+    var hasUserToken = context.Request.Headers.Authorization.FirstOrDefault()
+        ?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) == true;
+    var hasDevelopmentIdentity = app.Environment.IsDevelopment()
+        && context.Request.Headers.ContainsKey("X-User-Id");
+    if (hasUserToken || hasDevelopmentIdentity)
+    {
+        var userId = ApiSupport.RequireUserId(context);
+        var db = context.RequestServices.GetRequiredService<Db>();
+        if (await db.ScalarAsync<int>(
+            "SELECT count(*) FROM app_user WHERE id=@userId AND status='active' AND deleted_at IS NULL",
+            new { userId }, context.RequestAborted) != 1)
+            throw new ApiException(401, "account_unavailable", "账号当前不可用");
+    }
+    return await next(invocation);
+});
 api.MapGet("/health", async (Db db, PushNotificationService push, CancellationToken ct) =>
 {
     var databaseTime = await db.ScalarAsync<DateTime>("SELECT now()", cancellationToken: ct);

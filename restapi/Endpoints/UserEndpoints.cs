@@ -1,4 +1,5 @@
 using Muda.Api.Infrastructure;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Muda.Api.Endpoints;
 
@@ -126,8 +127,9 @@ public static class UserEndpoints
             });
         });
 
-        api.MapPost("/auth/dev-login", async (DevLoginRequest request, Db db, CancellationToken ct) =>
+        api.MapPost("/auth/dev-login", async (DevLoginRequest request, Db db, IHostEnvironment environment, CancellationToken ct) =>
         {
+            if (!environment.IsDevelopment()) throw new ApiException(404, "not_found", "Not found");
             if (string.IsNullOrWhiteSpace(request.Nickname))
                 throw new ApiException(400, "nickname_required", "请输入昵称");
 
@@ -454,14 +456,30 @@ public static class UserEndpoints
             return Results.NoContent();
         });
 
-        api.MapDelete("/me", async (HttpContext context, Db db, CancellationToken ct) =>
+        api.MapDelete("/me", async (
+            HttpContext context, [FromBody] DeleteAccountRequest request, Db db, AuthService auth, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
+            var confirmationEmail = request.ConfirmationEmail?.Trim().ToLowerInvariant();
+            var registeredEmail = await db.ScalarAsync<string>(
+                "SELECT lower(email) FROM user_credential WHERE user_id=@userId",
+                new { userId }, ct);
+            if (string.IsNullOrWhiteSpace(confirmationEmail)
+                || !string.Equals(confirmationEmail, registeredEmail, StringComparison.Ordinal))
+                throw new ApiException(400, "account_delete_email_mismatch", "请输入当前账号的注册邮箱以确认注销");
+
+            var passwordHash = await db.ScalarAsync<string>(
+                "SELECT password_hash FROM user_credential WHERE user_id=@userId", new { userId }, ct);
+            if (string.IsNullOrEmpty(request.Password) || passwordHash is null
+                || !auth.VerifyPassword(request.Password, passwordHash))
+                throw new ApiException(401, "invalid_credentials", "邮箱或密码不正确");
+
             await db.ExecuteAsync(
                 """
                 UPDATE app_user
-                SET status='deleting', deletion_requested_at=now()
-                WHERE id=@userId AND deleted_at IS NULL
+                SET status='deleting', deletion_requested_at=COALESCE(deletion_requested_at,now())
+                WHERE id=@userId AND deleted_at IS NULL;
+                UPDATE push_device SET enabled=false WHERE user_id=@userId;
                 """, new { userId }, ct);
             return Results.Accepted(value: new
             {
@@ -515,6 +533,7 @@ public static class UserEndpoints
 
 public sealed record RegisterRequest(string? Nickname, string? Email, string? Password, Guid? AvatarId);
 public sealed record LoginRequest(string? Email, string? Password);
+public sealed record DeleteAccountRequest(string? ConfirmationEmail, string? Password);
 public sealed record SystemAvatarRequest(Guid? AvatarId);
 public sealed record DevLoginRequest(string Nickname, string? CityCode);
 public sealed record UpdateProfileRequest(

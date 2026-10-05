@@ -127,6 +127,14 @@ $env:DAMUMU_POSTGRES_PASSWORD = '你的密码'
 
 ## 用户认证与头像
 
+### 注销申请（尚非最终数据擦除）
+
+`DELETE /me` 需要 Bearer 登录凭据和 JSON 字段 `confirmationEmail`、`password`。
+验证当前账号邮箱与密码后返回 202，将账号置为 `deleting` 并禁用推送设备。
+后续受保护请求拒绝该账号；最终数据清理尚未实现，不应对用户承诺已经删除全部数据。
+`X-User-Id` 与开发登录仅限 Development，生产环境不接受开发身份头。
+管理员 Basic Auth 不作为用户 Bearer 凭据解析。
+
 ## 多用户互动演示数据
 
 API 启动并应用全部迁移后，可以通过真实注册、活动发布、报名审批和聊天接口生成一组

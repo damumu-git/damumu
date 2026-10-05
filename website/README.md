@@ -1,25 +1,27 @@
-DAMUMU 静态官网
-================
+# Damu 静态官网
 
-部署方式
-1. 将本文件夹内全部文件上传到 Nginx 网站根目录、AWS S3 静态网站 bucket，或任意静态托管服务。
-2. 入口文件为 index.html。
-3. 不需要 Node.js、数据库或构建步骤。
+品牌：搭慕 / 담우 / Damu。默认中文，共 15 个静态 HTML 页面。
+所有页面提供中文、English、한국어 切换；换语言保持当前页面。
 
-上线前必须处理
-- 全局搜索“[필수”与“[예:”并替换所有黄色占位内容。
-- 用真实 App 截图替换首页 CSS mockup（可选）。
-- 把 Google Play / App Store 下载按钮改成真实链接。
-- 用真实商店链接生成 QR 图后替换二维码占位。
-- 让韩国法律专业人士核对 privacy.html、terms.html。
-- 确保 Google Play Data safety、Apple App Privacy 与 privacy.html 及 App 实际行为一致。
-- 确认账号删除入口、邮件处理流程和各类数据保存/删除期限。
+部署只需上传 `dist/` 的全部内容到 Nginx/Lightsail 或 S3 静态托管。
+不需要线上 Python、Node、数据库或 API。域名目标为 `https://www.damumu.com`。
+当前未发布到公网。
 
-文件
-- index.html 首页
-- privacy.html 개인정보 처리방침草案
-- terms.html 이용약관草案
-- account-deletion.html 账号删除说明
-- support.html 客服页
-- styles.css 全站样式
-- script.js 移动导航与年份
+## 维护
+
+`build_site.py` 保存三语文案和共享模板。修改后运行 `python3 website/build_site.py`，
+再运行 `python3 website/check_site.py`。部署产物已生成，不运行脚本也能直接使用。
+
+- 默认文件：`index.html`、`privacy.html`、`terms.html`、`account-deletion.html`、`support.html`。
+- 英文加 `-en`，韩文加 `-ko`，如 `privacy-ko.html`。
+- `styles.css` 保留品牌主题，`languages.css` 处理三语布局，`script.js` 为移动导航。
+- 商店地址尚未提供，下载按钮禁用，二维码仅为明确不可扫描的占位。
+- `docs/PRIVACY_REVIEW.md` 记录真实代码核对、保存期限建议、验证边界及待确认清理方案。
+
+## 发布前状态
+
+公开文案仍为政策草案；生效日期、第三方跨境详情及定期删除/备份方案未落实。
+App/API 支持密码复核的删除申请与停用；最终清理未完成，不能称为完整数据擦除。
+不应直接作为正式商店审核政策使用。手机及 Google 登录未实现，MVP1 不开放 SOS。
+
+已有旧 ZIP 是第一版归档；最新包名为 `damu-trilingual-2026-10-05.zip`。

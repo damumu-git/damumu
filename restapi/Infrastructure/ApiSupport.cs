@@ -14,7 +14,8 @@ public static class ApiSupport
     public static Guid RequireUserId(HttpContext context)
     {
         var raw = context.Request.Headers["X-User-Id"].FirstOrDefault();
-        if (Guid.TryParse(raw, out var developmentUserId))
+        if (context.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment()
+            && Guid.TryParse(raw, out var developmentUserId))
             return developmentUserId;
 
         var authorization = context.Request.Headers.Authorization.FirstOrDefault();
@@ -30,7 +31,8 @@ public static class ApiSupport
     public static Guid? GetOptionalUserId(HttpContext context)
     {
         var raw = context.Request.Headers["X-User-Id"].FirstOrDefault();
-        if (Guid.TryParse(raw, out var developmentUserId)) return developmentUserId;
+        if (context.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment()
+            && Guid.TryParse(raw, out var developmentUserId)) return developmentUserId;
 
         var authorization = context.Request.Headers.Authorization.FirstOrDefault();
         var token = authorization?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) == true

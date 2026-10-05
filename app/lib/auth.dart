@@ -118,6 +118,22 @@ class AuthApi {
   static Future<AuthUser> me(String token) async =>
       AuthUser.fromJson(await _json('/me', token: token));
 
+  static Future<void> requestAccountDeletion(
+    String token,
+    String confirmationEmail,
+    String password,
+  ) async {
+    await _json(
+      '/me',
+      method: 'DELETE',
+      token: token,
+      body: {
+        'confirmationEmail': confirmationEmail.trim(),
+        'password': password,
+      },
+    );
+  }
+
   static Future<String> uploadAvatar(String token, Uint8List jpeg) async {
     final request = http.MultipartRequest(
       'POST',
@@ -208,6 +224,14 @@ class AuthController extends ChangeNotifier {
     user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
     await _saveToken(token);
     notifyListeners();
+  }
+
+  Future<void> requestAccountDeletion(
+    String confirmationEmail,
+    String password,
+  ) async {
+    await AuthApi.requestAccountDeletion(token!, confirmationEmail, password);
+    await logout();
   }
 
   Future<void> updateAvatar(Uint8List bytes) async {

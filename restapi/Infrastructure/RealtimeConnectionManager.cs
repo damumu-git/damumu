@@ -45,6 +45,11 @@ public sealed class RealtimeConnectionManager(
             return;
         }
 
+        if (!await IsActiveAsync(userId, requestAborted))
+        {
+            await CloseAsync(socket, WebSocketCloseStatus.PolicyViolation, "account_unavailable");
+            return;
+        }
         var connection = new Connection(Guid.NewGuid(), userId, socket);
         var userConnections = _connections.GetOrAdd(userId, _ => new());
         userConnections[connection.Id] = connection;
@@ -119,6 +124,12 @@ public sealed class RealtimeConnectionManager(
         foreach (var userId in userIds.Distinct())
         {
             if (!_connections.TryGetValue(userId, out var userConnections)) continue;
+            if (!await IsActiveAsync(userId, cancellationToken))
+            {
+                foreach (var pair in userConnections.ToArray())
+                    pair.Value.Socket.Abort();
+                continue;
+            }
             foreach (var pair in userConnections.ToArray())
             {
                 try
@@ -132,6 +143,14 @@ public sealed class RealtimeConnectionManager(
                 }
             }
         }
+    }
+
+    private async Task<bool> IsActiveAsync(Guid userId, CancellationToken ct)
+    {
+        await using var command = dataSource.CreateCommand(
+            "SELECT EXISTS(SELECT 1 FROM app_user WHERE id=@id AND status='active' AND deleted_at IS NULL)");
+        command.Parameters.AddWithValue("id", userId);
+        return (bool)(await command.ExecuteScalarAsync(ct))!;
     }
 
     internal sealed record RealtimeRelay(Guid Origin, Guid[] UserIds, string Type, JsonElement Data);
@@ -174,6 +193,7 @@ public sealed class RealtimeConnectionManager(
 
     private sealed class Connection(Guid id, Guid userId, WebSocket socket) : IDisposable
     {
+        public WebSocket Socket => socket;
         private readonly SemaphoreSlim _sendLock = new(1, 1);
         public Guid Id { get; } = id;
         public Guid UserId { get; } = userId;
