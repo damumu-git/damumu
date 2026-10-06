@@ -1,8 +1,8 @@
 # Lightsail 单机测试部署
 
 本目录用于 Ubuntu 24.04 Lightsail 单机测试环境。公网只访问宿主机 Nginx；
-API 和 Admin 容器分别绑定 `127.0.0.1:8080`、`8082`。Flutter `app/` 只构建
-Android/iOS 客户端，不作为服务器容器部署。
+产品主页、API 和 Admin 容器分别绑定 `127.0.0.1:8081`、`8080`、`8082`。
+Flutter `app/` 只构建 Android/iOS 客户端；域名根路径发布 `website/dist` 的独立静态产品主页。
 
 ## 前置条件
 
@@ -44,7 +44,7 @@ Lightsail 公网防火墙不得添加 5432。`pg_hba.conf` 不得添加 `0.0.0.0
 sudo apt-get install -y apache2-utils
 sudo mkdir -p /opt/damumu
 sudo chown "$USER":"$USER" /opt/damumu
-git clone --branch fix/lightsail-host-postgres \
+git clone --branch main \
   https://github.com/damumu-git/damumu.git /opt/damumu/repo
 cd /opt/damumu/repo
 
@@ -79,22 +79,23 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
 
-docker compose --env-file deploy/.env -f deploy/compose.yaml build
-docker compose --env-file deploy/.env -f deploy/compose.yaml up -d
+docker compose --env-file deploy/.env -f deploy/compose.yaml build site api admin
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d site api admin
 docker compose --env-file deploy/.env -f deploy/compose.yaml ps
 ```
 
 ## 验证
 
 ```bash
+curl --fail http://127.0.0.1:8081/healthz
 curl --fail http://127.0.0.1:8080/api/v1/health
 curl --fail http://127.0.0.1:8082/healthz
 curl --fail http://127.0.0.1/api/v1/health
 curl --fail http://127.0.0.1/healthz
 ```
 
-根路径不提供 Flutter Web 页面并返回 404。Admin 位于 `PUBLIC_ORIGIN/admin/`，先通过
-Nginx Basic Auth，再由现有 Admin API Key 调用管理 API；Android/iOS App 使用
+域名根路径提供独立产品主页，不提供 Flutter Web App。Admin 位于 `PUBLIC_ORIGIN/admin/`，
+先通过 Nginx Basic Auth，再由现有 Admin API Key 调用管理 API；Android/iOS App 使用
 `PUBLIC_ORIGIN/api/v1` 和同源 WebSocket 地址。
 
 ## 更新与回滚
@@ -104,8 +105,8 @@ Nginx Basic Auth，再由现有 Admin API Key 调用管理 API；Android/iOS App
 ```bash
 cd /opt/damumu/repo
 git pull --ff-only
-docker compose --env-file deploy/.env -f deploy/compose.yaml build
-docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --remove-orphans
+docker compose --env-file deploy/.env -f deploy/compose.yaml build site api admin
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d site api admin --remove-orphans
 docker image prune -f
 ```
 
