@@ -120,6 +120,9 @@ footer { padding: 30px 0 42px; display: grid; grid-template-columns: 1fr auto au
 .policy-hero { padding: 46px 50px; border-radius: 28px; color: white; background: var(--ink); }
 .policy-hero h1 { max-width: none; font-size: clamp(2.6rem, 6vw, 4.5rem); }
 .policy-hero p { max-width: 680px; margin: 20px 0 0; color: #c8c2d8; }
+.policy-languages { display: flex; gap: 8px; margin-top: 22px; }
+.policy-languages a, .policy-languages strong { padding: 7px 12px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; color: white; font-size: .82rem; text-decoration: none; }
+.policy-languages strong { color: var(--ink); background: white; }
 .policy-meta { display: flex; flex-wrap: wrap; gap: 10px 24px; margin-top: 24px; font-size: .86rem; }
 .policy-content { margin-top: 22px; padding: 48px 50px; border: 1px solid var(--line); border-radius: 28px; background: var(--white); }
 .policy-content h2 { margin: 44px 0 12px; font-size: 1.45rem; line-height: 1.3; }

@@ -35,27 +35,30 @@ const _green = Color(0xFF5B4BDB);
 const _mint = Color(0xFFEDEAFF);
 const _cream = Color(0xFFF3F5FA);
 const _orange = Color(0xFFFF6B57);
-final _privacyPolicyUri = Uri.https('www.damumu.com', '/privacy.html');
-
 _AppShellState? _activeShell;
 _CreateEventPageState? _activeRouteDraft;
 
 Future<void> _openPrivacyPolicy(BuildContext context) async {
+  final languageCode = Localizations.localeOf(context).languageCode;
+  final privacyPolicyUri = Uri.https(
+    'www.damumu.com',
+    languageCode == 'ko' ? '/privacy-ko.html' : '/privacy.html',
+  );
   try {
     final opened = await launchUrl(
-      _privacyPolicyUri,
+      privacyPolicyUri,
       mode: LaunchMode.externalApplication,
     );
     if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('privacyOpenFailed'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('privacyOpenFailed'))));
     }
   } catch (_) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('privacyOpenFailed'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('privacyOpenFailed'))));
     }
   }
 }

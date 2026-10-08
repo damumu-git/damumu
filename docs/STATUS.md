@@ -6,7 +6,7 @@
 
 - 用户可见的中文产品名已统一为“搭慕”，拉丁品牌、域名和内部技术标识继续使用 `DAMUMU` / `damumu`。首版“搭”字 App Logo 候选稿保存在 `branding/tamu-logo-concept-v1.png`，待确认后再生成并替换各平台正式图标。
 
-- 产品网站新增 `/privacy.html` 隐私政策页面，首页页头和页脚均提供入口；App 设置中的“隐私政策”会用系统浏览器打开 `https://www.damumu.com/privacy.html`。页面覆盖账号、资料、位置、活动、聊天、推送、共享、保存删除及用户权利，但正式提交应用商店前仍需填写真实运营者信息、创建并验证 `privacy@damumu.com`，并进行适用法律审阅。
+- 产品网站新增中文 `/privacy.html` 与韩文 `/privacy-ko.html` 隐私政策页面，中文页面可切换韩文；首页页头和页脚均提供入口。App 设置中的“隐私政策”会用系统浏览器打开对应语言版本，韩文界面直接打开韩文页。页面覆盖账号、资料、位置、活动、聊天、推送、共享、保存删除及用户权利，但正式提交应用商店前仍需填写真实运营者信息、创建并验证 `privacy@damumu.com`，并进行适用法律审阅。
 
 - Lightsail 测试数据库已改为宿主机 PostgreSQL 18/PostGIS；API 容器通过固定的 `172.30.0.0/24` Compose 内网和 `host.docker.internal` 访问，宿主机 `pg_hba.conf` 与 UFW 只允许该网段的 `damumu_app` 连接，公网防火墙不开放 5432。
 
@@ -43,7 +43,7 @@
 
 ## 接下来做什么
 
-- 在网站部署后验证 `https://www.damumu.com/privacy.html` 可公开访问、无需登录且移动端可读；创建并测试 `privacy@damumu.com`，把政策中的泛称运营者替换为真实个人或企业主体及必要联系方式，再用于 App Store / Google Play 提交。
+- 在网站部署后验证 `https://www.damumu.com/privacy.html` 和 `https://www.damumu.com/privacy-ko.html` 可公开访问、无需登录且移动端可读；创建并测试 `privacy@damumu.com`，把政策中的泛称运营者替换为真实个人或企业主体及必要联系方式，再用于 App Store / Google Play 提交。
 
 - 评审 `branding/tamu-logo-concept-v1.png`；确认视觉方向后导出 Android adaptive icon、iOS App Icon 和 Web favicon/PWA 图标，并在真机与商店预览中检查小尺寸识别度。
 

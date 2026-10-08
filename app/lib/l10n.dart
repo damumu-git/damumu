@@ -422,7 +422,8 @@ const _strings = <String, Map<String, String>>{
     'helpRules': 'Help & community rules',
     'privacyAccount': 'Privacy policy',
     'privacySubtitle': 'Review data collection, use, and deletion',
-    'privacyOpenFailed': 'Could not open the privacy policy. Visit www.damumu.com/privacy.html',
+    'privacyOpenFailed':
+        'Could not open the privacy policy. Visit www.damumu.com/privacy.html',
     'logout': 'Sign out',
     'language': 'Language',
     'languageTitle': 'App language',
@@ -626,7 +627,8 @@ const _strings = <String, Map<String, String>>{
     'helpRules': '도움말 및 커뮤니티 규칙',
     'privacyAccount': '개인정보 처리방침',
     'privacySubtitle': '개인정보 수집, 이용 및 삭제 안내',
-    'privacyOpenFailed': '개인정보 처리방침을 열 수 없습니다. www.damumu.com/privacy.html을 방문해 주세요',
+    'privacyOpenFailed':
+        '개인정보 처리방침을 열 수 없습니다. www.damumu.com/privacy-ko.html을 방문해 주세요',
     'logout': '로그아웃',
     'language': '언어',
     'languageTitle': '화면 언어',
