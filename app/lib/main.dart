@@ -7,6 +7,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'auth.dart';
 import 'activity_interactions.dart';
 import 'category_service.dart';
@@ -34,9 +35,30 @@ const _green = Color(0xFF5B4BDB);
 const _mint = Color(0xFFEDEAFF);
 const _cream = Color(0xFFF3F5FA);
 const _orange = Color(0xFFFF6B57);
+final _privacyPolicyUri = Uri.https('www.damumu.com', '/privacy.html');
 
 _AppShellState? _activeShell;
 _CreateEventPageState? _activeRouteDraft;
+
+Future<void> _openPrivacyPolicy(BuildContext context) async {
+  try {
+    final opened = await launchUrl(
+      _privacyPolicyUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('privacyOpenFailed'))),
+      );
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('privacyOpenFailed'))),
+      );
+    }
+  }
+}
 
 Future<void> _goHome(BuildContext context) async {
   final draft = _activeRouteDraft;
@@ -133,7 +155,7 @@ class _DaziAppState extends State<DaziApp> {
             }
             return child!;
           },
-          title: '搭慕慕',
+          title: '搭慕',
           locale: _locale,
           supportedLocales: const [Locale('zh'), Locale('en'), Locale('ko')],
           localizationsDelegates: const [
@@ -5678,11 +5700,7 @@ class ProfilePage extends StatelessWidget {
                 icon: Icons.privacy_tip_outlined,
                 title: context.tr('privacyAccount'),
                 subtitle: context.tr('privacySubtitle'),
-                onTap: () => _openInfo(
-                  context,
-                  context.tr('privacyAccount'),
-                  '准确集合点仅对组织者和报名成功的参与者开放。账号注销和隐私数据管理将在此页面提供。',
-                ),
+                onTap: () => _openPrivacyPolicy(context),
               ),
               const Divider(height: 1, indent: 58),
               _Menu(

@@ -870,7 +870,7 @@ function App() {
   return (
     <div className="admin-shell">
       <aside className={mobileNav ? 'sidebar open' : 'sidebar'}>
-        <div className="brand"><div className="brand-mark">慕</div><div><strong>搭慕慕</strong><span>社区运营中心</span></div></div>
+        <div className="brand"><div className="brand-mark">搭</div><div><strong>搭慕</strong><span>社区运营中心</span></div></div>
         <nav>{navigation.map((item) => (
           <button key={item.id} className={active === item.id ? 'active' : ''} onClick={() => { setActive(item.id); setMobileNav(false) }}>
             <i>{item.icon}</i><span>{item.label}</span>{item.id === 'reports' && <em>!</em>}
@@ -880,7 +880,7 @@ function App() {
       </aside>
       <main className="main-panel">
         <header className="topbar">
-          <div className="title-row"><button className="menu-button" onClick={() => setMobileNav(!mobileNav)}>☰</button><div><span className="breadcrumb">搭慕慕 / 运营管理</span><h1>{current.label}</h1></div></div>
+          <div className="title-row"><button className="menu-button" onClick={() => setMobileNav(!mobileNav)}>☰</button><div><span className="breadcrumb">搭慕 / 运营管理</span><h1>{current.label}</h1></div></div>
           <div className="top-actions"><span className="today">{new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date())}</span><button className="announcement-button" onClick={() => setAnnouncement(true)}>发布公告</button><div className="admin-avatar">管</div></div>
         </header>
         <div className="page-content"><ActivePage /></div>
