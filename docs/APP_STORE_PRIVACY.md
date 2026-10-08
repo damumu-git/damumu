@@ -7,7 +7,7 @@
 - 中文：`https://www.damumu.com/privacy.html`
 - 韩文：`https://www.damumu.com/privacy-ko.html`
 - 提交审核前必须确认两个地址无需登录即可公开访问。
-- 运营主体名称、有效隐私联系邮箱和具体保存期限仍需确认后写入两个页面。
+- 隐私联系邮箱已确定为 `damumuapp@gmail.com`；运营主体名称和具体保存期限仍需确认后写入两个页面。
 
 ## 当前可能需要申报的数据类型
 

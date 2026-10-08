@@ -6,7 +6,7 @@
 
 - 用户可见的中文产品名已统一为“搭慕”，拉丁品牌、域名和内部技术标识继续使用 `DAMUMU` / `damumu`。首版“搭”字 App Logo 候选稿保存在 `branding/tamu-logo-concept-v1.png`，待确认后再生成并替换各平台正式图标。
 
-- 产品网站新增中文 `/privacy.html` 与韩文 `/privacy-ko.html` 隐私政策页面，中文页面可切换韩文；首页页头和页脚均提供入口。App 设置中的“隐私政策”会用系统浏览器打开对应语言版本，韩文界面直接打开韩文页。页面覆盖账号、资料、位置、活动、聊天、推送、共享、保存删除及用户权利，但正式提交应用商店前仍需填写真实运营者信息、确认并验证实际隐私联系邮箱（草案当前使用 `privacy@damumu.com`），并进行适用法律审阅。
+- 产品网站新增中文 `/privacy.html` 与韩文 `/privacy-ko.html` 隐私政策页面，中文页面可切换韩文；首页页头和页脚均提供入口。App 设置中的“隐私政策”会用系统浏览器打开对应语言版本，韩文界面直接打开韩文页。页面覆盖账号、资料、位置、活动、聊天、推送、共享、保存删除及用户权利，隐私联系邮箱统一为 `damumuapp@gmail.com`；正式提交应用商店前仍需填写真实运营者信息、验证该邮箱可正常收发，并进行适用法律审阅。
 
 - App 设置页新增可直接发起的账号删除入口，二次确认后调用现有 `DELETE /api/v1/me` 并清除本地登录状态；iOS 显示名统一为“搭慕”，相机、使用中定位和相册权限说明补齐中、英、韩本地化。App Store Connect 数据申报初稿见 `docs/APP_STORE_PRIVACY.md`。
 
@@ -45,7 +45,7 @@
 
 ## 接下来做什么
 
-- 在网站部署后验证 `https://www.damumu.com/privacy.html` 和 `https://www.damumu.com/privacy-ko.html` 可公开访问、无需登录且移动端可读；确定并测试实际隐私联系邮箱，把政策中的泛称运营者替换为真实个人或企业主体及必要联系方式，再用于 App Store / Google Play 提交。
+- 在网站部署后验证 `https://www.damumu.com/privacy.html` 和 `https://www.damumu.com/privacy-ko.html` 可公开访问、无需登录且移动端可读；测试 `damumuapp@gmail.com` 的收发与账号恢复设置，把政策中的泛称运营者替换为真实个人或企业主体及必要联系方式，再用于 App Store / Google Play 提交。
 
 - 评审 `branding/tamu-logo-concept-v1.png`；确认视觉方向后导出 Android adaptive icon、iOS App Icon 和 Web favicon/PWA 图标，并在真机与商店预览中检查小尺寸识别度。
 
@@ -62,7 +62,7 @@
 
 ## 已知缺口与验证边界
 
-- 当前隐私政策是按现有代码数据流编写的上线草案，不替代韩国及目标商店要求的法律审阅；实际隐私联系邮箱和真实运营主体尚未在仓库中确认。现有注销接口先把账号标记为删除处理中，完整的定时清除／匿名化工作流仍待实现。
+- 当前隐私政策是按现有代码数据流编写的上线草案，不替代韩国及目标商店要求的法律审阅；隐私联系邮箱已确定为 `damumuapp@gmail.com`，但仍需验证可用性，真实运营主体尚未在仓库中确认。现有注销接口先把账号标记为删除处理中，完整的定时清除／匿名化工作流仍待实现。
 
 - 2026-10-08 App 内账号删除入口、三语确认文案及 iOS 三语权限用途说明通过 Flutter 静态分析和 9 项相关界面回归测试；Windows 仅能对 Xcode 工程文本、Info.plist XML 和资源引用做结构检查，仍需在 macOS/Xcode Release Archive 中验证本地化资源、Privacy Report 和第三方 SDK manifest。
 
