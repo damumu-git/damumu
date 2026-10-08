@@ -14,6 +14,8 @@
 
 - Lightsail 单机测试部署配置已进入仓库：产品主页、Admin 和 API 容器只绑定宿主机回环端口，公网由宿主机 Nginx 按 `www.damumu.com`、`admin.damumu.com`、`api.damumu.com` 三个域名分流并强制 HTTPS，根域名跳转到 `www`。Admin 页面和同源管理 API 在现有静态 Key 外增加 Basic Auth，公共 API 域名拒绝管理 API 路径；上传目录使用命名卷。Flutter `app/` 保持 Android/iOS 客户端，不部署 Flutter Web。正式上线前仍必须替换为管理员登录、短时 Cookie、RBAC 和二次验证。
 
+- Lightsail 更新可通过 `deploy/deploy.sh` 或服务器快捷命令 `damumu-deploy` 完成：脚本只允许干净的 `main` 快进到 `origin/main`，检测新增数据库迁移并要求先备份和人工确认，随后校验配置、构建并启动三个容器、等待健康检查、按需安全更新 Nginx、验证公网 HTTPS，成功后清理悬空镜像；失败时保留数据卷并输出服务状态与最近日志。
+
 - App 定位被拒绝、永久关闭、设备定位未开启或定位失败时，会提供使用后台行政区数据的手动城市／区域选择；选择结果保存为稳定地区代码，首页活动列表按该城市与区域筛选。首页定位栏可随时在自动定位和手动地区之间切换；定位栏、活动列表、活动记录和发布表单的地区名称统一随 App 中英韩语言显示，目标语言名称缺失时显示稳定地区代码，避免混入另一种语言。
 
 - 图片流量控制已接通：新活动封面生成最长边 640px 的 WebP 缩略图，新聊天图片生成最长边 320px 的 WebP 缩略图，两者限制为 200 KB；列表和聊天气泡只加载缩略图，进入放大预览后才请求现有原图。媒体文件名使用 UUID 且不会覆盖，`/uploads` 返回一年 `immutable` 缓存。上传只接受静态 JPEG、PNG 或 WebP，不提供视频或 Live Photo 上传。旧媒体没有缩略图时兼容回退原图。数据库需应用 `019_media_thumbnails.sql`。
