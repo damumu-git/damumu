@@ -5717,6 +5717,13 @@ class ProfilePage extends StatelessWidget {
               ),
               const Divider(height: 1, indent: 58),
               _Menu(
+                icon: Icons.delete_forever_outlined,
+                title: context.tr('deleteAccount'),
+                subtitle: context.tr('deleteAccountSubtitle'),
+                onTap: () => _confirmAccountDeletion(context, auth),
+              ),
+              const Divider(height: 1, indent: 58),
+              _Menu(
                 icon: Icons.logout,
                 title: context.tr('logout'),
                 onTap: auth.logout,
@@ -5726,6 +5733,39 @@ class ProfilePage extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _confirmAccountDeletion(
+    BuildContext context,
+    AuthController auth,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(dialogContext.tr('deleteAccountTitle')),
+        content: Text(dialogContext.tr('deleteAccountMessage')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(dialogContext.tr('cancel')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(dialogContext.tr('deleteAccountConfirm')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await auth.deleteAccount();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('deleteAccountFailed'))),
+      );
+    }
   }
 
   void _openInfo(BuildContext context, String title, String message) {

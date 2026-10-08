@@ -118,6 +118,10 @@ class AuthApi {
   static Future<AuthUser> me(String token) async =>
       AuthUser.fromJson(await _json('/me', token: token));
 
+  static Future<void> deleteAccount(String token) async {
+    await _json('/me', method: 'DELETE', token: token);
+  }
+
   static Future<String> uploadAvatar(String token, Uint8List jpeg) async {
     final request = http.MultipartRequest(
       'POST',
@@ -232,6 +236,22 @@ class AuthController extends ChangeNotifier {
 
   Future<void> logout() async {
     await PushNotificationService.instance.stop(token);
+    user = null;
+    token = null;
+    await _saveToken(null);
+    notifyListeners();
+  }
+
+  Future<void> deleteAccount() async {
+    final currentToken = token;
+    if (currentToken == null) throw StateError('Missing authentication token');
+    await AuthApi.deleteAccount(currentToken);
+    try {
+      await PushNotificationService.instance.stop(currentToken);
+    } catch (_) {
+      // The server accepted the deletion request. Local sign-out must still
+      // complete even if unregistering a push token fails.
+    }
     user = null;
     token = null;
     await _saveToken(null);

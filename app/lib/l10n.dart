@@ -209,6 +209,13 @@ const _strings = <String, Map<String, String>>{
     'privacyAccount': '隐私政策',
     'privacySubtitle': '查看个人信息收集、使用与删除说明',
     'privacyOpenFailed': '无法打开隐私政策，请访问 www.damumu.com/privacy.html',
+    'deleteAccount': '注销账号',
+    'deleteAccountSubtitle': '发起永久删除账号和关联个人信息',
+    'deleteAccountTitle': '确定注销账号？',
+    'deleteAccountMessage':
+        '提交后账号将进入删除处理并退出登录。除依法需要保留的记录外，账号及关联个人信息将被删除或匿名化。此操作无法在 App 内撤销。',
+    'deleteAccountConfirm': '确认注销',
+    'deleteAccountFailed': '暂时无法提交注销申请，请稍后重试',
     'logout': '退出登录',
     'language': '语言',
     'languageTitle': '界面语言',
@@ -424,6 +431,15 @@ const _strings = <String, Map<String, String>>{
     'privacySubtitle': 'Review data collection, use, and deletion',
     'privacyOpenFailed':
         'Could not open the privacy policy. Visit www.damumu.com/privacy.html',
+    'deleteAccount': 'Delete account',
+    'deleteAccountSubtitle':
+        'Request permanent deletion of your account and associated personal data',
+    'deleteAccountTitle': 'Delete your account?',
+    'deleteAccountMessage':
+        'Your account will enter deletion processing and you will be signed out. Except for records we must retain by law, your account and associated personal data will be deleted or anonymized. This cannot be undone in the app.',
+    'deleteAccountConfirm': 'Delete account',
+    'deleteAccountFailed':
+        'The deletion request could not be submitted. Try again later.',
     'logout': 'Sign out',
     'language': 'Language',
     'languageTitle': 'App language',
@@ -629,6 +645,13 @@ const _strings = <String, Map<String, String>>{
     'privacySubtitle': '개인정보 수집, 이용 및 삭제 안내',
     'privacyOpenFailed':
         '개인정보 처리방침을 열 수 없습니다. www.damumu.com/privacy-ko.html을 방문해 주세요',
+    'deleteAccount': '계정 삭제',
+    'deleteAccountSubtitle': '계정과 관련 개인정보의 영구 삭제 요청',
+    'deleteAccountTitle': '계정을 삭제할까요?',
+    'deleteAccountMessage':
+        '요청하면 계정이 삭제 처리 상태로 전환되고 로그아웃됩니다. 법률상 보관해야 하는 기록을 제외한 계정 및 관련 개인정보는 삭제되거나 익명화됩니다. 앱에서 이 요청을 취소할 수 없습니다.',
+    'deleteAccountConfirm': '계정 삭제',
+    'deleteAccountFailed': '계정 삭제 요청을 제출할 수 없습니다. 잠시 후 다시 시도해 주세요.',
     'logout': '로그아웃',
     'language': '언어',
     'languageTitle': '화면 언어',

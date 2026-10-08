@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "搭慕";
+"NSCameraUsageDescription" = "搭慕는 채팅 이미지, 활동 사진 및 프로필 사진을 촬영하기 위해 카메라를 사용합니다.";
+"NSLocationWhenInUseUsageDescription" = "搭慕는 앱 사용 중 현재 지역을 표시하고 주변 활동을 추천하기 위해 위치를 사용합니다.";
+"NSPhotoLibraryUsageDescription" = "搭慕는 채팅 이미지, 활동 사진 및 프로필 사진으로 선택한 사진에 접근합니다.";

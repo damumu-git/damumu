@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "搭慕";
+"NSCameraUsageDescription" = "搭慕使用相机拍摄聊天图片、活动图片和个人头像。";
+"NSLocationWhenInUseUsageDescription" = "搭慕在 App 使用期间读取位置，用于显示所在地区并推荐附近活动。";
+"NSPhotoLibraryUsageDescription" = "搭慕访问你选择的照片，用作聊天图片、活动图片和个人头像。";

@@ -96,6 +96,25 @@ void main() {
     }
   });
 
+  testWidgets('设置页可发起账号删除并二次确认', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(authenticatedApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('main-nav-4')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('注销账号'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('注销账号'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('确定注销账号？'), findsOneWidget);
+    expect(find.text('确认注销'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('确定注销账号？'), findsNothing);
+  });
+
   testWidgets('子页面可直接回首页', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpWidget(authenticatedApp());
