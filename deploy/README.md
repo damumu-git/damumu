@@ -106,7 +106,8 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml ps
 ```
 
 先确认四个域名已经能从公网解析到本机，再签发包含全部域名的证书。把下面的
-`YOUR_EMAIL` 替换为接收续期通知的真实邮箱：
+`YOUR_EMAIL` 替换为 ACME 注册使用的真实邮箱；证书续期依赖 Certbot 定时任务，
+不能依赖到期提醒邮件：
 
 ```bash
 sudo certbot certonly \
