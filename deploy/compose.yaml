@@ -43,8 +43,10 @@ services:
     build:
       context: ../admin
       args:
-        VITE_API_BASE: ${PUBLIC_ORIGIN}/api/v1
-        VITE_BASE: /admin/
+        # Admin calls the API through the same protected admin.damumu.com
+        # origin. Host Nginx proxies /api/ to the API container.
+        VITE_API_BASE: /api/v1
+        VITE_BASE: /
         VITE_ADMIN_KEY: ${ADMIN_API_KEY}
     restart: unless-stopped
     ports:
