@@ -165,6 +165,11 @@ sudo ln -sfn /opt/damumu/repo/deploy/deploy.sh /usr/local/bin/damumu-deploy
 damumu-deploy
 ```
 
+第一次运行时还没有“上次成功部署版本”记录，脚本不会猜测数据库状态，而会在更新
+源码后停止并显示仓库中的最新迁移编号。备份数据库并核对该编号以前的必要迁移均已
+应用后，使用 `damumu-deploy --migrations-applied` 完成首次受管部署。此后直接运行
+`damumu-deploy` 即可；只有检测到新迁移时才需要再次确认。
+
 该命令会防止并发部署，要求服务器停留在干净的 `main` 分支，从
 `origin/main` 快进更新，校验 `deploy/.env` 和 Compose 配置，构建并启动三个
 容器，等待 Docker 健康检查，通过回环端口验证三个服务，按需更新并校验 Nginx，

@@ -19,6 +19,7 @@ COMPOSE_STARTED=false
 OLD_REVISION="unknown"
 NEW_REVISION="unknown"
 STATE_FILE=""
+STATE_INITIALIZED=false
 
 usage() {
   cat <<'EOF'
@@ -77,7 +78,7 @@ while (($#)); do
   shift
 done
 
-for command in git docker curl flock readlink stat; do
+for command in git docker curl find flock readlink stat; do
   command -v "$command" >/dev/null 2>&1 || die "Required command not found: $command"
 done
 docker compose version >/dev/null 2>&1 || die "Docker Compose v2 plugin is not available."
@@ -111,6 +112,7 @@ fi
 checkout_revision="$(git rev-parse HEAD)"
 if [[ -f "$STATE_FILE" ]] && git cat-file -e "$(<"$STATE_FILE")^{commit}" 2>/dev/null; then
   OLD_REVISION="$(<"$STATE_FILE")"
+  STATE_INITIALIZED=true
 else
   OLD_REVISION="$checkout_revision"
 fi
@@ -129,6 +131,21 @@ if [[ "$checkout_revision" == "$NEW_REVISION" ]]; then
 else
   log "Fast-forwarding main from ${checkout_revision:0:12} to ${NEW_REVISION:0:12}"
   git merge --ff-only "origin/$DEPLOY_BRANCH"
+fi
+
+if [[ "$STATE_INITIALIZED" != true && "$ACKNOWLEDGE_MIGRATIONS" != true ]]; then
+  latest_migration="$(find restapi/Migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort | tail -n 1)"
+  cat >&2 <<EOF
+
+This is the first deployment managed by this script, so the previously deployed
+database migration level is unknown. The newest migration in this checkout is:
+  ${latest_migration}
+
+The running containers were not changed. Back up the database, verify that all
+required migrations through this file are applied, then run:
+  damumu-deploy --migrations-applied
+EOF
+  exit 2
 fi
 
 if [[ -n "$pending_migrations" && "$ACKNOWLEDGE_MIGRATIONS" != true ]]; then
