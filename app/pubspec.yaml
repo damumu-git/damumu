@@ -21,6 +21,7 @@ dependencies:
   image_cropper: ^11.0.0
   image_picker: ^1.2.0
   shared_preferences: ^2.5.3
+  url_launcher: ^6.3.3
   web_socket: ^1.0.1
 
 dev_dependencies:

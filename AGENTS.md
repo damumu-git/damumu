@@ -39,7 +39,7 @@ At task completion:
 
 ## Product invariants
 
-- DAMUMU (current UI name: 搭慕慕) is a Korea-focused offline activity and
+- DAMUMU (current UI name: 搭慕) is a Korea-focused offline activity and
   companion-finding app.
 - The platform does not collect activity fees, provide payments, guarantee
   transfers, or act as an escrow service. Amounts shown are estimated offline
