@@ -150,18 +150,47 @@ flutter build apk \
 
 ## 更新与回滚
 
-更新前先创建 Lightsail 快照。然后：
+更新前先创建 Lightsail 快照。首次安装快捷命令：
 
 ```bash
 cd /opt/damumu/repo
-git pull --ff-only
-docker compose --env-file deploy/.env -f deploy/compose.yaml build site api admin
-docker compose --env-file deploy/.env -f deploy/compose.yaml up -d site api admin --remove-orphans
-docker image prune -f
-sudo cp deploy/nginx/damumu.conf /etc/nginx/sites-available/damumu
-sudo nginx -t
-sudo systemctl reload nginx
+git switch main
+git pull --ff-only origin main
+sudo ln -sfn /opt/damumu/repo/deploy/deploy.sh /usr/local/bin/damumu-deploy
 ```
+
+以后每次 GitHub Pull Request 合并进 `main` 后，只需在服务器执行：
+
+```bash
+damumu-deploy
+```
+
+该命令会防止并发部署，要求服务器停留在干净的 `main` 分支，从
+`origin/main` 快进更新，校验 `deploy/.env` 和 Compose 配置，构建并启动三个
+容器，等待 Docker 健康检查，通过回环端口验证三个服务，按需更新并校验 Nginx，
+再验证公网 HTTPS。全部成功后才清理悬空镜像；任一步失败都会打印容器状态和最近
+日志。它不会删除 Docker 卷，也不会自动修改数据库。
+
+脚本会在 Git 元数据中记录上次成功部署的提交。如果本次更新含有新的
+`restapi/Migrations/*.sql`，命令只更新源码，保持现有容器继续运行，然后停止并列出
+迁移文件。先创建数据库备份，审查并按编号应用这些迁移；确认全部成功后再执行：
+
+```bash
+damumu-deploy --migrations-applied
+```
+
+常用诊断选项：
+
+```bash
+damumu-deploy --skip-public-checks  # DNS/证书尚未就绪时跳过公网检查
+damumu-deploy --skip-nginx          # 本次明确不更新宿主机 Nginx
+damumu-deploy --no-prune            # 成功后保留悬空 Docker 镜像
+```
+
+需要回滚时，不要在服务器上 `reset --hard` 或直接修改文件。应在 GitHub 对导致问题的
+Pull Request 创建 revert、合并回 `main`，再运行 `damumu-deploy`。如果版本包含数据库
+迁移，必须先确认迁移是否向后兼容；数据库回滚应使用事先创建的备份或经过审查的反向
+迁移，不能依靠应用脚本自动处理。
 
 `damumu_uploads` 是 Docker 命名卷，重建容器不会删除；不要执行
 `docker compose down -v`。数据库仍需独立备份。自动 Lightsail 快照会备份实例磁盘，
