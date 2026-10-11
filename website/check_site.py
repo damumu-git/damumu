@@ -31,12 +31,13 @@ for name,p in pages.items():
         base=name.replace('-en.html','.html').replace('-ko.html','.html')[:-5]
         assert base+suffix+'.html' in p.refs, (name,suffix)
 privacy_expectations={
-    'privacy.html':('2026年10月20日','个人运营者','个人信息处理明细','处理委托','境外转移'),
-    'privacy-en.html':('October 20, 2026','individual','Processing details','Processors','Overseas transfers'),
-    'privacy-ko.html':('2026년 10월 20일','개인','개인정보 처리 내역','개인정보 처리위탁','개인정보 국외 이전'),
+    'privacy.html':('2026年10月20日','个人运营者','个人信息处理明细','处理委托','境外转移','自动快照保留最近7日','手动快照最长30日'),
+    'privacy-en.html':('October 20, 2026','individual','Processing details','Processors','Overseas transfers','latest seven daily automatic snapshots','within 30 days'),
+    'privacy-ko.html':('2026년 10월 20일','개인','개인정보 처리 내역','개인정보 처리위탁','개인정보 국외 이전','최근 7일분','30일 이내'),
 }
 for name,expected in privacy_expectations.items():
     text=(root/name).read_text(encoding='utf-8')
     for value in expected:
         assert value in text,(name,value)
+    assert 'Nominatim' not in text and 'OpenStreetMap' not in text,name
 print('PASS: 15 pages, language metadata, headings, local assets, page/anchor links and same-page language switching.')

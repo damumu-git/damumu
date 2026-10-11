@@ -1,7 +1,4 @@
-import 'dart:convert';
-
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppLocation {
@@ -30,14 +27,12 @@ class ManualRegionSelection {
 }
 
 class LocationService {
-  LocationService({http.Client? client}) : _client = client ?? http.Client();
+  LocationService();
 
   // v3 separates labels by App language and invalidates older locale-agnostic
   // labels, which could keep showing Traditional Chinese after a language change.
   static const _cacheVersion = 'v3';
   static const _cacheLifetime = Duration(minutes: 30);
-
-  final http.Client _client;
 
   static const _manualCityKey = 'manual_location_city_v1';
   static const _manualDistrictKey = 'manual_location_district_v1';
@@ -102,77 +97,20 @@ class LocationService {
         timeLimit: Duration(seconds: 12),
       ),
     );
-    final label = await _reverseGeocode(
-      position.latitude,
-      position.longitude,
-      languageCode,
-    );
     final result = AppLocation(
       latitude: position.latitude,
       longitude: position.longitude,
-      label: label,
+      label: _currentLocationLabel(languageCode),
     );
     await _writeCache(result, languageCode);
     return result;
   }
 
-  Future<String> _reverseGeocode(
-    double latitude,
-    double longitude,
-    String languageCode,
-  ) async {
-    final acceptedLanguages = switch (languageCode) {
-      'ko' => 'ko-KR,ko,en',
-      'en' => 'en-US,en',
-      _ => 'zh-CN,zh-Hans-CN,zh-Hans,en',
-    };
-    final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
-      'format': 'jsonv2',
-      'lat': latitude.toStringAsFixed(7),
-      'lon': longitude.toStringAsFixed(7),
-      'zoom': '12',
-      'addressdetails': '1',
-      'accept-language': acceptedLanguages,
-    });
-    try {
-      final response = await _client
-          .get(
-            uri,
-            headers: const {'User-Agent': 'DAMUMU/0.1 (location@muda.app)'},
-          )
-          .timeout(const Duration(seconds: 8));
-      if (response.statusCode != 200) return '当前位置';
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
-      final address = json['address'] as Map<String, dynamic>? ?? const {};
-      final city = _first(address, const [
-        'city',
-        'municipality',
-        'state',
-        'province',
-      ]);
-      final district = _first(address, const [
-        'borough',
-        'city_district',
-        'suburb',
-        'county',
-        'town',
-      ]);
-      if (city != null && district != null && city != district) {
-        return '$city · $district';
-      }
-      return district ?? city ?? (json['display_name'] as String?) ?? '当前位置';
-    } catch (_) {
-      return '当前位置';
-    }
-  }
-
-  String? _first(Map<String, dynamic> address, List<String> keys) {
-    for (final key in keys) {
-      final value = address[key]?.toString().trim();
-      if (value != null && value.isNotEmpty) return value;
-    }
-    return null;
-  }
+  String _currentLocationLabel(String languageCode) => switch (languageCode) {
+    'ko' => '현재 위치',
+    'en' => 'Current location',
+    _ => '当前位置',
+  };
 
   String _cacheKey(String field, String languageCode) =>
       'last_location_${field}_${_cacheVersion}_$languageCode';
