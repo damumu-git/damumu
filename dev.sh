@@ -6,21 +6,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="$ROOT_DIR/.dev-logs"
 API_PORT="${API_PORT:-8080}"
 ADMIN_PORT="${ADMIN_PORT:-5173}"
-API_BASE_URL="${API_BASE_URL:-http://localhost:${API_PORT}/api/v1}"
-POSTGRES_HOST="${DAMUMU_POSTGRES_HOST:-100.66.109.44}"
-POSTGRES_DATABASE="${DAMUMU_POSTGRES_DATABASE:-damumu}"
-POSTGRES_USERNAME="${DAMUMU_POSTGRES_USERNAME:-postgres}"
-if [[ -z "${DAMUMU_POSTGRES_PASSWORD:-}" && -f "$ROOT_DIR/dev.local.sh" ]]; then
-  source "$ROOT_DIR/dev.local.sh"
-fi
-POSTGRES_PASSWORD="${DAMUMU_POSTGRES_PASSWORD:-}"
+API_BASE_URL="${API_BASE_URL:-https://api.damumu.com/api/v1}"
 SERVICES_ONLY=false
-
-[[ -n "$POSTGRES_PASSWORD" ]] || {
-  echo "错误：请在 dev.local.sh 中设置 DAMUMU_POSTGRES_PASSWORD，或设置同名环境变量。" >&2
-  exit 1
-}
-DATABASE_CONNECTION="Host=${POSTGRES_HOST};Port=5432;Database=${POSTGRES_DATABASE};Username=${POSTGRES_USERNAME};Password=${POSTGRES_PASSWORD};SSL Mode=Disable"
 
 if [[ "${1:-}" == "--services" ]]; then
   SERVICES_ONLY=true
@@ -47,6 +34,33 @@ find_command() {
   return 1
 }
 
+if [[ "$SERVICES_ONLY" == false ]]; then
+  FLUTTER="$(find_command flutter "$HOME/flutter/bin/flutter")" || {
+    echo "错误：找不到 flutter。" >&2
+    exit 1
+  }
+  echo "启动 Flutter App（API：${API_BASE_URL}）"
+  cd "$ROOT_DIR/app"
+  exec "$FLUTTER" run --dart-define="API_BASE_URL=$API_BASE_URL" "$@"
+fi
+
+if [[ -z "${ConnectionStrings__Muda:-}" && -f "$ROOT_DIR/dev.local.sh" ]]; then
+  source "$ROOT_DIR/dev.local.sh"
+fi
+DATABASE_CONNECTION="${ConnectionStrings__Muda:-}"
+if [[ -z "$DATABASE_CONNECTION" ]]; then
+  POSTGRES_HOST="${DAMUMU_POSTGRES_HOST:-}"
+  POSTGRES_PORT="${DAMUMU_POSTGRES_PORT:-5432}"
+  POSTGRES_DATABASE="${DAMUMU_POSTGRES_DATABASE:-damumu}"
+  POSTGRES_USERNAME="${DAMUMU_POSTGRES_USERNAME:-postgres}"
+  POSTGRES_PASSWORD="${DAMUMU_POSTGRES_PASSWORD:-}"
+  if [[ -z "$POSTGRES_HOST" || -z "$POSTGRES_PASSWORD" ]]; then
+    echo "错误：启动本地 REST API 需要 ConnectionStrings__Muda，或同时设置 DAMUMU_POSTGRES_HOST 和 DAMUMU_POSTGRES_PASSWORD。AWS PostgreSQL 不开放公网 5432；需要本地 API 时请使用本地数据库或 SSH 隧道。" >&2
+    exit 1
+  fi
+  DATABASE_CONNECTION="Host=${POSTGRES_HOST};Port=${POSTGRES_PORT};Database=${POSTGRES_DATABASE};Username=${POSTGRES_USERNAME};Password=${POSTGRES_PASSWORD};SSL Mode=Disable"
+fi
+
 latest_node_bin="$(find "$HOME/.nvm/versions/node" -maxdepth 3 -type f -name node -perm -111 2>/dev/null | sort -V | tail -1 || true)"
 if [[ -n "$latest_node_bin" ]]; then
   node_bin_dir="$(dirname "$latest_node_bin")"
@@ -71,13 +85,6 @@ done
   echo "错误：找不到 dotnet。请先安装 .NET 10 SDK。" >&2
   exit 1
 }
-
-if [[ "$SERVICES_ONLY" == false ]]; then
-  FLUTTER="$(find_command flutter "$HOME/flutter/bin/flutter")" || {
-    echo "错误：找不到 flutter。" >&2
-    exit 1
-  }
-fi
 
 mkdir -p "$LOG_DIR"
 api_pid=""
@@ -127,11 +134,5 @@ fi
 
 echo "日志目录：$LOG_DIR"
 
-if [[ "$SERVICES_ONLY" == true ]]; then
-  echo "Admin 和 REST API 已启动；按 Ctrl+C 停止。"
-  wait
-else
-  echo "启动 Flutter App（API：${API_BASE_URL}）"
-  cd "$ROOT_DIR/app"
-  "$FLUTTER" run --dart-define="API_BASE_URL=$API_BASE_URL" "$@"
-fi
+echo "Admin 和 REST API 已启动；按 Ctrl+C 停止。"
+wait

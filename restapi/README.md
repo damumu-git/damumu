@@ -3,15 +3,16 @@
 ASP.NET Core 10 + PostgreSQL/PostGIS API，覆盖用户、活动、报名候补、聊天、
 安全会面、评价、举报治理、通知、配置与管理员运营接口。
 
-开发环境默认通过 Tailscale 连接 `100.66.109.44:5432/damumu`。真实密码保存在本机
-.NET User Secrets，不能写入 `appsettings.json`：
+AWS Lightsail 上的 PostgreSQL 只允许服务器内部网络访问，不开放公网 5432。本地 Flutter
+开发默认直接使用 `https://api.damumu.com/api/v1`，无需数据库凭据：
 
 ```powershell
-dotnet user-secrets set "ConnectionStrings:Muda" "Host=100.66.109.44;Port=5432;Database=damumu;Username=postgres;Password=你的密码;SSL Mode=Disable" --project ./restapi/Muda.Api.csproj
+./dev.ps1 -d chrome --web-port 3000
 ```
 
-Admin 不直接连接 PostgreSQL；它通过 `http://localhost:8080/api/v1` 使用同一个 REST API，
-所以 REST API 的连接配置同时决定用户 App 和 Admin 读取的数据库。
+只有调试 REST API 或本地 Admin 时才启动本地服务。此时使用隔离的本地 PostgreSQL，或先建立
+SSH 隧道，再通过 `ConnectionStrings__Muda` 提供完整连接字符串。不要把 AWS 数据库端口开放到公网。
+Admin 不直接连接 PostgreSQL；它通过本地 REST API 访问数据库。
 
 ## 可选：独立的本地 Docker 环境
 
@@ -68,9 +69,10 @@ done
 docker exec muda-postgres psql -U muda -d muda -c '\\dt'
 ```
 
-## Tailscale PostgreSQL 集成测试
+## 旧 Tailscale PostgreSQL 集成测试
 
-当前测试通过 Tailscale 连接 `100.66.109.44:5432/damumu`，默认用户为 `postgres`。
+该脚本仅保留用于旧环境兼容，不再是当前 AWS 数据库的连接方式。不要用它连接 Lightsail 数据库；
+服务端集成测试应使用隔离数据库或受控 SSH 隧道。如需验证尚未迁移的旧环境，默认用户为 `postgres`。
 在 Windows PowerShell 中先设置数据库密码环境变量，再从仓库根目录执行：
 
 ```powershell
@@ -89,16 +91,22 @@ $env:DAMUMU_POSTGRES_PASSWORD = '你的密码'
 
 ## Windows PowerShell 开发启动
 
-`dev.ps1` 优先使用完整的 `ConnectionStrings__Muda` 环境变量；未提供时，根据
-`DAMUMU_POSTGRES_HOST`、`DAMUMU_POSTGRES_DATABASE`、
-`DAMUMU_POSTGRES_USERNAME` 和 `DAMUMU_POSTGRES_PASSWORD` 生成连接字符串。
-密码缺失时脚本直接退出，不再交互询问：
+`dev.ps1` 默认只启动 Flutter，并连接 `https://api.damumu.com/api/v1`：
 
 ```powershell
+./dev.ps1 -d chrome --web-port 3000
+```
+
+可以通过 `API_BASE_URL` 覆盖地址。显式使用 `--services` 时才启动本地 REST API 和 Admin。
+脚本优先使用完整的 `ConnectionStrings__Muda` 环境变量；未提供时，根据
+`DAMUMU_POSTGRES_HOST`、`DAMUMU_POSTGRES_DATABASE`、
+`DAMUMU_POSTGRES_USERNAME`、`DAMUMU_POSTGRES_PORT` 和
+`DAMUMU_POSTGRES_PASSWORD` 生成连接字符串。主机或密码缺失时脚本直接退出：
+
+```powershell
+$env:DAMUMU_POSTGRES_HOST = '127.0.0.1' # 本地数据库或 SSH 隧道
 $env:DAMUMU_POSTGRES_PASSWORD = '你的密码'
 ./dev.ps1 --services
-# 或同时启动 Flutter Web：
-./dev.ps1 -d chrome --web-port 3000
 ```
 
 启动脚本会把 API 和 Admin 的 PID 记录到 Git 忽略的 `.dev-logs/dev-processes.json`。
@@ -120,10 +128,10 @@ $env:DAMUMU_POSTGRES_PASSWORD = '你的密码'
 
 ## Bash 开发启动
 
-`./dev.sh -d chrome --web-port 3000` 启动时不再询问密码；默认读取仓库根目录的
-`dev.local.sh`，其中设置 `DAMUMU_POSTGRES_PASSWORD='你的密码'`。
-该文件已被 Git 忽略，只在本机保存；换机器后需要重新配置。
-已有的同名环境变量优先。未配置密码时脚本会报错退出。
+`./dev.sh -d chrome --web-port 3000` 同样默认只启动 Flutter 并连接公网 API。
+`./dev.sh --services` 才会读取仓库根目录 Git 忽略的 `dev.local.sh`，其中应设置
+`ConnectionStrings__Muda`，或同时设置 `DAMUMU_POSTGRES_HOST` 和
+`DAMUMU_POSTGRES_PASSWORD`。未配置时脚本会报错退出。
 
 ## 用户认证与头像
 
