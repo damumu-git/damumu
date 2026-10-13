@@ -8,6 +8,11 @@ internal static class FeedbackChecks
     {
         if (FeedbackPolicy.RiskSignalThreshold != 3)
             throw new Exception("Risk signal threshold changed unexpectedly");
+        if (FeedbackPolicy.BeginnerFriendlyVerificationThreshold != 3 ||
+            FeedbackPolicy.IsBeginnerFriendly(false, 2) ||
+            !FeedbackPolicy.IsBeginnerFriendly(false, 3) ||
+            !FeedbackPolicy.IsBeginnerFriendly(true, 0))
+            throw new Exception("Beginner-friendly verification policy changed unexpectedly");
 
         FeedbackPolicy.Validate("activity", "like", "newcomer_friendly", null);
         FeedbackPolicy.Validate("activity", "report", "unsafe_arrangement", "details");

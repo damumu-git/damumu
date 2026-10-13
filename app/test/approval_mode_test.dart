@@ -62,6 +62,7 @@ void main() {
           capacity: 8,
           priceAmount: 0,
           approvalRequired: required,
+          beginnerFriendly: false,
         );
       }
     }, () => client);

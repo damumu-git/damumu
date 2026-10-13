@@ -269,6 +269,11 @@ GET /api/v1/activities?limit=20&cursor=<上一页 data.nextCursor>
 游标为版本化 Base64URL 编码位置，不是秘密或鉴权令牌；非法/过长/未知版本游标返回
 HTTP 400，`error.code=invalid_cursor`。活动列表永不返回精确集合点。
 
+发布活动时可传 `beginnerFriendly: true` 声明适合新手。活动列表和详情分别返回
+`beginner_friendly_claimed`、`beginner_friendly_verified` 和合并后的
+`beginner_friendly`。组织者在已结束活动中获得至少 3 名不同参与者的
+`newcomer_friendly` 正向评价后，认证状态为真；客户端必须区分发布者声明与参与者认证。
+
 部署时按迁移顺序执行 `Migrations/010_activity_cursor_index.sql`、
 `Migrations/011_illustrated_other_category.sql`、
 `Migrations/012_custom_category_leaves.sql` 与
@@ -278,9 +283,11 @@ HTTP 400，`error.code=invalid_cursor`。活动列表永不返回精确集合点
 `Migrations/016_member_profiles_and_message_actions.sql`、
 `Migrations/017_post_event_feedback.sql`、
 `Migrations/018_chat_reliability.sql` 与
-`Migrations/019_media_thumbnails.sql`；`010` 增加公开活动创建时间/UUID
+`Migrations/019_media_thumbnails.sql`、
+`Migrations/020_fix_gyeonggi_region_translations.sql` 与
+`Migrations/021_beginner_friendly_activity.sql`；`010` 增加公开活动创建时间/UUID
 部分索引，`011` 增加分类图标键与活动自定义小分类列，`012` 为各一级分类增加“其它”叶子及标识。
-升级 API 前必须先应用 `011` 至 `019` 的缺失迁移，否则活动、分类、消息操作、活动群聊、活动后反馈或图片缩略图行为不完整。
+升级 API 前必须先应用 `011` 至 `021` 的缺失迁移，否则活动、分类、消息操作、活动群聊、活动后反馈、图片缩略图或新手友好标记行为不完整。
 活动封面上传接口 `POST /api/v1/events/covers` 接受登录用户的一张 1280×960 JPEG，最大 1.5 MB；返回媒体 ID 后在 `POST /events` 传入 `coverMediaId`。文件存于 API 本地 `uploads/events`。
 API 为活动封面生成最长边 640px 的 WebP，为聊天图片生成最长边 320px 的 WebP，缩略图不超过 200 KB。处理后的可放大图片不超过 1.5 MB。列表和聊天记录返回缩略图，活动详情及聊天图片预览保留原图 URL，并在点击放大时加载。所有 `/uploads` URL 使用 UUID 不可变文件名和一年长期缓存。当前媒体接口只接受静态 JPEG、PNG、WebP，不提供视频或 Live Photo 上传下载。月度出站流量达到 2 TB 时评估对象存储/CDN。
 原 `/events` 及后台分页接口保持兼容。

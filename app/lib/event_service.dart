@@ -448,7 +448,10 @@ class EventService {
         .toList();
   }
 
-  static Future<String> create({
+  static Future<
+    ({String id, bool beginnerFriendly, bool beginnerFriendlyVerified})
+  >
+  create({
     required String token,
     required String categoryId,
     required String title,
@@ -460,6 +463,7 @@ class EventService {
     required int capacity,
     required int priceAmount,
     required bool approvalRequired,
+    required bool beginnerFriendly,
     String? meetingPoint,
     String? customSubcategory,
     String? coverMediaId,
@@ -485,6 +489,7 @@ class EventService {
             'minParticipants': 2,
             'capacity': capacity,
             'approvalMode': approvalRequired ? 'manual' : 'automatic',
+            'beginnerFriendly': beginnerFriendly,
             'visibility': 'public',
             'minAge': 18,
             'priceMin': priceAmount,
@@ -502,6 +507,11 @@ class EventService {
         )
         .timeout(const Duration(seconds: 12));
     final decoded = _decodeResponse(response, '活动发布没有成功，请稍后再试');
-    return decoded['data']['id'] as String;
+    final data = decoded['data'] as Map<String, dynamic>;
+    return (
+      id: data['id'] as String,
+      beginnerFriendly: data['beginnerFriendly'] == true,
+      beginnerFriendlyVerified: data['beginnerFriendlyVerified'] == true,
+    );
   }
 }
