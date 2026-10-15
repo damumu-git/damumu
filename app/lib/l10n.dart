@@ -216,7 +216,7 @@ const _strings = <String, Map<String, String>>{
     'deleteAccountSubtitle': '发起永久删除账号和关联个人信息',
     'deleteAccountTitle': '确定注销账号？',
     'deleteAccountMessage':
-        '提交后账号将进入删除处理并退出登录。除依法需要保留的记录外，账号及关联个人信息将被删除或匿名化。此操作无法在 App 内撤销。',
+        '确认后将立即删除登录凭据、个人资料和关联个人信息并退出登录。活动历史与安全审计记录仅以匿名形式保留。此操作无法撤销。',
     'deleteAccountConfirm': '确认注销',
     'deleteAccountFailed': '暂时无法提交注销申请，请稍后重试',
     'logout': '退出登录',
@@ -443,7 +443,7 @@ const _strings = <String, Map<String, String>>{
         'Request permanent deletion of your account and associated personal data',
     'deleteAccountTitle': 'Delete your account?',
     'deleteAccountMessage':
-        'Your account will enter deletion processing and you will be signed out. Except for records we must retain by law, your account and associated personal data will be deleted or anonymized. This cannot be undone in the app.',
+        'Your credentials, profile, and associated personal data will be deleted immediately and you will be signed out. Activity history and safety audit records are retained only in anonymized form. This cannot be undone.',
     'deleteAccountConfirm': 'Delete account',
     'deleteAccountFailed':
         'The deletion request could not be submitted. Try again later.',
@@ -659,7 +659,7 @@ const _strings = <String, Map<String, String>>{
     'deleteAccountSubtitle': '계정과 관련 개인정보의 영구 삭제 요청',
     'deleteAccountTitle': '계정을 삭제할까요?',
     'deleteAccountMessage':
-        '요청하면 계정이 삭제 처리 상태로 전환되고 로그아웃됩니다. 법률상 보관해야 하는 기록을 제외한 계정 및 관련 개인정보는 삭제되거나 익명화됩니다. 앱에서 이 요청을 취소할 수 없습니다.',
+        '확인하면 로그인 정보, 프로필 및 관련 개인정보가 즉시 삭제되고 로그아웃됩니다. 활동 기록과 안전 감사 기록은 익명화된 형태로만 보관됩니다. 이 작업은 취소할 수 없습니다.',
     'deleteAccountConfirm': '계정 삭제',
     'deleteAccountFailed': '계정 삭제 요청을 제출할 수 없습니다. 잠시 후 다시 시도해 주세요.',
     'logout': '로그아웃',

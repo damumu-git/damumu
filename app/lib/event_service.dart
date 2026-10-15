@@ -7,7 +7,7 @@ import 'feedback_model.dart';
 
 const _apiBase = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://localhost:8080/api/v1',
+  defaultValue: 'https://api.damumu.com/api/v1',
 );
 
 class EventServiceException implements Exception {

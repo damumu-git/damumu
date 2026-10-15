@@ -2,8 +2,8 @@
 
 ## 启动
 
-默认 API 地址是 `http://localhost:8080/api/v1`。真机或 Android 模拟器需要传入
-设备可访问的地址，例如：
+默认 API 地址是 `https://api.damumu.com/api/v1`，正常移动端开发不需要启动本地
+REST API 或 Admin。仅在隔离数据库上开发服务端时显式覆盖，例如 Android 模拟器：
 
 ```bash
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080/api/v1

@@ -1,11 +1,12 @@
 # App Store 隐私提交清单
 
-最后核对：2026-10-08（Asia/Seoul）。本清单根据当前代码数据流整理，用于填写 App Store Connect；最终答案必须与待提交版本、服务端行为和第三方 SDK 实际情况一致。
+最后核对：2026-10-15（Asia/Seoul）。本清单根据当前代码数据流整理，用于填写 App Store Connect；最终答案必须与待提交版本、服务端行为和第三方 SDK 实际情况一致。
 
 ## Privacy Policy URL
 
 - 中文：`https://www.damumu.com/privacy.html`
 - 韩文：`https://www.damumu.com/privacy-ko.html`
+- 网页账号删除说明：`https://www.damumu.com/account-deletion.html`
 - 提交审核前必须确认两个地址无需登录即可公开访问。
 - 隐私联系邮箱已确定为 `damumuapp@gmail.com`；运营主体名称和具体保存期限仍需确认后写入两个页面。
 
@@ -25,8 +26,8 @@
 
 ## 审核前必须完成
 
-- App 设置页可直接发起账号删除，并有明确的二次确认；该入口已接入 `DELETE /api/v1/me`。
-- 服务端目前只把账号标记为 `deleting`。上线前必须建立实际删除／匿名化流程、完成时限和完成通知，不能只冻结账号。
+- App 设置页可直接发起账号删除，并有明确的二次确认；`DELETE /api/v1/me` 会在单个数据库事务内立即删除认证、资料、兴趣、推送、通知和安全联系人数据，并匿名化必须保留的活动、会话和治理历史。
+- 部署网站后验证 `/account-deletion.html` 可公开访问，并确认邮箱请求的 7 日处理承诺具备实际运营流程。
 - 为中、英、韩三种语言核对相机、定位、相册权限说明。
 - 在 macOS/Xcode 生成 Release Archive，检查 Privacy Report、`PrivacyInfo.xcprivacy`、Required Reason API 和第三方 SDK 签名；Windows 环境不能完成这项验证。
 - 用最终生产配置核对 Firebase、日志、崩溃收集、分析和广告 SDK，确保 App Store Connect 回答没有漏项。

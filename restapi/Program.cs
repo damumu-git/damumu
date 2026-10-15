@@ -12,6 +12,7 @@ var connectionString = builder.Configuration.GetConnectionString("Muda")
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<Db>();
 builder.Services.AddSingleton<AuthService>();
+builder.Services.AddSingleton<AccountDeletionService>();
 builder.Services.AddSingleton<RealtimeConnectionManager>();
 builder.Services.AddSingleton<PushNotificationService>();
 builder.Services.AddHostedService<RealtimeRelayService>();
@@ -56,6 +57,42 @@ app.Use(async (context, next) =>
             traceId = Activity.Current?.Id ?? context.TraceIdentifier
         });
     }
+});
+
+app.Use(async (context, next) =>
+{
+    var authorization = context.Request.Headers.Authorization.FirstOrDefault();
+    var token = authorization?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) == true
+        ? authorization[7..].Trim()
+        : null;
+    if (token is not null)
+    {
+        var auth = context.RequestServices.GetRequiredService<AuthService>();
+        if (auth.TryValidateToken(token, out var userId))
+        {
+            var db = context.RequestServices.GetRequiredService<Db>();
+            var active = await db.ScalarAsync<int>(
+                """
+                SELECT count(*) FROM app_user
+                WHERE id=@userId AND status='active' AND deleted_at IS NULL
+                """,
+                new { userId },
+                context.RequestAborted);
+            if (active == 0)
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    data = (object?)null,
+                    meta = (object?)null,
+                    error = new { code = "account_unavailable", message = "账号已注销或不可用" },
+                    traceId = Activity.Current?.Id ?? context.TraceIdentifier
+                }, context.RequestAborted);
+                return;
+            }
+        }
+    }
+    await next();
 });
 
 app.UseCors();

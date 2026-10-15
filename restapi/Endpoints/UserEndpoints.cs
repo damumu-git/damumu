@@ -126,8 +126,11 @@ public static class UserEndpoints
             });
         });
 
-        api.MapPost("/auth/dev-login", async (DevLoginRequest request, Db db, CancellationToken ct) =>
+        api.MapPost("/auth/dev-login", async (
+            DevLoginRequest request, Db db, IWebHostEnvironment environment, CancellationToken ct) =>
         {
+            if (!environment.IsDevelopment())
+                throw new ApiException(404, "not_found", "接口不存在");
             if (string.IsNullOrWhiteSpace(request.Nickname))
                 throw new ApiException(400, "nickname_required", "请输入昵称");
 
@@ -454,21 +457,21 @@ public static class UserEndpoints
             return Results.NoContent();
         });
 
-        api.MapDelete("/me", async (HttpContext context, Db db, CancellationToken ct) =>
+        api.MapDelete("/me", async (
+            HttpContext context,
+            AccountDeletionService deletion,
+            CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
-            await db.ExecuteAsync(
-                """
-                UPDATE app_user
-                SET status='deleting', deletion_requested_at=now()
-                WHERE id=@userId AND deleted_at IS NULL
-                """, new { userId }, ct);
-            return Results.Accepted(value: new
+            var result = await deletion.DeleteAsync(userId, ct)
+                ?? throw new ApiException(404, "user_not_found", "用户不存在或已经注销");
+
+            return ApiSupport.Ok(new
             {
-                data = new { status = "deleting" },
-                meta = (object?)null,
-                error = (object?)null,
-                traceId = System.Diagnostics.Activity.Current?.Id
+                status = "deleted",
+                deletedAt = result.DeletedAt,
+                avatarCleanupPending = !result.AvatarFilesDeleted,
+                retained = "仅保留已匿名化的活动历史与安全审计记录"
             });
         });
 

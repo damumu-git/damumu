@@ -1,14 +1,16 @@
 # DAMUMU 当前项目状态
 
-最后核对：2026-10-13（Asia/Seoul）。本页只记当前事实、下一步和阻塞；完成历史见 Git。代码、迁移和测试结果优先于本页。
+最后核对：2026-10-15（Asia/Seoul）。本页只记当前事实、下一步和阻塞；完成历史见 Git。代码、迁移和测试结果优先于本页。
 
 ## 当前已接通
 
-- 用户可见的中文产品名已统一为“搭慕”，拉丁品牌、域名和内部技术标识继续使用 `DAMUMU` / `damumu`。首版“搭”字 App Logo 候选稿保存在 `branding/tamu-logo-concept-v1.png`，待确认后再生成并替换各平台正式图标。
+- 用户可见的中文产品名已统一为“搭慕”，拉丁品牌、域名和内部技术标识继续使用 `DAMUMU` / `damumu`。首版“搭”字稿及三套新增 App 图标候选保存在 `branding/`，均待确认，尚未替换平台正式图标。Android 已接入使用首版概念稿的临时原生启动画面，覆盖 Android 12 前后启动主题；选定图标后可只替换启动素材。
 
 - 产品网站新增中文 `/privacy.html` 与韩文 `/privacy-ko.html` 隐私政策页面，中文页面可切换韩文；首页页头和页脚均提供入口。App 设置中的“隐私政策”会用系统浏览器打开对应语言版本，韩文界面直接打开韩文页。页面覆盖账号、资料、位置、活动、聊天、推送、共享、保存删除及用户权利，隐私联系邮箱统一为 `damumuapp@gmail.com`；正式提交应用商店前仍需填写真实运营者信息、验证该邮箱可正常收发，并进行适用法律审阅。
 
-- App 设置页新增可直接发起的账号删除入口，二次确认后调用现有 `DELETE /api/v1/me` 并清除本地登录状态；iOS 显示名统一为“搭慕”，相机、使用中定位和相册权限说明补齐中、英、韩本地化。App Store Connect 数据申报初稿见 `docs/APP_STORE_PRIVACY.md`。
+- App 设置页可直接完成账号删除：二次确认后，`DELETE /api/v1/me` 在一个数据库事务内撤销凭据与推送令牌，删除资料、兴趣、通知、黑名单、紧急联系人和位置安全数据，匿名化必须保留的活动、会话和治理历史，并取消尚未完成的主办活动；服务端账号状态检查使删除前签发的旧 Token 立即失效，App 随后清除本地登录状态。产品网站新增公开 `/account-deletion.html` 网页注销说明。iOS 显示名统一为“搭慕”，相机、使用中定位和相册权限说明已补齐中、英、韩本地化；申报初稿见 `docs/APP_STORE_PRIVACY.md`。
+
+- Android 首发基线已更新为版本 `1.0.0+1`、`compileSdk/targetSdk 36`，生产默认 API 为 `https://api.damumu.com/api/v1`，主清单禁止明文 HTTP，Release 不再回退 Debug 签名；仓库提供不含秘密的 `key.properties.example`，缺少 Upload Key 时正式构建会明确失败。生产 API 禁止 `X-User-Id` 开发身份头并隐藏 `/auth/dev-login`。签名、SDK 安装、注销验收和隐私核对步骤见 `docs/ANDROID_RELEASE_PREP.md`。
 
 - Lightsail 测试数据库已改为宿主机 PostgreSQL 18/PostGIS；API 容器通过固定的 `172.30.0.0/24` Compose 内网和 `host.docker.internal` 访问，宿主机 `pg_hba.conf` 与 UFW 只允许该网段的 `damumu_app` 连接，公网防火墙不开放 5432。
 
@@ -51,7 +53,9 @@
 
 - 在网站部署后验证 `https://www.damumu.com/privacy.html` 和 `https://www.damumu.com/privacy-ko.html` 可公开访问、无需登录且移动端可读；测试 `damumuapp@gmail.com` 的收发与账号恢复设置，把政策中的泛称运营者替换为真实个人或企业主体及必要联系方式，再用于 App Store / Google Play 提交。
 
-- 评审 `branding/tamu-logo-concept-v1.png`；确认视觉方向后导出 Android adaptive icon、iOS App Icon 和 Web favicon/PWA 图标，并在真机与商店预览中检查小尺寸识别度。
+- 评审 `branding/tamu-logo-concept-v1.png` 与 `branding/candidates/` 三套新增候选；确认视觉方向后导出 Android adaptive icon、iOS App Icon 和 Web favicon/PWA 图标，并在真机与商店预览中检查小尺寸识别度。
+
+- 在发布机安装 Android SDK 36，创建并安全备份 Upload Key，按 `docs/ANDROID_RELEASE_PREP.md` 生成签名 AAB；部署 API 和网站后，用专用测试账号验证即时注销、匿名化、未来活动取消以及公开网页注销入口。
 
 - 在 Lightsail 拉取子域名部署配置，签发覆盖根域名、`www`、`admin`、`api` 的证书并安装最终 Nginx 配置；重新构建 Admin 后验证宿主机 PostgreSQL、上传、WebSocket、公共 API 管理路径阻断以及 Admin Basic Auth。不得把 5432 或 8080 至 8082 暴露到公网。
 
@@ -67,7 +71,9 @@
 
 ## 已知缺口与验证边界
 
-- 当前隐私政策是按现有代码数据流编写的上线草案，不替代韩国及目标商店要求的法律审阅；隐私联系邮箱已确定为 `damumuapp@gmail.com`，但仍需验证可用性，真实运营主体尚未在仓库中确认。现有注销接口先把账号标记为删除处理中，完整的定时清除／匿名化工作流仍待实现。
+- 当前隐私政策是按现有代码数据流编写的上线草案，不替代韩国及目标商店要求的法律审阅；隐私联系邮箱已确定为 `damumuapp@gmail.com`，但仍需验证可用性，真实运营主体和举报／审计记录的最终法定保存期限尚未在仓库中确认。即时注销已实现，但仍需部署到 AWS 后通过数据库验收，并建立网页邮件请求的人工处理责任和 7 日完成监控。
+
+- 2026-10-15 API 零警告编译、Flutter 静态分析通过；Flutter 49 项测试中 48 项通过，唯一失败是既有注册页 Golden 测试写死 macOS 字体路径，在 Windows 找不到 `/System/Library/Fonts/Supplemental/Arial Unicode.ttf`。Android 构建因本机未安装 Android SDK 而无法执行，API 36、启动画面和正式签名仍需在配置好 Android SDK 36 的发布机验证。
 
 - 2026-10-08 App 内账号删除入口、三语确认文案及 iOS 三语权限用途说明通过 Flutter 静态分析和 9 项相关界面回归测试；Windows 仅能对 Xcode 工程文本、Info.plist XML 和资源引用做结构检查，仍需在 macOS/Xcode Release Archive 中验证本地化资源、Privacy Report 和第三方 SDK manifest。
 
