@@ -25,19 +25,10 @@ public static class ActivityQueries
                        up.avatar_url AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_score,
                        organizer_risk.category_code AS organizer_risk_tag,
-                       (e.title ILIKE '%新手%' OR e.description ILIKE '%新手%'
-                        OR EXISTS (
-                            SELECT 1
-                            FROM event_tag beginner_tag
-                            JOIN interest beginner_interest
-                              ON beginner_interest.id=beginner_tag.interest_id
-                            WHERE beginner_tag.event_id=e.id
-                              AND (
-                                  beginner_interest.code ILIKE '%beginner%'
-                                  OR beginner_interest.name_zh_cn ILIKE '%新手%'
-                                  OR beginner_interest.name_ko_kr ILIKE '%초보%'
-                              )
-                        )) AS beginner_friendly,
+                       e.beginner_friendly_claimed,
+                       beginner_feedback.verified AS beginner_friendly_verified,
+                       (e.beginner_friendly_claimed OR
+                        beginner_feedback.verified) AS beginner_friendly,
                        CASE WHEN @hasGeo AND p.public_geo IS NOT NULL
                             THEN ST_Distance(p.public_geo, ST_Point(@longitude, @latitude, 4326)::geography)
                             ELSE NULL END AS distance_meters
@@ -47,6 +38,14 @@ public static class ActivityQueries
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id
+                LEFT JOIN LATERAL (
+                    SELECT count(DISTINCT beginner_endorsement.from_user_id)
+                               >= @beginnerFriendlyThreshold AS verified
+                    FROM endorsement beginner_endorsement
+                    WHERE beginner_endorsement.target_user_id=e.organizer_user_id
+                      AND beginner_endorsement.target_type='activity'
+                      AND beginner_endorsement.tag_code='newcomer_friendly'
+                ) beginner_feedback ON true
                 LEFT JOIN LATERAL (
                     SELECT r.category_code
                     FROM report r

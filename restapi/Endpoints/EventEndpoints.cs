@@ -50,19 +50,10 @@ public static class EventEndpoints
                        up.avatar_url AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_score,
                        organizer_risk.category_code AS organizer_risk_tag,
-                       (e.title ILIKE '%新手%' OR e.description ILIKE '%新手%'
-                        OR EXISTS (
-                            SELECT 1
-                            FROM event_tag beginner_tag
-                            JOIN interest beginner_interest
-                              ON beginner_interest.id=beginner_tag.interest_id
-                            WHERE beginner_tag.event_id=e.id
-                              AND (
-                                  beginner_interest.code ILIKE '%beginner%'
-                                  OR beginner_interest.name_zh_cn ILIKE '%新手%'
-                                  OR beginner_interest.name_ko_kr ILIKE '%초보%'
-                              )
-                        )) AS beginner_friendly,
+                       e.beginner_friendly_claimed,
+                       beginner_feedback.verified AS beginner_friendly_verified,
+                       (e.beginner_friendly_claimed OR
+                        beginner_feedback.verified) AS beginner_friendly,
                        CASE WHEN @hasGeo AND p.public_geo IS NOT NULL
                             THEN ST_Distance(p.public_geo, ST_Point(@longitude, @latitude, 4326)::geography)
                             ELSE NULL END AS distance_meters
@@ -72,6 +63,14 @@ public static class EventEndpoints
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id
+                LEFT JOIN LATERAL (
+                    SELECT count(DISTINCT beginner_endorsement.from_user_id)
+                               >= @beginnerFriendlyThreshold AS verified
+                    FROM endorsement beginner_endorsement
+                    WHERE beginner_endorsement.target_user_id=e.organizer_user_id
+                      AND beginner_endorsement.target_type='activity'
+                      AND beginner_endorsement.tag_code='newcomer_friendly'
+                ) beginner_feedback ON true
                 LEFT JOIN LATERAL (
                     SELECT r.category_code
                     FROM report r
@@ -122,6 +121,7 @@ public static class EventEndpoints
                     latitude = latitude ?? 0,
                     longitude = longitude ?? 0,
                     radius,
+                    beginnerFriendlyThreshold = FeedbackPolicy.BeginnerFriendlyVerificationThreshold,
                     limit = take,
                     offset = skip
                 }, ct);
@@ -162,6 +162,9 @@ public static class EventEndpoints
                        up.nickname AS organizer_name, up.avatar_url AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_score,
                        COALESCE(ts.review_count, 0) AS organizer_review_count,
+                       beginner_feedback.verified AS beginner_friendly_verified,
+                       (e.beginner_friendly_claimed OR
+                        beginner_feedback.verified) AS beginner_friendly,
                        (
                            SELECT viewer_member.status
                            FROM event_member viewer_member
@@ -174,8 +177,21 @@ public static class EventEndpoints
                 LEFT JOIN place p ON p.id=e.place_id
                 LEFT JOIN user_profile up ON up.user_id=e.organizer_user_id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=e.organizer_user_id
+                LEFT JOIN LATERAL (
+                    SELECT count(DISTINCT beginner_endorsement.from_user_id)
+                               >= @beginnerFriendlyThreshold AS verified
+                    FROM endorsement beginner_endorsement
+                    WHERE beginner_endorsement.target_user_id=e.organizer_user_id
+                      AND beginner_endorsement.target_type='activity'
+                      AND beginner_endorsement.tag_code='newcomer_friendly'
+                ) beginner_feedback ON true
                 WHERE e.id=@id AND e.deleted_at IS NULL
-                """, new { id, viewerId }, ct);
+                """, new
+                {
+                    id,
+                    viewerId,
+                    beginnerFriendlyThreshold = FeedbackPolicy.BeginnerFriendlyVerificationThreshold
+                }, ct);
             if (item is null) throw new ApiException(404, "event_not_found", "活动不存在");
 
             var schedules = await db.QueryAsync(
@@ -393,14 +409,14 @@ public static class EventEndpoints
                     INSERT INTO event (
                         id, organizer_user_id, category_id, custom_subcategory, place_id, cover_media_id, title, description,
                         city_code, district_code, status, published_at, visibility, approval_mode,
-                        min_participants, capacity, approved_count, min_age, max_age,
+                        beginner_friendly_claimed, min_participants, capacity, approved_count, min_age, max_age,
                         price_min, price_max, price_amount, price_currency, language_codes,
                         announcement, organizer_note, review_status
                     )
                     VALUES (
                         @eventId, @userId, @categoryId, @customSubcategory, @placeId, @coverMediaId, @title, @description,
                         @cityCode, @districtCode, 'published', now(), @visibility, @approvalMode,
-                        @minParticipants, @capacity, 1, @minAge, @maxAge,
+                        @beginnerFriendly, @minParticipants, @capacity, 1, @minAge, @maxAge,
                         @priceMin, @priceMax, @priceMin, @priceCurrency, @languageCodes,
                         @announcement, @organizerNote, 'not_required'
                     )
@@ -425,6 +441,7 @@ public static class EventEndpoints
                     request.DistrictCode,
                     visibility = request.Visibility ?? "public",
                     approvalMode = request.ApprovalMode ?? "manual",
+                    beginnerFriendly = request.BeginnerFriendly,
                     request.MinParticipants,
                     request.Capacity,
                     minAge = request.MinAge ?? 18,
@@ -444,11 +461,24 @@ public static class EventEndpoints
                     "INSERT INTO event_tag (event_id, interest_id) VALUES (@eventId, @interestId) ON CONFLICT DO NOTHING",
                     new { eventId, interestId }, ct);
 
+            var beginnerFriendlyEndorsements = await db.ScalarAsync<long>(
+                """
+                SELECT count(DISTINCT from_user_id)
+                FROM endorsement
+                WHERE target_user_id=@userId AND target_type='activity'
+                  AND tag_code='newcomer_friendly'
+                """, new { userId }, ct);
+            var beginnerFriendlyVerified = beginnerFriendlyEndorsements >=
+                FeedbackPolicy.BeginnerFriendlyVerificationThreshold;
+
             return ApiSupport.Created($"/api/v1/events/{eventId}", new
             {
                 id = eventId,
                 status = "published",
-                reviewStatus = "not_required"
+                reviewStatus = "not_required",
+                beginnerFriendly = request.BeginnerFriendly || beginnerFriendlyVerified,
+                beginnerFriendlyClaimed = request.BeginnerFriendly,
+                beginnerFriendlyVerified
             });
         });
 
@@ -486,12 +516,13 @@ public static class EventEndpoints
                                             ELSE @customSubcategory END,
                     capacity=COALESCE(@capacity, capacity),
                     approval_mode=COALESCE(@approvalMode, approval_mode),
+                    beginner_friendly_claimed=COALESCE(@beginnerFriendly, beginner_friendly_claimed),
                     visibility=COALESCE(@visibility, visibility),
                     row_version=row_version
                 WHERE id=@id AND organizer_user_id=@userId AND deleted_at IS NULL
                   AND row_version=@rowVersion
                 RETURNING id, title, description, status, capacity, approval_mode,
-                          visibility, row_version, updated_at
+                          beginner_friendly_claimed, visibility, row_version, updated_at
                 """, new
                 {
                     id,
@@ -502,6 +533,7 @@ public static class EventEndpoints
                     customSubcategory,
                     request.Capacity,
                     request.ApprovalMode,
+                    request.BeginnerFriendly,
                     request.Visibility,
                     request.RowVersion
                 }, ct);
@@ -765,6 +797,7 @@ public sealed record CreateEventRequest(
     decimal PriceMin,
     decimal PriceMax,
     string? PriceCurrency,
+    bool BeginnerFriendly,
     string? Announcement,
     string? OrganizerNote,
     string[]? LanguageCodes,
@@ -778,6 +811,7 @@ public sealed record UpdateEventRequest(
     Guid? CategoryId,
     short? Capacity,
     string? ApprovalMode,
+    bool? BeginnerFriendly,
     string? Visibility,
     long RowVersion,
     string? CustomSubcategory);

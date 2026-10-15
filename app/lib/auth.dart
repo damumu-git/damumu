@@ -18,7 +18,7 @@ const _mint = Color(0xFFE7F4EC);
 const _ink = Color(0xFF17211B);
 const _apiBase = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://localhost:8080/api/v1',
+  defaultValue: 'https://api.damumu.com/api/v1',
 );
 const _devAutoLogin = bool.fromEnvironment(
   'DEV_AUTO_LOGIN',

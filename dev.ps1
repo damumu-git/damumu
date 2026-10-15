@@ -5,32 +5,15 @@ $logDirectory = Join-Path $repositoryRoot '.dev-logs'
 $localFirebaseCredential = Join-Path $repositoryRoot '.dev-data/firebase-service-account.json'
 $apiPort = if ($env:API_PORT) { $env:API_PORT } else { '8080' }
 $adminPort = if ($env:ADMIN_PORT) { $env:ADMIN_PORT } else { '5173' }
-$apiBaseUrl = if ($env:API_BASE_URL) {
-    $env:API_BASE_URL
-} else {
-    "http://localhost:$apiPort/api/v1"
-}
-$databaseConnection = $env:ConnectionStrings__Muda
-if ([string]::IsNullOrWhiteSpace($databaseConnection)) {
-    $databaseHost = if ($env:DAMUMU_POSTGRES_HOST) {
-        $env:DAMUMU_POSTGRES_HOST
-    } else { '100.66.109.44' }
-    $databaseName = if ($env:DAMUMU_POSTGRES_DATABASE) {
-        $env:DAMUMU_POSTGRES_DATABASE
-    } else { 'damumu' }
-    $databaseUsername = if ($env:DAMUMU_POSTGRES_USERNAME) {
-        $env:DAMUMU_POSTGRES_USERNAME
-    } else { 'postgres' }
-    $databasePassword = $env:DAMUMU_POSTGRES_PASSWORD
-    if ([string]::IsNullOrWhiteSpace($databasePassword)) {
-        throw '未设置数据库连接。请设置 DAMUMU_POSTGRES_PASSWORD，或通过 ConnectionStrings__Muda 提供完整连接字符串。'
-    }
-    $databaseConnection = "Host=$databaseHost;Port=5432;Database=$databaseName;Username=$databaseUsername;Password=$databasePassword;SSL Mode=Disable"
-}
 $flutterArguments = @($args)
 $servicesOnly = $flutterArguments.Count -gt 0 -and $flutterArguments[0] -eq '--services'
 if ($servicesOnly) {
     $flutterArguments = @($flutterArguments | Select-Object -Skip 1)
+}
+$apiBaseUrl = if ($env:API_BASE_URL) {
+    $env:API_BASE_URL
+} else {
+    'https://api.damumu.com/api/v1'
 }
 
 function Resolve-Executable([string[]]$Names, [string]$Description) {
@@ -39,6 +22,39 @@ function Resolve-Executable([string[]]$Names, [string]$Description) {
         if ($null -ne $command) { return $command.Source }
     }
     throw "找不到 $Description。请先安装并确认它已加入 PATH。"
+}
+
+if (-not $servicesOnly) {
+    $flutter = Resolve-Executable @('flutter.bat', 'flutter.exe', 'flutter') 'Flutter'
+    Write-Host "启动 Flutter App（API：$apiBaseUrl）"
+    Push-Location (Join-Path $repositoryRoot 'app')
+    try {
+        & $flutter run "--dart-define=API_BASE_URL=$apiBaseUrl" @flutterArguments
+        if ($LASTEXITCODE -ne 0) { throw "Flutter 运行失败，退出代码：$LASTEXITCODE" }
+    } finally {
+        Pop-Location
+    }
+    return
+}
+
+$databaseConnection = $env:ConnectionStrings__Muda
+if ([string]::IsNullOrWhiteSpace($databaseConnection)) {
+    $databaseHost = $env:DAMUMU_POSTGRES_HOST
+    $databasePassword = $env:DAMUMU_POSTGRES_PASSWORD
+    if ([string]::IsNullOrWhiteSpace($databaseHost) -or
+        [string]::IsNullOrWhiteSpace($databasePassword)) {
+        throw '启动本地 REST API 需要 ConnectionStrings__Muda，或同时设置 DAMUMU_POSTGRES_HOST 和 DAMUMU_POSTGRES_PASSWORD。AWS PostgreSQL 不开放公网 5432；需要本地 API 时请使用本地数据库或 SSH 隧道。'
+    }
+    $databasePort = if ($env:DAMUMU_POSTGRES_PORT) {
+        $env:DAMUMU_POSTGRES_PORT
+    } else { '5432' }
+    $databaseName = if ($env:DAMUMU_POSTGRES_DATABASE) {
+        $env:DAMUMU_POSTGRES_DATABASE
+    } else { 'damumu' }
+    $databaseUsername = if ($env:DAMUMU_POSTGRES_USERNAME) {
+        $env:DAMUMU_POSTGRES_USERNAME
+    } else { 'postgres' }
+    $databaseConnection = "Host=$databaseHost;Port=$databasePort;Database=$databaseName;Username=$databaseUsername;Password=$databasePassword;SSL Mode=Disable"
 }
 
 function Stop-DevelopmentProcess([System.Diagnostics.Process]$Process) {
@@ -87,10 +103,6 @@ $viteEntryPoint = Join-Path $repositoryRoot 'admin/node_modules/vite/bin/vite.js
 if (-not (Test-Path -LiteralPath $viteEntryPoint)) {
     throw '找不到 Admin 的 Vite。请先在 admin 目录执行 npm install。'
 }
-$flutter = if ($servicesOnly) { $null } else {
-    Resolve-Executable @('flutter.bat', 'flutter.exe', 'flutter') 'Flutter'
-}
-
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
 $apiLog = Join-Path $logDirectory 'restapi.log'
 $apiErrorLog = Join-Path $logDirectory 'restapi.error.log'
@@ -181,7 +193,7 @@ try {
     $env:VITE_API_BASE = $previousViteApiBase
     if (-not (Wait-DevelopmentEndpoint "http://localhost:$apiPort/api/v1/health" $apiProcess)) {
         Show-StartupFailure 'REST API' $apiErrorLog
-        throw 'REST API 未通过健康检查，请确认 Tailscale 和 PostgreSQL 的账号、密码。'
+        throw 'REST API 未通过健康检查，请查看日志并确认本地数据库或 SSH 隧道连接配置。'
     }
     if (-not (Wait-DevelopmentEndpoint "http://localhost:$adminPort" $adminProcess)) {
         Show-StartupFailure 'Admin' $adminErrorLog
@@ -191,22 +203,11 @@ try {
 
     Write-Host "日志目录：$logDirectory"
     Write-Host '独立停止命令：.\stop-dev.ps1'
-    if ($servicesOnly) {
-        Write-Host 'Admin 和 REST API 已启动；按 Ctrl+C 停止。'
-        while (-not $apiProcess.HasExited -and -not $adminProcess.HasExited) {
-            Start-Sleep -Seconds 1
-        }
-        throw '开发服务意外停止，请检查 .dev-logs。'
+    Write-Host 'Admin 和 REST API 已启动；按 Ctrl+C 停止。'
+    while (-not $apiProcess.HasExited -and -not $adminProcess.HasExited) {
+        Start-Sleep -Seconds 1
     }
-
-    Write-Host "启动 Flutter App（API：$apiBaseUrl）"
-    Push-Location (Join-Path $repositoryRoot 'app')
-    try {
-        & $flutter run "--dart-define=API_BASE_URL=$apiBaseUrl" @flutterArguments
-        if ($LASTEXITCODE -ne 0) { throw "Flutter 运行失败，退出代码：$LASTEXITCODE" }
-    } finally {
-        Pop-Location
-    }
+    throw '开发服务意外停止，请检查 .dev-logs。'
 } finally {
     $env:ASPNETCORE_ENVIRONMENT = $previousAspNetEnvironment
     $env:ASPNETCORE_URLS = $previousAspNetUrls

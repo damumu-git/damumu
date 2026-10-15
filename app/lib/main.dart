@@ -268,6 +268,7 @@ class EventItem {
     this.startsAt,
     this.endsAt,
     this.beginnerFriendly = false,
+    this.beginnerFriendlyVerified = false,
     this.coverUrl,
     this.organizerRiskTag,
   });
@@ -296,6 +297,7 @@ class EventItem {
   final DateTime? endsAt;
   bool get isPast => endsAt != null && !endsAt!.isAfter(DateTime.now());
   final bool beginnerFriendly;
+  final bool beginnerFriendlyVerified;
   final String? coverUrl;
   final String? organizerRiskTag;
 }
@@ -634,13 +636,15 @@ class _AppShellState extends State<AppShell> {
       description: '${json['description'] ?? ''}',
       startsAt: startsAt,
       endsAt: DateTime.tryParse('${json["ends_at"]}')?.toLocal(),
-      beginnerFriendly:
-          '${json['title'] ?? ''}'.contains('新手') ||
-          '${json['description'] ?? ''}'.contains('新手') ||
-          json['beginner_friendly'] == true,
+      beginnerFriendly: json['beginner_friendly'] == true,
+      beginnerFriendlyVerified: json['beginner_friendly_verified'] == true,
       tags: [
         '${json['category_name'] ?? ''}',
         json['approval_mode'] == 'manual' ? '需审核' : '直接加入',
+        if (json['beginner_friendly'] == true)
+          json['beginner_friendly_verified'] == true
+              ? context.tr('beginnerFriendlyVerified')
+              : context.tr('beginnerFriendly'),
       ],
     );
   }
@@ -2926,6 +2930,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
       _step != 0 ||
       _capacity != 6 ||
       !_approval ||
+      _beginnerFriendly ||
       _selectionEdited ||
       _sourceId != null;
 
@@ -3001,6 +3006,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         _price.text = '${data['price_amount'] ?? 0}';
         _capacity = (data['capacity'] as num).toInt();
         _approval = data['approval_mode'] == 'manual';
+        _beginnerFriendly = data['beginner_friendly_claimed'] == true;
         _startsAt = null;
         _endsAt = null;
         _step = 0;
@@ -3037,6 +3043,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
   bool _otherSelected = false;
   int _capacity = 6;
   bool _approval = true;
+  bool _beginnerFriendly = false;
   bool _publishing = false;
   Uint8List? _coverBytes;
   bool _coverBusy = false;
@@ -3754,6 +3761,18 @@ class _CreateEventPageState extends State<CreateEventPage> {
         onChanged: (value) => setState(() => _approval = value),
       ),
       const SizedBox(height: 18),
+      Card(
+        child: SwitchListTile.adaptive(
+          value: _beginnerFriendly,
+          onChanged: (value) => setState(() => _beginnerFriendly = value),
+          title: Text(
+            context.tr('beginnerFriendly'),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Text(context.tr('beginnerFriendlyClaimHelp')),
+        ),
+      ),
+      const SizedBox(height: 18),
       const _InfoBox(text: '发布即代表同意社区规范。禁止商业导流、歧视、危险或违法活动。'),
     ],
   );
@@ -3811,6 +3830,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
     setState(() => _publishing = true);
     String? uploadedCoverId;
     String? uploadedCoverUrl;
+    String? createdEventId;
+    bool createdBeginnerFriendly = _beginnerFriendly;
+    bool createdBeginnerFriendlyVerified = false;
     String? token;
     try {
       token = AuthScope.of(context).token;
@@ -3820,7 +3842,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         uploadedCoverId = upload.id;
         uploadedCoverUrl = upload.url;
       }
-      await EventService.create(
+      final created = await EventService.create(
         token: token,
         categoryId: _leafCategoryId!,
         coverMediaId: uploadedCoverId,
@@ -3838,8 +3860,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
         capacity: _capacity,
         priceAmount: priceAmount,
         approvalRequired: _approval,
+        beginnerFriendly: _beginnerFriendly,
         meetingPoint: _meetingPoint.text,
       );
+      createdEventId = created.id;
+      createdBeginnerFriendly = created.beginnerFriendly;
+      createdBeginnerFriendlyVerified = created.beginnerFriendlyVerified;
     } catch (error) {
       if (uploadedCoverId != null && token != null) {
         try {
@@ -3859,6 +3885,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
     widget.onCreated(
       EventItem(
         id: DateTime.now().millisecondsSinceEpoch,
+        apiId: createdEventId,
         emoji: '✨',
         coverUrl: uploadedCoverUrl,
         title: _title.text.trim(),
@@ -3875,12 +3902,19 @@ class _CreateEventPageState extends State<CreateEventPage> {
         isOwned: true,
         startsAt: _startsAt,
         endsAt: _endsAt,
-        beginnerFriendly:
-            _title.text.contains('新手') || _description.text.contains('新手'),
+        beginnerFriendly: createdBeginnerFriendly,
+        beginnerFriendlyVerified: createdBeginnerFriendlyVerified,
         description: _description.text.trim().isEmpty
             ? '一起度过轻松愉快的时间，欢迎第一次参加的新朋友。'
             : _description.text.trim(),
-        tags: [_category, _approval ? '需审核' : '直接加入'],
+        tags: [
+          _category,
+          _approval ? '需审核' : '直接加入',
+          if (createdBeginnerFriendly)
+            createdBeginnerFriendlyVerified
+                ? context.tr('beginnerFriendlyVerified')
+                : context.tr('beginnerFriendly'),
+        ],
       ),
     );
     _title.clear();
@@ -3892,6 +3926,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
       _step = 0;
       _startsAt = null;
       _endsAt = null;
+      _beginnerFriendly = false;
       _selectionEdited = false;
     });
   }

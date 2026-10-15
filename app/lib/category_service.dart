@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 const _apiBase = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://localhost:8080/api/v1',
+  defaultValue: 'https://api.damumu.com/api/v1',
 );
 
 class ActivityCategory {

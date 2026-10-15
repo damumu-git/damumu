@@ -39,6 +39,7 @@ public static class ActivityEndpoints
                     latitude = latitude ?? 0,
                     longitude = longitude ?? 0,
                     radius,
+                    beginnerFriendlyThreshold = FeedbackPolicy.BeginnerFriendlyVerificationThreshold,
                     limit = take + 1,
                     hasCursor = position is not null,
                     cursorCreatedAt = position?.CreatedAt ?? DateTime.UnixEpoch,

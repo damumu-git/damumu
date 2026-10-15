@@ -9,6 +9,11 @@ public sealed record FeedbackEligibility(
 public static class FeedbackPolicy
 {
     public const int RiskSignalThreshold = 3;
+    public const int BeginnerFriendlyVerificationThreshold = 3;
+
+    public static bool IsBeginnerFriendly(bool organizerClaimed, int distinctParticipantEndorsements) =>
+        organizerClaimed ||
+        distinctParticipantEndorsements >= BeginnerFriendlyVerificationThreshold;
 
     public static readonly IReadOnlySet<string> ActivityLikeTags = new HashSet<string>(
         ["punctual", "newcomer_friendly", "well_organized", "clear_communication",
