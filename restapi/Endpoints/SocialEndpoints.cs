@@ -144,7 +144,7 @@ public static class SocialEndpoints
 
         api.MapPost("/conversations/{id:guid}/media", async (
             Guid id, HttpContext context, IFormFile image, Db db,
-            IWebHostEnvironment environment, CancellationToken ct) =>
+            MediaStorage media, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var allowed = await db.ScalarAsync<long>(
@@ -183,10 +183,8 @@ public static class SocialEndpoints
             var mediaId = Guid.NewGuid();
             var storageKey = $"messages/{userId:N}/{mediaId:N}{extension}";
             var thumbnailStorageKey = $"messages/{userId:N}/{mediaId:N}.thumb.webp";
-            var path = Path.Combine(environment.ContentRootPath, "uploads", "messages",
-                userId.ToString("N"), $"{mediaId:N}{extension}");
-            var thumbnailPath = Path.Combine(environment.ContentRootPath, "uploads", "messages",
-                userId.ToString("N"), $"{mediaId:N}.thumb.webp");
+            var path = media.GetPath(storageKey);
+            var thumbnailPath = media.GetPath(thumbnailStorageKey);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             try
             {
@@ -228,7 +226,7 @@ public static class SocialEndpoints
 
         api.MapDelete("/conversations/{id:guid}/media/{mediaId:guid}", async (
             Guid id, Guid mediaId, HttpContext context, Db db,
-            IWebHostEnvironment environment, CancellationToken ct) =>
+            MediaStorage media, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var asset = await db.QueryOneAsync(
@@ -239,10 +237,8 @@ public static class SocialEndpoints
                 RETURNING storage_key, thumbnail_storage_key
                 """, new { mediaId, userId }, ct);
             if (asset is null) return Results.NoContent();
-            ImageThumbnailService.DeleteStoredFile(
-                environment.ContentRootPath, (string?)asset["storage_key"]);
-            ImageThumbnailService.DeleteStoredFile(
-                environment.ContentRootPath, (string?)asset["thumbnail_storage_key"]);
+            media.DeleteFile((string?)asset["storage_key"]);
+            media.DeleteFile((string?)asset["thumbnail_storage_key"]);
             return Results.NoContent();
         });
 

@@ -5,7 +5,7 @@ namespace Muda.Api.Infrastructure;
 
 public sealed class AccountDeletionService(
     NpgsqlDataSource dataSource,
-    IWebHostEnvironment environment,
+    MediaStorage media,
     ILogger<AccountDeletionService> logger)
 {
     public async Task<AccountDeletionResult?> DeleteAsync(
@@ -109,8 +109,7 @@ public sealed class AccountDeletionService(
 
     private bool DeleteAvatarFiles(Guid userId)
     {
-        var avatarRoot = Path.GetFullPath(Path.Combine(
-            environment.ContentRootPath, "uploads", "avatars"));
+        var avatarRoot = media.GetPath("avatars");
         var userDirectory = Path.GetFullPath(Path.Combine(avatarRoot, userId.ToString("N")));
         if (!userDirectory.StartsWith(
                 avatarRoot + Path.DirectorySeparatorChar,

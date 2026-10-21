@@ -6,6 +6,11 @@ using Muda.Api.Infrastructure;
 
 CancellationChecks.ValidateReasons();
 FeedbackChecks.Validate();
+if (args.FirstOrDefault() == "--storage-check")
+{
+    await StorageChecks.Validate();
+    return;
+}
 if (args.FirstOrDefault() == "--thumbnail-check")
 {
     await MediaChecks.ValidateThumbnails();

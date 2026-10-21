@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { API_BASE, api } from './api'
+import { API_BASE, api, mediaUrl } from './api'
 import './App.css'
 
 const navigation = [
@@ -781,7 +781,7 @@ function SystemAvatars() {
       <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
         <div className="avatar-grid">{rows.map((avatar) => (
           <article className={`avatar-card ${avatar.is_active ? '' : 'disabled'}`} key={avatar.id}>
-            <img src={`${API_BASE}${avatar.image_url}`} alt={avatar.name_zh_cn} />
+            <img src={mediaUrl(avatar.image_url)} alt={avatar.name_zh_cn} />
             <div><h4>{avatar.name_zh_cn}</h4><p>{avatar.name_en_us} · {avatar.name_ko_kr}</p><small>{avatar.code} · {avatar.byte_size} bytes</small></div>
             <label className="switch"><input type="checkbox" checked={avatar.is_active} onChange={() => toggle(avatar)} /><span /></label>
           </article>

@@ -190,7 +190,7 @@ public static class UserEndpoints
             return ApiSupport.Ok(user);
         });
 
-        api.MapPatch("/me", async (HttpContext context, UpdateProfileRequest request, Db db, CancellationToken ct) =>
+        api.MapPatch("/me", async (HttpContext context, UpdateProfileRequest request, Db db, MediaStorage media, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var profile = await db.QueryOneAsync(
@@ -214,7 +214,7 @@ public static class UserEndpoints
                 {
                     userId,
                     nickname = EmptyToNull(request.Nickname),
-                    avatarUrl = EmptyToNull(request.AvatarUrl),
+                    avatarUrl = media.ToStoredReference(EmptyToNull(request.AvatarUrl)),
                     bio = EmptyToNull(request.Bio),
                     cityCode = EmptyToNull(request.CityCode),
                     districtCode = EmptyToNull(request.DistrictCode),
@@ -247,14 +247,13 @@ public static class UserEndpoints
         });
 
         api.MapPost("/me/avatar", async (
-            HttpContext context, IFormFile avatar, Db db, IWebHostEnvironment environment,
+            HttpContext context, IFormFile avatar, Db db, MediaStorage media,
             CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             AvatarImageValidator.Validate(avatar);
             await using var input = avatar.OpenReadStream();
-            var relativeDirectory = Path.Combine("avatars", userId.ToString("N"));
-            var directory = Path.Combine(environment.ContentRootPath, "uploads", relativeDirectory);
+            var directory = media.GetPath($"avatars/{userId:N}");
             Directory.CreateDirectory(directory);
             var fileName = $"{Guid.NewGuid():N}.jpg";
             var fullPath = Path.Combine(directory, fileName);

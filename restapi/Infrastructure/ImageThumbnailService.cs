@@ -73,16 +73,6 @@ public static class ImageThumbnailService
         await data.AsStream().CopyToAsync(output, cancellationToken);
     }
 
-    public static void DeleteStoredFile(string contentRoot, string? storageKey)
-    {
-        if (string.IsNullOrWhiteSpace(storageKey)) return;
-        var uploadsRoot = Path.GetFullPath(Path.Combine(contentRoot, "uploads"));
-        var relative = storageKey.Replace('/', Path.DirectorySeparatorChar);
-        var path = Path.GetFullPath(Path.Combine(uploadsRoot, relative));
-        if (!path.StartsWith(uploadsRoot + Path.DirectorySeparatorChar,
-                StringComparison.OrdinalIgnoreCase)) return;
-        if (File.Exists(path)) File.Delete(path);
-    }
 }
 
 public sealed record ImageThumbnailResult(long ByteSize, int Width, int Height);

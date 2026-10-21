@@ -2,3 +2,7 @@ bin
 obj
 .git
 .env
+.codex-build
+uploads/avatars
+uploads/events
+uploads/messages

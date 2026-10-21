@@ -445,7 +445,7 @@ public static class AdminEndpoints
                 """, cancellationToken: ct)));
 
         admin.MapPost("/system-avatars", async (
-            HttpContext context, Db db, IWebHostEnvironment environment, CancellationToken ct) =>
+            HttpContext context, Db db, MediaStorage media, CancellationToken ct) =>
         {
             var form = await context.Request.ReadFormAsync(ct);
             var image = form.Files.GetFile("image")
@@ -458,7 +458,7 @@ public static class AdminEndpoints
             _ = int.TryParse(form["sortOrder"].FirstOrDefault(), out var sortOrder);
 
             var id = Guid.NewGuid();
-            var directory = Path.Combine(environment.ContentRootPath, "uploads", "system-avatars");
+            var directory = media.GetPath("system-avatars");
             Directory.CreateDirectory(directory);
             var fileName = $"{id:N}.jpg";
             var fullPath = Path.Combine(directory, fileName);

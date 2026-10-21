@@ -6,6 +6,73 @@ Nginx 按域名把 `www.damumu.com`、`admin.damumu.com`、`api.damumu.com`
 分别转发给三个服务，`damumu.com` 跳转到 `www.damumu.com`。Flutter `app/`
 只构建 Android/iOS 客户端，不部署 Flutter Web。
 
+## Ubuntu 目录与图片访问
+
+```text
+/opt/damumu/repo/              Git 源码与部署脚本
+/srv/damumu/uploads/           持久化图片，独立于源码和容器
+  system-avatars/             系统头像
+  avatars/                    用户头像
+  events/                     活动原图与缩略图
+  messages/                   聊天原图与缩略图
+/var/backups/damumu/           备份归档，不对公网提供
+/etc/nginx/                   宿主机 HTTPS 与域名路由配置
+```
+
+只有 API 容器绑定 `/srv/damumu/uploads` 到容器内的
+`/var/lib/damumu/uploads`；Admin 容器不挂载图片目录。上传经过 API 校验，浏览器和
+App 使用完整 URL，如 `https://api.damumu.com/uploads/system-avatars/green-sprout.jpg`。
+宿主机 Nginx 将 `/uploads/` 转发给 API 静态文件服务，响应不暴露磁盘路径。
+
+`Media__RootPath` 配置磁盘位置，`MEDIA_PUBLIC_BASE_URL` 配置公开 URL 前缀。
+数据库保留相对存储键与历史 `/uploads/...` 引用，API 在响应边界统一转换为完整 URL，
+无需数据库迁移。未来调整媒体域名前，须先确保新地址能读取全部既有文件。
+
+预设头像随发布产物保存在 `/app/preset-avatars`，启动时只补齐缺少的文件，不覆盖
+已有头像，也不会被上传目录挂载遮住。用户上传不进入 Git；更新图片应产生新 URL。
+
+首次部署前准备目录：
+
+```bash
+sudo install -d -m 755 /srv/damumu /srv/damumu/uploads
+sudo install -d -m 700 /var/backups/damumu
+```
+
+当前 API 镜像仍以 root 运行；以后改为非 root 时必须同步配置目录属主，不能使用
+`chmod 777` 代替。绑定目录缺失时 Compose 会失败，不会自动创建空目录掩盖迁移遗漏。
+
+## 从旧 Docker 图片卷迁移（已有服务器必须执行一次）
+
+先创建 Lightsail 手动快照，并确认数据库独立备份。拉取新配置后，**不要直接执行
+`docker compose up`**，先在服务器运行：
+
+```bash
+cd /opt/damumu/repo
+bash deploy/migrate-uploads.sh
+```
+
+脚本从现有 API 容器发现 `/app/uploads` 的实际命名卷，检查目标为空，停止 API 写入，
+将原卷归档到 `/var/backups/damumu/uploads-时间戳.tar.gz`，复制并比较全部文件。
+成功后记录迁移标记；保留原卷，API 保持停止，然后运行 `damumu-deploy`
+（首次受管部署仍需按下文核对迁移并使用 `--migrations-applied`）。其他服务不停止。
+存在旧 API 卷但没有成功迁移标记时，部署脚本会拒绝替换 API 容器。
+
+失败时不要删除卷或清空目标目录；先检查归档和已复制文件。如果需要恢复旧服务，
+可执行 `docker start <原API容器ID>`，它仍挂载原卷；恢复写入后必须重新核对和迁移
+增量，不能沿用旧迁移结果。脚本不会自动合并非空目标目录。
+
+部署后验证头像、一张已有活动/聊天图片，并通过后台上传新头像：
+
+```bash
+curl --fail --output /dev/null https://api.damumu.com/uploads/system-avatars/green-sprout.jpg
+docker compose --env-file deploy/.env -f deploy/compose.yaml exec api \
+  ls -l /var/lib/damumu/uploads/system-avatars
+```
+
+日常图片操作通过 App/后台完成。备份须覆盖 `/srv/damumu/uploads` 和对应数据库；
+暂停写入或使用一致性快照后归档，将备份复制到其他主机或对象存储，并定期验证恢复。
+只有本机副本无法应对实例丢失。`git pull` 和重建容器不会备份或同步用户上传。
+
 ## 前置条件
 
 - Docker Engine 与 Compose 插件已安装。
@@ -100,6 +167,8 @@ sudo nginx -t
 sudo systemctl enable --now nginx
 sudo systemctl reload nginx
 
+sudo install -d -m 755 /srv/damumu /srv/damumu/uploads
+sudo install -d -m 700 /var/backups/damumu
 docker compose --env-file deploy/.env -f deploy/compose.yaml build site api admin
 docker compose --env-file deploy/.env -f deploy/compose.yaml up -d site api admin
 docker compose --env-file deploy/.env -f deploy/compose.yaml ps
@@ -197,8 +266,8 @@ Pull Request 创建 revert、合并回 `main`，再运行 `damumu-deploy`。如�
 迁移，必须先确认迁移是否向后兼容；数据库回滚应使用事先创建的备份或经过审查的反向
 迁移，不能依靠应用脚本自动处理。
 
-`damumu_uploads` 是 Docker 命名卷，重建容器不会删除；不要执行
-`docker compose down -v`。数据库仍需独立备份。自动 Lightsail 快照会备份实例磁盘，
+图片现存于 `/srv/damumu/uploads`，重建容器不会删除。旧命名卷应在迁移及恢复验证
+完成后再人工清理，不要执行 `docker compose down -v`。数据库仍需独立备份。自动 Lightsail 快照会备份实例磁盘，
 但删除实例时自动快照也会被删除，重要版本应另存手动快照。
 
 ## 当前安全边界

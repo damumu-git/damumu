@@ -162,6 +162,19 @@ fi
 log "Validating Compose configuration"
 compose config --quiet
 
+[[ -d /srv/damumu/uploads && -r /srv/damumu/uploads ]] || \
+  die "Prepare /srv/damumu/uploads first; see deploy/README.md. Docker will not create a missing media directory."
+api_container="$(compose ps -aq api)"
+if [[ -n "$api_container" ]]; then
+  old_volume="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/app/uploads"}}{{if eq .Type "volume"}}{{.Name}}{{end}}{{end}}{{end}}' "$api_container")"
+  if [[ -n "$old_volume" ]]; then
+    [[ -f /srv/damumu/.uploads-migrated-from && "$(cat /srv/damumu/.uploads-migrated-from)" == "$old_volume" ]] || \
+      die "Existing uploads are in $old_volume. Run bash deploy/migrate-uploads.sh before replacing the API container."
+    [[ "$(docker inspect --format '{{.State.Running}}' "$api_container")" == false ]] || \
+      die "Old API resumed after migration; stop writes and verify/copy any new uploads before deployment."
+  fi
+fi
+
 available_kb="$(df -Pk "$REPO_ROOT" | awk 'NR == 2 {print $4}')"
 if ((available_kb < 2097152)); then
   printf 'WARNING: less than 2 GiB is available on the deployment filesystem.\n' >&2
@@ -179,6 +192,8 @@ log "Checking services through their loopback ports"
 curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8081/healthz >/dev/null
 curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8080/api/v1/health >/dev/null
 curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8082/healthz >/dev/null
+curl --fail --silent --show-error --max-time 15 \
+  http://127.0.0.1:8080/uploads/system-avatars/green-sprout.jpg >/dev/null
 
 if [[ "$UPDATE_NGINX" == true ]]; then
   command -v sudo >/dev/null 2>&1 || die "sudo is required to update Nginx."
@@ -209,6 +224,8 @@ if [[ "$CHECK_PUBLIC" == true ]]; then
   log "Checking public HTTPS routes"
   curl --fail --silent --show-error --max-time 20 https://www.damumu.com/healthz >/dev/null
   curl --fail --silent --show-error --max-time 20 https://api.damumu.com/api/v1/health >/dev/null
+  curl --fail --silent --show-error --max-time 20 \
+    https://api.damumu.com/uploads/system-avatars/green-sprout.jpg >/dev/null
   admin_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
     --max-time 20 https://admin.damumu.com/healthz)"
   [[ "$admin_status" == "401" ]] || \

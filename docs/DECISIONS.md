@@ -1,5 +1,26 @@
 # DAMUMU 项目决策记录
 
+## ADR-022：Ubuntu 媒体目录与公开 URL 分离
+
+状态：已采用
+日期：2026-10-21
+
+### 决定
+
+- Lightsail 单机的持久化图片保存在宿主机 `/srv/damumu/uploads`，通过显式绑定挂载到 API 的 `/var/lib/damumu/uploads`。源码留在 `/opt/damumu/repo`，备份留在 `/var/backups/damumu`；Admin 容器不挂载图片目录。
+- API 使用 `Media:RootPath` 管理写入、静态读取与删除，使用 `Media:PublicBaseUrl` 生成完整公开 URL。生产环境要求绝对磁盘路径和 HTTPS URL，不依赖请求 Host 或客户端拼接 API 前缀。
+- 数据库继续保存相对存储键及历史 `/uploads/...` 引用；成功响应统一转换媒体 URL 字段，保留系统头像 ID 和业务文本。完整外部 URL 不重复拼接。
+- 内置头像打包到独立发布目录，启动时只补齐持久化目录缺失文件。旧命名卷必须先停止写入、备份、复制并比较，再切换挂载；不得通过删除卷解决图片缺失。
+
+### 原因与影响
+
+明确的宿主机目录便于单机运维与备份；URL 与磁盘位置分离使移动端和 Admin 使用同一媒体地址，并为未来 CDN 保留配置边界。绑定目录本身不提供备份或多机共享，仍需异机备份；多 API 实例前仍应迁移共享存储。本决定取代 ADR-020 中关于上传命名卷的部分，其余入口与认证边界不变。URL 绝对化不改变现有媒体的访问权限策略。
+
+### 相关位置
+
+- `restapi/Infrastructure/MediaStorage.cs`、`MediaJsonResult.cs`
+- `deploy/compose.yaml`、`deploy/migrate-uploads.sh`、`deploy/README.md`
+
 ## 索引
 
 | 编号 | 决策 | 状态 | 日期 |
@@ -19,6 +40,7 @@
 | ADR-019 | 图片缩略图、不可变缓存与流量升级阈值 | 已采用 | 2026-10-02 |
 | ADR-020 | Lightsail 单机测试部署边界 | 已采用 | 2026-10-04 |
 | ADR-021 | Lightsail 测试数据库运行在宿主机 | 已采用 | 2026-10-04 |
+| ADR-022 | Ubuntu 媒体目录与公开 URL 分离 | 已采用 | 2026-10-21 |
 | ADR-008 | 用户位置标签跟随 App 语言 | 已采用 | 2026-09-07 |
 | ADR-009 | 活动容量包含组织者 | 已采用 | 2026-09-08 |
 | ADR-010 | 远端业务数据库使用 damumu 名称 | 已采用 | 2026-09-11 |

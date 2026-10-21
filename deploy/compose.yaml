@@ -12,6 +12,8 @@ services:
       Auth__TokenKey: ${AUTH_TOKEN_KEY}
       Admin__ApiKey: ${ADMIN_API_KEY}
       Firebase__ProjectId: ${FIREBASE_PROJECT_ID:-}
+      Media__RootPath: /var/lib/damumu/uploads
+      Media__PublicBaseUrl: ${MEDIA_PUBLIC_BASE_URL:-https://api.damumu.com/uploads}
     ports:
       - 127.0.0.1:8080:8080
     extra_hosts:
@@ -19,7 +21,11 @@ services:
     networks:
       - backend
     volumes:
-      - damumu_uploads:/app/uploads
+      - type: bind
+        source: /srv/damumu/uploads
+        target: /var/lib/damumu/uploads
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/api/v1/health"]
       interval: 30s
@@ -56,9 +62,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-volumes:
-  damumu_uploads:
 
 networks:
   backend:

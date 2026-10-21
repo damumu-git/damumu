@@ -28,7 +28,7 @@ DAMUMU（中文 UI 名称“搭慕”）是一款面向韩国本地生活场景�
 - App：Flutter、Dart、Material 3。
 - Admin：React 19、Vite 8。
 - Infrastructure：AWS Lightsail 单机测试环境；本地 App 开发默认使用公网 HTTPS API，本地 REST API 开发需使用隔离数据库或 SSH 隧道。
-- Object Storage：尚未确定，头像当前使用 API 本地持久化目录。
+- Media Storage：Lightsail 单机使用宿主机 `/srv/damumu/uploads`，仅挂载到 API；磁盘路径与公开媒体 URL 分开配置，API 返回完整 HTTP(S) 图片 URL。对象存储尚未接入。
 - Realtime：ASP.NET Core 原生 WebSocket；数据库和 REST API 仍是消息事实来源，WebSocket 只发送同步事件，多 API 实例通过 PostgreSQL `LISTEN/NOTIFY` 转发轻量事件。
 - Push：Firebase Cloud Messaging（FCM）；缺少 Firebase 项目配置时自动停用，不影响站内消息和前台 WebSocket。
 

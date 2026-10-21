@@ -1,8 +1,12 @@
 # DAMUMU 当前项目状态
 
-最后核对：2026-10-15（Asia/Seoul）。本页只记当前事实、下一步和阻塞；完成历史见 Git。代码、迁移和测试结果优先于本页。
+最后核对：2026-10-21（Asia/Seoul）。本页只记当前事实、下一步和阻塞；完成历史见 Git。代码、迁移和测试结果优先于本页。
 
 ## 当前已接通
+
+- Ubuntu 媒体配置改为宿主机 `/srv/damumu/uploads` 绑定到 API 的 `/var/lib/damumu/uploads`，Admin 无需共享挂载。上传、删除、注销清理和静态读取统一使用可配置根目录；API 将历史 `/uploads/...` 图片引用转换为配置的完整 HTTPS URL，保留数据库存储键与 `system:<id>` 标识。Admin 修复错误的 `/api/v1/uploads` 拼接。预设头像独立打包、启动时仅补齐缺失文件；提供旧卷停止写入、备份、复制与比较脚本，部署检查迁移标记和公开头像读取。尚未在 AWS 执行迁移或部署。
+
+- 媒体改造验证已通过：API 构建与发布、Admin lint/build、Compose 配置和 Bash 语法；Windows 与 Linux 容器中的真实 HTTP 检查覆盖完整 URL、响应封装、外部目录读写/删除与预设补齐。隔离 Docker 测试已验证旧卷复制到宿主机绑定目录、归档恢复后文件一致，以及发布版 API 从绑定目录读取预设/已有图片并保留缓存头。未连接 AWS 数据库或执行线上迁移；本地发布仅含仍存在的 17 张预设图，原有三张删除未提交。
 
 - 用户可见的中文产品名已统一为“搭慕”，拉丁品牌、域名和内部技术标识继续使用 `DAMUMU` / `damumu`。首版“搭”字稿及三套新增 App 图标候选保存在 `branding/`，均待确认，尚未替换平台正式图标。Android 已接入使用首版概念稿的临时原生启动画面，覆盖 Android 12 前后启动主题；选定图标后可只替换启动素材。
 
@@ -14,7 +18,7 @@
 
 - Lightsail 测试数据库已改为宿主机 PostgreSQL 18/PostGIS；API 容器通过固定的 `172.30.0.0/24` Compose 内网和 `host.docker.internal` 访问，宿主机 `pg_hba.conf` 与 UFW 只允许该网段的 `damumu_app` 连接，公网防火墙不开放 5432。
 
-- Lightsail 单机测试部署配置已进入仓库：产品主页、Admin 和 API 容器只绑定宿主机回环端口，公网由宿主机 Nginx 按 `www.damumu.com`、`admin.damumu.com`、`api.damumu.com` 三个域名分流并强制 HTTPS，根域名跳转到 `www`。Admin 页面和同源管理 API 在现有静态 Key 外增加 Basic Auth，公共 API 域名拒绝管理 API 路径；上传目录使用命名卷。Flutter `app/` 保持 Android/iOS 客户端，不部署 Flutter Web。正式上线前仍必须替换为管理员登录、短时 Cookie、RBAC 和二次验证。
+- Lightsail 单机测试部署配置已进入仓库：产品主页、Admin 和 API 容器只绑定宿主机回环端口，公网由宿主机 Nginx 按 `www.damumu.com`、`admin.damumu.com`、`api.damumu.com` 三个域名分流并强制 HTTPS，根域名跳转到 `www`。Admin 页面和同源管理 API 在现有静态 Key 外增加 Basic Auth，公共 API 域名拒绝管理 API 路径；上传目录使用宿主机持久化绑定目录。Flutter `app/` 保持 Android/iOS 客户端，不部署 Flutter Web。正式上线前仍必须替换为管理员登录、短时 Cookie、RBAC 和二次验证。
 
 - Lightsail 更新可通过 `deploy/deploy.sh` 或服务器快捷命令 `damumu-deploy` 完成：脚本只允许干净的 `main` 快进到 `origin/main`，检测新增数据库迁移并要求先备份和人工确认，随后校验配置、构建并启动三个容器、等待健康检查、按需安全更新 Nginx、验证公网 HTTPS，成功后清理悬空镜像；失败时保留数据卷并输出服务状态与最近日志。
 
@@ -50,6 +54,8 @@
 - 旧 Tailscale 数据库已迁移至 AWS Lightsail 宿主机 PostgreSQL；本地 App 开发通过公网 API 访问。数据库迁移与服务端集成测试应在受控服务器连接、本地隔离数据库或 SSH 隧道中执行，不得开放公网 5432。
 
 ## 接下来做什么
+
+- 按 `deploy/README.md` 在 AWS 备份并运行 `deploy/migrate-uploads.sh`，再部署 API/Admin；核对历史活动/聊天图片及新头像上传。确认现有三张本地已删除的预设头像是否需要恢复；这些删除未纳入本次存储改造。
 
 - 在网站部署后验证 `https://www.damumu.com/privacy.html` 和 `https://www.damumu.com/privacy-ko.html` 可公开访问、无需登录且移动端可读；测试 `damumuapp@gmail.com` 的收发与账号恢复设置，把政策中的泛称运营者替换为真实个人或企业主体及必要联系方式，再用于 App Store / Google Play 提交。
 

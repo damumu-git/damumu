@@ -263,7 +263,7 @@ public static class EventEndpoints
         });
 
         api.MapPost("/events/covers", async (
-            HttpContext context, IFormFile cover, Db db, IWebHostEnvironment environment,
+            HttpContext context, IFormFile cover, Db db, MediaStorage media,
             CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
@@ -271,10 +271,8 @@ public static class EventEndpoints
             var mediaId = Guid.NewGuid();
             var storageKey = $"events/{userId:N}/{mediaId:N}.jpg";
             var thumbnailStorageKey = $"events/{userId:N}/{mediaId:N}.thumb.webp";
-            var path = Path.Combine(environment.ContentRootPath, "uploads", "events",
-                userId.ToString("N"), $"{mediaId:N}.jpg");
-            var thumbnailPath = Path.Combine(environment.ContentRootPath, "uploads", "events",
-                userId.ToString("N"), $"{mediaId:N}.thumb.webp");
+            var path = media.GetPath(storageKey);
+            var thumbnailPath = media.GetPath(thumbnailStorageKey);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             try
             {
@@ -315,7 +313,7 @@ public static class EventEndpoints
         }).DisableAntiforgery();
 
         api.MapDelete("/events/covers/{id:guid}", async (
-            Guid id, HttpContext context, Db db, IWebHostEnvironment environment,
+            Guid id, HttpContext context, Db db, MediaStorage media,
             CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
@@ -328,10 +326,8 @@ public static class EventEndpoints
                 """, new { id, userId }, ct);
             if (deleted is null)
                 throw new ApiException(404, "cover_not_found", "图片不存在或已被活动使用");
-            ImageThumbnailService.DeleteStoredFile(
-                environment.ContentRootPath, (string?)deleted["storage_key"]);
-            ImageThumbnailService.DeleteStoredFile(
-                environment.ContentRootPath, (string?)deleted["thumbnail_storage_key"]);
+            media.DeleteFile((string?)deleted["storage_key"]);
+            media.DeleteFile((string?)deleted["thumbnail_storage_key"]);
             return ApiSupport.Ok(new { id });
         });
 

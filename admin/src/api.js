@@ -1,6 +1,12 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/api/v1'
 const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY ?? 'muda-admin-local'
 
+export function mediaUrl(value) {
+  if (!value) return ''
+  const apiUrl = new URL(API_BASE, window.location.origin)
+  return new URL(value, apiUrl.origin).href
+}
+
 async function request(path, options = {}) {
   const isForm = options.body instanceof FormData
   const response = await fetch(`${API_BASE}${path}`, {

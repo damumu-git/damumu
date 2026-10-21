@@ -224,8 +224,27 @@ Authentication Key 也已上传到 Firebase Cloud Messaging。Web
 中分类和完整的小分类目录，并把旧分类无损归入新目录。
 
 部署生产环境前必须通过
-环境变量 `Auth__TokenKey` 设置至少 32 位的随机密钥，并将 `uploads/` 挂载到持久卷
-或替换为对象存储。
+环境变量 `Auth__TokenKey` 设置至少 32 位的随机密钥，并配置媒体目录与公开 URL：
+
+```text
+Media__RootPath=/var/lib/damumu/uploads
+Media__PublicBaseUrl=https://api.damumu.com/uploads
+```
+
+生产环境必须配置绝对磁盘路径与完整 HTTPS URL。Ubuntu 将宿主机 `/srv/damumu/uploads`
+绑定到上述目录；迁移、权限和备份步骤见 `deploy/README.md`。Development 默认使用
+内容目录下的 `uploads` 和 `http://localhost:8080/uploads`；更换端口或跨设备访问时
+显式配置公开 URL。上传、静态读取、删除和注销清理统一使用 `MediaStorage`。
+数据库保留可迁移的存储键，成功响应的头像、活动、聊天图片字段统一转换为完整 URL；
+客户端不应拼接 `/api/v1`。既有完整 URL 不变，`system:<id>` 继续作为系统头像标识。
+系统预设 JPEG 发布到独立 `preset-avatars` 目录，启动时只补齐缺失文件，不覆盖已有文件。
+
+媒体存储及真实 HTTP 验证（不需要数据库）：
+
+```bash
+dotnet build restapi.tests/Muda.Api.PaginationTests.csproj -o restapi/.codex-build/storage-tests
+dotnet restapi/.codex-build/storage-tests/Muda.Api.PaginationTests.dll --storage-check
+```
 
 ## 本地开发身份
 

@@ -11,6 +11,7 @@ var connectionString = builder.Configuration.GetConnectionString("Muda")
     ?? throw new InvalidOperationException("ConnectionStrings:Muda is required.");
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<Db>();
+builder.Services.AddSingleton<MediaStorage>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<AccountDeletionService>();
 builder.Services.AddSingleton<RealtimeConnectionManager>();
@@ -25,8 +26,8 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
-var uploadsRoot = Path.Combine(app.Environment.ContentRootPath, "uploads");
-Directory.CreateDirectory(Path.Combine(uploadsRoot, "avatars"));
+var mediaStorage = app.Services.GetRequiredService<MediaStorage>();
+mediaStorage.Initialize(Path.Combine(AppContext.BaseDirectory, "preset-avatars"));
 
 app.Use(async (context, next) =>
 {
@@ -99,7 +100,7 @@ app.UseCors();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(uploadsRoot),
+    FileProvider = new PhysicalFileProvider(mediaStorage.RootPath),
     RequestPath = "/uploads",
     OnPrepareResponse = context =>
     {

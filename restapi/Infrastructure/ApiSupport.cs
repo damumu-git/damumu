@@ -6,10 +6,10 @@ namespace Muda.Api;
 public static class ApiSupport
 {
     public static IResult Ok(object? data, object? meta = null) =>
-        Results.Ok(new { data, meta, error = (object?)null, traceId = Activity.Current?.Id });
+        new MediaJsonResult(new { data, meta, error = (object?)null, traceId = Activity.Current?.Id });
 
     public static IResult Created(string uri, object? data) =>
-        Results.Created(uri, new { data, meta = (object?)null, error = (object?)null, traceId = Activity.Current?.Id });
+        new MediaJsonResult(new { data, meta = (object?)null, error = (object?)null, traceId = Activity.Current?.Id }, uri);
 
     public static Guid RequireUserId(HttpContext context)
     {
