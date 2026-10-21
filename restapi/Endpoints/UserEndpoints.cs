@@ -28,6 +28,7 @@ public static class UserEndpoints
         api.MapPost("/auth/register", async (
             RegisterRequest request, Db db, AuthService auth, CancellationToken ct) =>
         {
+            PrivacyRules.ValidateRegistration(request.AgeConfirmed, request.PrivacyAcknowledged, request.PrivacyVersion);
             var nickname = request.Nickname?.Trim();
             var email = request.Email?.Trim().ToLowerInvariant();
             ValidateCredentials(nickname, email, request.Password);
@@ -48,8 +49,9 @@ public static class UserEndpoints
             await db.ExecuteAsync(
                 """
                 WITH new_user AS (
-                    INSERT INTO app_user (id, status, role, adult_confirmed_at)
-                    VALUES (@userId, 'active', 'user', now())
+                    INSERT INTO app_user (id, status, role, minimum_age_confirmed_at,
+                                          privacy_notice_version, privacy_notice_acknowledged_at)
+                    VALUES (@userId, 'active', 'user', now(), @privacyVersion, now())
                     RETURNING id
                 ), new_profile AS (
                     INSERT INTO user_profile (
@@ -68,7 +70,8 @@ public static class UserEndpoints
                     nickname,
                     avatarUrl = avatarId.HasValue ? $"system:{avatarId}" : null,
                     email,
-                    passwordHash
+                    passwordHash,
+                    privacyVersion = PrivacyRules.NoticeVersion
                 }, ct);
 
             return ApiSupport.Created($"/api/v1/users/{userId}", new
@@ -515,7 +518,8 @@ public static class UserEndpoints
     }
 }
 
-public sealed record RegisterRequest(string? Nickname, string? Email, string? Password, Guid? AvatarId);
+public sealed record RegisterRequest(string? Nickname, string? Email, string? Password, Guid? AvatarId,
+    bool AgeConfirmed = false, bool PrivacyAcknowledged = false, string? PrivacyVersion = null);
 public sealed record LoginRequest(string? Email, string? Password);
 public sealed record SystemAvatarRequest(Guid? AvatarId);
 public sealed record DevLoginRequest(string Nickname, string? CityCode);

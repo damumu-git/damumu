@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'privacy_retention.dart';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -209,6 +210,38 @@ class UnreadSummary {
 }
 
 class SocialService {
+  static Future<void> purgeExpiredLocalMessages() async {
+    final preferences = await SharedPreferences.getInstance();
+    final cutoff = privacyRetentionCutoff(DateTime.now());
+    for (final key
+        in preferences
+            .getKeys()
+            .where(
+              (key) =>
+                  key.startsWith('chat_cache_') ||
+                  key.startsWith('chat_pending_'),
+            )
+            .toList()) {
+      try {
+        final entries = (jsonDecode(preferences.getString(key) ?? '[]') as List)
+            .where((item) {
+              final date = DateTime.tryParse(
+                '${(item as Map)['created_at'] ?? ''}',
+              );
+              return date != null && date.toUtc().isAfter(cutoff);
+            })
+            .toList();
+        if (entries.isEmpty) {
+          await preferences.remove(key);
+        } else {
+          await preferences.setString(key, jsonEncode(entries));
+        }
+      } catch (_) {
+        await preferences.remove(key);
+      }
+    }
+  }
+
   static Future<dynamic> _request(
     String token,
     String path, {
@@ -448,6 +481,11 @@ class SocialService {
             (item) =>
                 ChatMessage.fromJson((item as Map).cast<String, dynamic>()),
           )
+          .where(
+            (item) => item.createdAt.toUtc().isAfter(
+              privacyRetentionCutoff(DateTime.now()),
+            ),
+          )
           .toList();
     } on FormatException {
       return const [];
@@ -459,9 +497,16 @@ class SocialService {
     String conversationId,
     List<ChatMessage> messages,
   ) async {
-    final recent = messages.length > 100
-        ? messages.sublist(messages.length - 100)
-        : messages;
+    final retained = messages
+        .where(
+          (item) => item.createdAt.toUtc().isAfter(
+            privacyRetentionCutoff(DateTime.now()),
+          ),
+        )
+        .toList();
+    final recent = retained.length > 100
+        ? retained.sublist(retained.length - 100)
+        : retained;
     await (await SharedPreferences.getInstance()).setString(
       _cacheKey(userId, conversationId),
       jsonEncode(recent.map((item) => item.toJson()).toList()),
@@ -477,12 +522,19 @@ class SocialService {
     );
     if (raw == null) return const [];
     try {
-      return (jsonDecode(raw) as List).map((item) {
-        final message = ChatMessage.fromJson(
-          (item as Map).cast<String, dynamic>(),
-        );
-        return message.copyWith(pending: true, failed: true);
-      }).toList();
+      return (jsonDecode(raw) as List)
+          .map((item) {
+            final message = ChatMessage.fromJson(
+              (item as Map).cast<String, dynamic>(),
+            );
+            return message.copyWith(pending: true, failed: true);
+          })
+          .where(
+            (item) => item.createdAt.toUtc().isAfter(
+              privacyRetentionCutoff(DateTime.now()),
+            ),
+          )
+          .toList();
     } on FormatException {
       return const [];
     }

@@ -9,6 +9,7 @@ import 'package:image/image.dart' as img;
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'l10n.dart';
 import 'push_notification_service.dart';
 import 'web_cropper_layout.dart';
@@ -103,8 +104,10 @@ class AuthApi {
     String nickname,
     String email,
     String password,
-    String? avatarId,
-  ) => _json(
+    String? avatarId, {
+    required bool ageConfirmed,
+    required bool privacyAcknowledged,
+  }) => _json(
     '/auth/register',
     method: 'POST',
     body: {
@@ -112,6 +115,9 @@ class AuthApi {
       'email': email,
       'password': password,
       'avatarId': avatarId,
+      'ageConfirmed': ageConfirmed,
+      'privacyAcknowledged': privacyAcknowledged,
+      'privacyVersion': '2026-10-21',
     },
   );
 
@@ -200,13 +206,17 @@ class AuthController extends ChangeNotifier {
     String nickname,
     String email,
     String password,
-    String? avatarId,
-  ) async {
+    String? avatarId, {
+    required bool ageConfirmed,
+    required bool privacyAcknowledged,
+  }) async {
     final result = await AuthApi.register(
       nickname.trim(),
       email.trim(),
       password,
       avatarId,
+      ageConfirmed: ageConfirmed,
+      privacyAcknowledged: privacyAcknowledged,
     );
     token = result['accessToken'] as String;
     user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
@@ -236,6 +246,7 @@ class AuthController extends ChangeNotifier {
 
   Future<void> logout() async {
     await PushNotificationService.instance.stop(token);
+    await _clearPrivateLocalData(user?.id);
     user = null;
     token = null;
     await _saveToken(null);
@@ -246,6 +257,7 @@ class AuthController extends ChangeNotifier {
     final currentToken = token;
     if (currentToken == null) throw StateError('Missing authentication token');
     await AuthApi.deleteAccount(currentToken);
+    await _clearPrivateLocalData(user?.id);
     try {
       await PushNotificationService.instance.stop(currentToken);
     } catch (_) {
@@ -263,6 +275,25 @@ class AuthController extends ChangeNotifier {
     value == null
         ? await preferences.remove('auth_token')
         : await preferences.setString('auth_token', value);
+  }
+
+  Future<void> _clearPrivateLocalData(String? userId) async {
+    if (userId != null) {
+      final preferences = await SharedPreferences.getInstance();
+      for (final key
+          in preferences
+              .getKeys()
+              .where(
+                (key) =>
+                    key.startsWith('chat_cache_${userId}_') ||
+                    key.startsWith('chat_pending_${userId}_'),
+              )
+              .toList()) {
+        await preferences.remove(key);
+      }
+    }
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
   }
 }
 
@@ -329,6 +360,8 @@ class _AuthPageState extends State<AuthPage> {
   bool _register = false;
   bool _busy = false;
   bool _obscure = true;
+  bool _ageConfirmed = false;
+  bool _privacyAcknowledged = false;
   String? _avatarId;
   late Future<List<SystemAvatarData>> _avatars;
 
@@ -509,6 +542,40 @@ class _AuthPageState extends State<AuthPage> {
                           : null;
                     },
                   ),
+                  if (_register) ...[
+                    CheckboxListTile(
+                      value: _ageConfirmed,
+                      onChanged: _busy
+                          ? null
+                          : (value) =>
+                                setState(() => _ageConfirmed = value ?? false),
+                      title: Text(context.tr('minimumAgeConfirmation')),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    CheckboxListTile(
+                      value: _privacyAcknowledged,
+                      onChanged: _busy
+                          ? null
+                          : (value) => setState(
+                              () => _privacyAcknowledged = value ?? false,
+                            ),
+                      title: Text(context.tr('privacyNoticeAcknowledgement')),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    TextButton(
+                      onPressed: () => launchUrl(
+                        Uri.parse(
+                          Localizations.localeOf(context).languageCode == 'ko'
+                              ? 'https://www.damumu.com/privacy-ko.html'
+                              : 'https://www.damumu.com/privacy.html',
+                        ),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      child: Text(context.tr('readPrivacyNotice')),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   FilledButton(
                     onPressed: _busy ? null : _submit,
@@ -550,6 +617,12 @@ class _AuthPageState extends State<AuthPage> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_register && (!_ageConfirmed || !_privacyAcknowledged)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('registrationConfirmationRequired'))),
+      );
+      return;
+    }
     setState(() => _busy = true);
     try {
       final auth = AuthScope.of(context);
@@ -559,6 +632,8 @@ class _AuthPageState extends State<AuthPage> {
           _email.text,
           _password.text,
           _avatarId,
+          ageConfirmed: _ageConfirmed,
+          privacyAcknowledged: _privacyAcknowledged,
         );
       } else {
         await auth.login(_email.text, _password.text);
@@ -637,6 +712,21 @@ class UserAvatar extends StatelessWidget {
 
 String absoluteImageUrl(String value) =>
     value.startsWith('http') ? value : '${Uri.parse(_apiBase).origin}$value';
+
+Map<String, String>? privateImageHeaders(BuildContext context, String value) {
+  final image = Uri.tryParse(absoluteImageUrl(value));
+  if (image == null ||
+      (image.scheme != 'http' && image.scheme != 'https') ||
+      image.origin != Uri.parse(_apiBase).origin ||
+      !image.path.startsWith('/uploads/messages/')) {
+    return null;
+  }
+  final token = context
+      .dependOnInheritedWidgetOfExactType<AuthScope>()
+      ?.notifier
+      ?.token;
+  return token == null ? null : {'Authorization': 'Bearer $token'};
+}
 
 Future<void> showAvatarEditor(BuildContext context) async {
   final auth = AuthScope.of(context);

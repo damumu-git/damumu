@@ -116,8 +116,10 @@ public static class SocialEndpoints
                 FROM message m
                 LEFT JOIN user_profile up ON up.user_id=m.sender_user_id
                 LEFT JOIN message reply ON reply.id=m.reply_to_message_id
+                    AND reply.created_at > now()-interval '3 months'
                 LEFT JOIN media_asset ma ON ma.id=m.media_asset_id AND ma.deleted_at IS NULL
                 WHERE m.conversation_id=@id AND m.deleted_at IS NULL
+                  AND m.created_at > now()-interval '3 months'
                   AND (CAST(@before AS timestamptz) IS NULL OR m.created_at < @before)
                   AND (@hasCursor=false OR (m.created_at, m.id) < (@cursorCreatedAt, @cursorMessageId))
                 ORDER BY m.created_at DESC, m.id DESC

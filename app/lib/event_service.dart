@@ -491,7 +491,7 @@ class EventService {
             'approvalMode': approvalRequired ? 'manual' : 'automatic',
             'beginnerFriendly': beginnerFriendly,
             'visibility': 'public',
-            'minAge': 18,
+            'minAge': 14,
             'priceMin': priceAmount,
             'priceMax': priceAmount,
             'priceCurrency': 'KRW',

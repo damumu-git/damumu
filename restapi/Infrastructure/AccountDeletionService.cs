@@ -58,6 +58,10 @@ public sealed class AccountDeletionService(
             UPDATE feature_flag SET updated_by_user_id=NULL WHERE updated_by_user_id=@userId;
             UPDATE audit_log SET actor_user_id=NULL WHERE actor_user_id=@userId;
 
+            INSERT INTO media_deletion_queue(storage_key,is_directory)
+            VALUES ('avatars/' || replace(CAST(@userId AS text),'-',''),true)
+            ON CONFLICT (storage_key) DO UPDATE SET is_directory=true;
+
             DELETE FROM push_device WHERE user_id=@userId;
             DELETE FROM user_credential WHERE user_id=@userId;
             DELETE FROM notification WHERE user_id=@userId;
@@ -71,7 +75,7 @@ public sealed class AccountDeletionService(
             DELETE FROM emergency_contact WHERE user_id=@userId;
 
             UPDATE user_profile
-            SET nickname='已注销用户',
+            SET nickname='注销用户_' || nextval('muda_deleted_user_number'),
                 avatar_url=NULL,
                 bio=NULL,
                 city_code=NULL,
@@ -91,6 +95,9 @@ public sealed class AccountDeletionService(
                 locale='und',
                 timezone='UTC',
                 adult_confirmed_at=NULL,
+                minimum_age_confirmed_at=NULL,
+                privacy_notice_version=NULL,
+                privacy_notice_acknowledged_at=NULL,
                 last_login_at=NULL,
                 deletion_requested_at=COALESCE(deletion_requested_at, now()),
                 deleted_at=now(),

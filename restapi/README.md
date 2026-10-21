@@ -135,6 +135,22 @@ $env:DAMUMU_POSTGRES_PASSWORD = '你的密码'
 
 ## 用户认证与头像
 
+隐私与保留规则见 `docs/PRIVACY_OPERATIONS.md`。升级须应用 `022_privacy_retention.sql`；
+新注册额外要求 `ageConfirmed=true`、`privacyAcknowledged=true` 和
+`privacyVersion="2026-10-21"`。这是14岁自我确认和政策阅读记录，不是身份证件年龄验证。
+聊天图片仍返回完整URL，但请求需提供Bearer令牌且具有会话权限，不能作为公开图片缓存。
+API启动及每小时会清理到期内容和图片，首次部署前必须备份、审查期限并准备新版App。
+外部推送在`Privacy:ExternalPushApproved=false`时不初始化、不投递，包括旧设备令牌。
+
+隔离数据库验证使用专用本机`privacy_check`，按顺序应用迁移后运行：
+
+```bash
+dotnet build restapi.tests/Muda.Api.PaginationTests.csproj -o restapi/.codex-build/privacy-tests
+dotnet restapi/.codex-build/privacy-tests/Muda.Api.PaginationTests.dll --privacy-db
+```
+
+连接字符串通过进程环境变量`ConnectionStrings__Muda`提供；测试会拒绝非本机或非专用数据库。
+
 ## 多用户互动演示数据
 
 API 启动并应用全部迁移后，可以通过真实注册、活动发布、报名审批和聊天接口生成一组

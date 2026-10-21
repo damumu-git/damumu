@@ -337,6 +337,8 @@ public static class EventEndpoints
             var userId = ApiSupport.RequireUserId(context);
             if (request.EndsAt <= request.StartsAt)
                 throw new ApiException(400, "invalid_schedule", "结束时间必须晚于开始时间");
+            if (request.MinAge is < PrivacyRules.MinimumAge)
+                throw new ApiException(400, "invalid_minimum_age", "活动最低年龄不能小于14周岁");
             if (request.MinParticipants < 2 || request.Capacity < request.MinParticipants)
                 throw new ApiException(400, "capacity_invalid", "人数范围无效");
             if (request.PriceMin < 0 || request.PriceMax < request.PriceMin)
@@ -440,7 +442,7 @@ public static class EventEndpoints
                     beginnerFriendly = request.BeginnerFriendly,
                     request.MinParticipants,
                     request.Capacity,
-                    minAge = request.MinAge ?? 18,
+                    minAge = request.MinAge ?? PrivacyRules.MinimumAge,
                     request.MaxAge,
                     request.PriceMin,
                     request.PriceMax,

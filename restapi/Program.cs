@@ -18,6 +18,7 @@ builder.Services.AddSingleton<RealtimeConnectionManager>();
 builder.Services.AddSingleton<PushNotificationService>();
 builder.Services.AddHostedService<RealtimeRelayService>();
 builder.Services.AddHostedService<ConversationLifecycleService>();
+builder.Services.AddHostedService<PrivacyRetentionService>();
 builder.Services.AddOpenApi();
 builder.Services.AddCors(options =>
 {
@@ -98,13 +99,16 @@ app.Use(async (context, next) =>
 
 app.UseCors();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
+app.UseMiddleware<PrivateMediaMiddleware>();
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(mediaStorage.RootPath),
     RequestPath = "/uploads",
     OnPrepareResponse = context =>
     {
-        context.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
+        context.Context.Response.Headers.CacheControl = context.Context.Request.Path.StartsWithSegments(
+            "/uploads/messages", StringComparison.OrdinalIgnoreCase)
+            ? "private,no-store" : "public,max-age=31536000,immutable";
         context.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     }
 });

@@ -129,6 +129,9 @@ if (-not [string]::IsNullOrWhiteSpace($ResumeManifest)) {
             email = $email
             password = $Password
             avatarId = $null
+            ageConfirmed = $true
+            privacyAcknowledged = $true
+            privacyVersion = '2026-10-21'
         }
         $accounts.Add([pscustomobject]@{
             Index = $sequence

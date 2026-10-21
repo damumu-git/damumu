@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import 'social_service.dart';
+import 'external_processing.dart';
 
 const _firebaseApiKey = String.fromEnvironment('FIREBASE_API_KEY');
 const _firebaseAppId = String.fromEnvironment('FIREBASE_APP_ID');
@@ -44,6 +45,7 @@ Future<void> _initializeFirebaseApp() => kIsWeb
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (!await externalProcessingAllowed('push')) return;
   if (!_firebaseConfigured) return;
   if (Firebase.apps.isEmpty) {
     await _initializeFirebaseApp();
@@ -65,6 +67,7 @@ class PushNotificationService {
   bool get isConfigured => _firebaseConfigured;
 
   static Future<void> initializeFirebase() async {
+    if (!await externalProcessingAllowed('push')) return;
     if (!_firebaseConfigured || Firebase.apps.isNotEmpty) return;
     try {
       await _initializeFirebaseApp();
@@ -75,6 +78,10 @@ class PushNotificationService {
   }
 
   Future<void> start(String authToken) async {
+    if (!await externalProcessingAllowed('push')) {
+      await stop(authToken);
+      return;
+    }
     if (!_firebaseConfigured || _authToken == authToken && _initialized) return;
     _authToken = authToken;
     try {
@@ -122,6 +129,11 @@ class PushNotificationService {
     _authToken = null;
     _registrationToken = null;
     _initialized = false;
+    if (Firebase.apps.isNotEmpty) {
+      try {
+        await FirebaseMessaging.instance.deleteToken();
+      } catch (_) {}
+    }
   }
 
   Future<void> _register(String authToken, String registrationToken) async {

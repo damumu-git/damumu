@@ -6,6 +6,12 @@ using Muda.Api.Infrastructure;
 
 CancellationChecks.ValidateReasons();
 FeedbackChecks.Validate();
+PrivacyChecks.ValidateRegistration();
+if (args.FirstOrDefault() == "--privacy-db")
+{
+    await PrivacyChecks.RunDatabase();
+    return;
+}
 if (args.FirstOrDefault() == "--storage-check")
 {
     await StorageChecks.Validate();
@@ -27,7 +33,8 @@ if (args.FirstOrDefault() == "--firebase-check")
     var configuration = new ConfigurationBuilder()
         .AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Firebase:ProjectId"] = "damumu-app"
+            ["Firebase:ProjectId"] = "damumu-app",
+            ["Privacy:ExternalPushApproved"] = "true"
         })
         .Build();
     using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());

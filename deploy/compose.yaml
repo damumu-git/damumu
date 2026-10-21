@@ -14,6 +14,7 @@ services:
       Firebase__ProjectId: ${FIREBASE_PROJECT_ID:-}
       Media__RootPath: /var/lib/damumu/uploads
       Media__PublicBaseUrl: ${MEDIA_PUBLIC_BASE_URL:-https://api.damumu.com/uploads}
+      Privacy__ExternalPushApproved: "false"
     ports:
       - 127.0.0.1:8080:8080
     extra_hosts:

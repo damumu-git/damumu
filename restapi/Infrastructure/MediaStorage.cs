@@ -95,4 +95,13 @@ public sealed class MediaStorage
         var path = GetPath(storageKey);
         if (File.Exists(path)) File.Delete(path);
     }
+
+    public void DeleteAvatarDirectory(string storageKey)
+    {
+        var parts = storageKey.Split('/');
+        if (parts.Length != 2 || parts[0] != "avatars" || !Guid.TryParseExact(parts[1], "N", out _))
+            throw new ArgumentException("Only a user avatar directory may be removed.", nameof(storageKey));
+        var path = GetPath(storageKey);
+        if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+    }
 }

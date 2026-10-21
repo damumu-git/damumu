@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'auth.dart';
+import 'external_processing.dart';
 import 'activity_interactions.dart';
 import 'category_service.dart';
 import 'chat_image.dart';
@@ -26,6 +27,7 @@ import 'push_notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SocialService.purgeExpiredLocalMessages();
   await PushNotificationService.initializeFirebase();
   runApp(const DaziApp());
 }
@@ -5441,6 +5443,7 @@ class _Bubble extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                         child: Image.network(
                           mediaUrl!,
+                          headers: privateImageHeaders(context, mediaUrl!),
                           width: 220,
                           height: 165,
                           fit: BoxFit.cover,
@@ -5509,6 +5512,7 @@ class ChatImagePreviewPage extends StatelessWidget {
               tag: heroTag ?? 'chat-image-$imageUrl',
               child: Image.network(
                 imageUrl,
+                headers: privateImageHeaders(context, imageUrl),
                 fit: BoxFit.contain,
                 loadingBuilder: (_, child, progress) => progress == null
                     ? child
@@ -5739,6 +5743,16 @@ class ProfilePage extends StatelessWidget {
                 title: context.tr('privacyAccount'),
                 subtitle: context.tr('privacySubtitle'),
                 onTap: () => _openPrivacyPolicy(context),
+              ),
+              ExternalProcessingSettings(
+                onPushChanged: (enabled) async {
+                  if (auth.token == null) return;
+                  if (enabled) {
+                    await PushNotificationService.instance.start(auth.token!);
+                  } else {
+                    await PushNotificationService.instance.stop(auth.token);
+                  }
+                },
               ),
               const Divider(height: 1, indent: 58),
               _Menu(

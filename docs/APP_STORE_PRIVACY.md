@@ -2,6 +2,8 @@
 
 最后核对：2026-10-15（Asia/Seoul）。本清单根据当前代码数据流整理，用于填写 App Store Connect；最终答案必须与待提交版本、服务端行为和第三方 SDK 实际情况一致。
 
+2026-10-21补充：最低年龄改为14岁自我确认，不应再声明仅成年人。新版App默认关闭外部FCM/Nominatim，发布前须核对实际启用状态后填写申报。个人运营者姓名未获公开授权；Apple个人账号及Google Play个人账号的实名展示要求仍需解决。三个月保留、私密图片与运维要求见`PRIVACY_OPERATIONS.md`，不可继续使用“所有历史已完全匿名化”的表述。
+
 ## Privacy Policy URL
 
 - 中文：`https://www.damumu.com/privacy.html`
@@ -26,7 +28,7 @@
 
 ## 审核前必须完成
 
-- App 设置页可直接发起账号删除，并有明确的二次确认；`DELETE /api/v1/me` 会在单个数据库事务内立即删除认证、资料、兴趣、推送、通知和安全联系人数据，并匿名化必须保留的活动、会话和治理历史。
+- App 设置页可直接发起账号删除，并有明确的二次确认；`DELETE /api/v1/me` 会在单个数据库事务内立即删除认证、资料、兴趣、推送、通知和安全联系人数据，并对有限期保留的活动、会话和治理历史作去标识处理。
 - 部署网站后验证 `/account-deletion.html` 可公开访问，并确认邮箱请求的 7 日处理承诺具备实际运营流程。
 - 为中、英、韩三种语言核对相机、定位、相册权限说明。
 - 在 macOS/Xcode 生成 Release Archive，检查 Privacy Report、`PrivacyInfo.xcprivacy`、Required Reason API 和第三方 SDK 签名；Windows 环境不能完成这项验证。

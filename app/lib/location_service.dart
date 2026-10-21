@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'external_processing.dart';
 
 class AppLocation {
   const AppLocation({
@@ -121,6 +122,13 @@ class LocationService {
     double longitude,
     String languageCode,
   ) async {
+    if (!await externalProcessingAllowed('geocoding')) {
+      return switch (languageCode) {
+        'ko' => '현재 위치',
+        'en' => 'Current location',
+        _ => '当前位置',
+      };
+    }
     final acceptedLanguages = switch (languageCode) {
       'ko' => 'ko-KR,ko,en',
       'en' => 'en-US,en',
@@ -138,7 +146,7 @@ class LocationService {
       final response = await _client
           .get(
             uri,
-            headers: const {'User-Agent': 'DAMUMU/0.1 (location@muda.app)'},
+            headers: const {'User-Agent': 'DAMUMU/1.0 (damumuapp@gmail.com)'},
           )
           .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return '当前位置';

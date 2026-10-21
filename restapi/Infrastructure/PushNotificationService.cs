@@ -12,6 +12,11 @@ public sealed class PushNotificationService
     public PushNotificationService(IConfiguration configuration, ILogger<PushNotificationService> logger)
     {
         _logger = logger;
+        if (!configuration.GetValue<bool>("Privacy:ExternalPushApproved"))
+        {
+            logger.LogInformation("External push is disabled pending verified privacy disclosures");
+            return;
+        }
         var projectId = configuration["Firebase:ProjectId"];
         if (string.IsNullOrWhiteSpace(projectId))
         {
@@ -61,8 +66,10 @@ public sealed class PushNotificationService
         var messages = devices.Select(device => new Message
         {
             Token = (string)device["registration_token"]!,
-            Notification = new Notification { Title = title, Body = body },
-            Data = new Dictionary<string, string>(data)
+            // Do not send private message bodies, event titles or user names to FCM.
+            Notification = new Notification { Title = "DAMUMU", Body = "새 알림이 있습니다 · You have a new notification" },
+            Data = data.Where(item => item.Key is "type" or "eventId" or "conversationId" or "messageId")
+                .ToDictionary(item => item.Key, item => item.Value)
         }).ToList();
 #pragma warning restore CS0618
 

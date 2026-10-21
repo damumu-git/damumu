@@ -8,6 +8,11 @@ Nginx 按域名把 `www.damumu.com`、`admin.damumu.com`、`api.damumu.com`
 
 ## Ubuntu 目录与图片访问
 
+隐私保留期、注册版本兼容、单人请求处理以及加密备份安装见
+[`docs/PRIVACY_OPERATIONS.md`](../docs/PRIVACY_OPERATIONS.md)。新版本需先应用迁移
+`022_privacy_retention.sql`，API启动后会清理已超过保存期限的数据；先备份并审查，
+同时准备新版App，避免旧注册与聊天图片读取流程不兼容。
+
 ```text
 /opt/damumu/repo/              Git 源码与部署脚本
 /srv/damumu/uploads/           持久化图片，独立于源码和容器
