@@ -18,6 +18,20 @@ source_volume="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination 
 docker volume inspect "$source_volume" >/dev/null
 image="$(docker inspect --format '{{.Image}}' "$container")"
 
+# A stopped container can still reference an image removed by earlier cleanup.
+# Resolve and check the helper before interrupting any running API.
+if ! docker image inspect "$image" >/dev/null 2>&1; then
+  printf 'Old API image is unavailable; preparing the official Debian migration helper.\n'
+  image="debian:bookworm-slim"
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    docker pull "$image"
+  fi
+  image="$(docker image inspect --format '{{.Id}}' "$image")"
+fi
+docker run --rm --user 0 --entrypoint /bin/sh "$image" -ec '
+  for tool in tar gzip chmod cp diff; do command -v "$tool" >/dev/null; done
+'
+
 sudo install -d -m 755 /srv/damumu "$TARGET"
 sudo install -d -m 700 "$BACKUP_ROOT"
 [[ -z "$(sudo find "$TARGET" -mindepth 1 -maxdepth 1 -print -quit)" ]] ||
@@ -25,7 +39,6 @@ sudo install -d -m 700 "$BACKUP_ROOT"
 
 printf 'Stopping API writes; copying volume %s to %s.\n' "$source_volume" "$TARGET"
 compose stop api
-# Use the already installed API image; no extra helper image download is needed.
 # Leave the API stopped on any error so uploads cannot diverge during recovery.
 docker run --rm --user 0 --entrypoint /bin/sh \
   --mount "type=volume,source=$source_volume,target=/source,readonly" \
