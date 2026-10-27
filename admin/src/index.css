@@ -1,5 +1,5 @@
 :root {
-  --admin-font: "Ysabeau Office", "LXGW WenKai Lite", "LXGW WenKai KR", "Noto Sans KR", "Segoe UI Emoji", "Apple Color Emoji", "Microsoft YaHei", sans-serif;
+  --admin-font: "Noto Sans SC", "Noto Sans KR", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   font-family: var(--admin-font);
   color: #203e55;
   background: #f3f8fc;

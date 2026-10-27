@@ -83,13 +83,13 @@ window.Preview = (() => {
     dialog.showModal();
   }
   function boot({ kind, routes, render, actions = {} }) {
-    const storageKey = `damumu-preview-${kind}-light-blue-v2`;
+    const storageKey = kind === "admin" ? "damumu-preview-admin-enterprise-v1" : `damumu-preview-${kind}-light-blue-v2`;
     const defaults = {
-      primary: "#8fc8ed",
-      bg: "#f3f8fc",
-      radius: 18,
+      primary: kind === "admin" ? "#1769c2" : "#8fc8ed",
+      bg: kind === "admin" ? "#f3f5f7" : "#f3f8fc",
+      radius: kind === "admin" ? 5 : 18,
       font: 14,
-      gap: 18,
+      gap: kind === "admin" ? 16 : 18,
       width: 390,
     };
     let prefs = { ...defaults };
@@ -102,7 +102,7 @@ window.Preview = (() => {
       /* file storage may be disabled */
     }
     const app = document.getElementById("preview");
-    app.innerHTML = `<header class="toolbar"><strong>搭慕 / ${kind === "app" ? "APP" : "ADMIN"} 设计预览</strong><div class="row wrap"><a href="../${kind === "app" ? "admin" : "app"}/index.html">切换到 ${kind === "app" ? "Admin" : "App"} ↗</a><button id="tune">主题微调</button><button id="reset-demo">重置演示</button></div></header><div class="preview-layout"><aside class="catalog"><h2>页面目录 <small>${routes.length}</small></h2><input id="catalog-search" aria-label="搜索预览页面" placeholder="搜索页面…"><nav id="catalog-nav"></nav><footer>离线设计稿 · 示例数据<br>无 API 请求，不写入真实账号。<br>设置仅保存于此浏览器。</footer></aside><main class="workspace"><div class="page-meta"><div><h2 id="page-name"></h2><p id="page-description"></p></div><label><select id="view-state" aria-label="页面数据状态"><option value="normal">正常内容</option><option value="loading">加载中</option><option value="empty">空数据</option><option value="error">加载失败</option></select></label></div><div id="stage"></div><div class="source-note" id="source"></div></main></div><aside class="panel tuner" id="tuner" hidden><div class="row between"><h3>主题微调</h3><button id="close-tuner" aria-label="关闭主题微调">×</button></div><small>仅影响当前 ${kind} 预览</small><label>配色方案<select id="palette"><option value="blue">浅蓝 · 当前方向</option><option value="green">森林绿</option><option value="clay">陶土 · 温暖</option></select></label><label>主色<input id="primary" type="color"></label><label>背景色<input id="bg" type="color"></label><label>圆角 <output id="radius-value"></output><input id="radius" type="range" min="0" max="30"></label><label>字号 <output id="font-value"></output><input id="font" type="range" min="12" max="18"></label><label>留白 <output id="gap-value"></output><input id="gap" type="range" min="12" max="28"></label>${kind === "app" ? '<label>设备宽度 <output id="width-value"></output><input id="width" type="range" min="320" max="480"></label>' : ""}<div class="stack"><button id="export-theme" class="primary">导出主题参数</button><button id="reset-theme">恢复默认主题</button></div></aside>`;
+    app.innerHTML = `<header class="toolbar"><strong>搭慕 / ${kind === "app" ? "APP" : "ADMIN"} 设计预览</strong><div class="row wrap"><a href="../${kind === "app" ? "admin" : "app"}/index.html">切换到 ${kind === "app" ? "Admin" : "App"} ↗</a><button id="tune">主题微调</button><button id="reset-demo">重置演示</button></div></header><div class="preview-layout"><aside class="catalog"><h2>页面目录 <small>${routes.length}</small></h2><input id="catalog-search" aria-label="搜索预览页面" placeholder="搜索页面…"><nav id="catalog-nav"></nav><footer>离线设计稿 · 示例数据<br>无 API 请求，不写入真实账号。<br>设置仅保存于此浏览器。</footer></aside><main class="workspace"><div class="page-meta"><div><h2 id="page-name"></h2><p id="page-description"></p></div><label><select id="view-state" aria-label="页面数据状态"><option value="normal">正常内容</option><option value="loading">加载中</option><option value="empty">空数据</option><option value="error">加载失败</option></select></label></div><div id="stage"></div><div class="source-note" id="source"></div></main></div><aside class="panel tuner" id="tuner" hidden><div class="row between"><h3>主题微调</h3><button id="close-tuner" aria-label="关闭主题微调">×</button></div><small>仅影响当前 ${kind} 预览</small><label>配色方案<select id="palette"><option value="blue">${kind === "admin" ? "经典蓝 · 管理工作台" : "浅蓝 · 当前方向"}</option><option value="green">森林绿</option><option value="clay">陶土 · 温暖</option></select></label><label>主色<input id="primary" type="color"></label><label>背景色<input id="bg" type="color"></label><label>圆角 <output id="radius-value"></output><input id="radius" type="range" min="0" max="30"></label><label>字号 <output id="font-value"></output><input id="font" type="range" min="12" max="18"></label><label>留白 <output id="gap-value"></output><input id="gap" type="range" min="12" max="28"></label>${kind === "app" ? '<label>设备宽度 <output id="width-value"></output><input id="width" type="range" min="320" max="480"></label>' : ""}<div class="stack"><button id="export-theme" class="primary">导出主题参数</button><button id="reset-theme">恢复默认主题</button></div></aside>`;
     function applyPrefs() {
       const root = document.documentElement.style;
       root.setProperty("--primary", prefs.primary);
@@ -160,7 +160,7 @@ window.Preview = (() => {
     document.getElementById("palette").onchange = (e) => {
       const colors = {
         green: ["#287756", "#f5f6f2"],
-        blue: ["#8fc8ed", "#f3f8fc"],
+        blue: kind === "admin" ? ["#1769c2", "#f3f5f7"] : ["#8fc8ed", "#f3f8fc"],
         clay: ["#a56448", "#f8f3ee"],
       }[e.target.value];
       [prefs.primary, prefs.bg] = colors;
@@ -242,15 +242,15 @@ window.Preview = (() => {
         )
         .join("")}</nav>`;
     function adminShell(content, page) {
-      return `<div class="admin-stage"><div class="admin-shell"><nav class="admin-nav" aria-label="Admin 主导航"><div class="admin-brand">搭慕<small>COMMUNITY OPERATIONS</small></div>${routes
+      return `<div class="admin-stage"><div class="admin-shell"><nav class="admin-nav" aria-label="Admin 主导航"><div class="admin-brand">搭慕<small>管理控制台</small></div>${routes
         .filter((r) => r.main)
         .map(
           (r) =>
-            `<a href="#${r.id}" class="${page.id === r.id ? "active" : ""}"><span>${r.icon}</span>${esc(r.title)}</a>`,
+            `<a href="#${r.id}" class="${page.id === r.id ? "active" : ""}"><span>${window.AdminNavIcon ? window.AdminNavIcon(r.id) : r.icon}</span>${esc(r.title)}</a>`,
         )
         .join(
           "",
-        )}</nav><div class="admin-main"><header class="admin-header"><div><small>DAMUMU / 社区运营中心</small><h1>${esc(page.title)}</h1></div><div class="row">${link("发布公告", "announcement", "primary")}<span class="avatar">管</span></div></header><div class="admin-content">${content}</div></div></div></div>`;
+        )}</nav><div class="admin-main"><header class="admin-header"><div><small>搭慕 / 运营管理</small><h1>${esc(page.title)}</h1></div><div class="row">${link("发布公告", "announcement", "primary")}<span class="avatar">管</span></div></header><div class="admin-content">${content}</div></div></div></div>`;
     }
     document.getElementById("view-state").onchange = (e) => {
       viewState = e.target.value;

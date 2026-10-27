@@ -1,23 +1,24 @@
+import AdminNavIcon from './AdminNavIcon.jsx'
 import { FilePicker } from './AdminControls.jsx'
 import { useAdminDialog } from './admin-dialog-context'
 import { EmojiIcon, EmojiAssetManager, EmojiAssetSelect } from './EmojiAssets.jsx'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { API_BASE, api, mediaUrl } from './api'
 import './App.css'
 import './preview-theme.css'
 
 const navigation = [
-  { id: 'dashboard', label: '运营概览', icon: '⌁' },
-  { id: 'users', label: '用户管理', icon: '◉' },
-  { id: 'events', label: '活动管理', icon: '◇' },
-  { id: 'reports', label: '举报治理', icon: '△' },
-  { id: 'safety', label: '安全警报', icon: '!' },
-  { id: 'categories', label: '分类配置', icon: '⊞' },
-  { id: 'regions', label: '地区管理', icon: '⌖' },
-  { id: 'emoji-assets', label: '图标素材', icon: '▧' },
-  { id: 'avatars', label: '系统头像', icon: '◎' },
-  { id: 'audit', label: '审计日志', icon: '≡' },
-  { id: 'settings', label: '功能开关', icon: '⚙' },
+  { id: 'dashboard', label: '运营概览' },
+  { id: 'users', label: '用户管理' },
+  { id: 'events', label: '活动管理' },
+  { id: 'reports', label: '举报治理' },
+  { id: 'safety', label: '安全警报' },
+  { id: 'categories', label: '分类配置' },
+  { id: 'regions', label: '地区管理' },
+  { id: 'emoji-assets', label: '图标素材' },
+  { id: 'avatars', label: '系统头像' },
+  { id: 'audit', label: '审计日志' },
+  { id: 'settings', label: '功能开关' },
 ]
 
 const statusText = {
@@ -884,17 +885,22 @@ function App() {
   return (
     <div className="admin-shell">
       <aside className={mobileNav ? 'sidebar open' : 'sidebar'}>
-        <div className="brand"><div className="brand-mark">搭</div><div><strong>搭慕</strong><span>社区运营中心</span></div></div>
-        <nav>{navigation.map((item) => (
-          <button key={item.id} className={active === item.id ? 'active' : ''} onClick={() => { setActive(item.id); setMobileNav(false) }}>
-            <i>{item.icon}</i><span>{item.label}</span>{item.id === 'reports' && <em>!</em>}
+        <div className="brand"><div className="brand-mark">搭</div><div><strong>搭慕</strong><span>管理控制台</span></div></div>
+        <nav aria-label="主菜单">{navigation.map((item) => (
+          <Fragment key={item.id}>
+          {item.id === 'users' && <div className="nav-section-label">业务管理</div>}
+          {item.id === 'categories' && <div className="nav-section-label">系统配置</div>}
+          <button aria-current={active === item.id ? 'page' : undefined} className={active === item.id ? 'active' : ''} onClick={() => { setActive(item.id); setMobileNav(false) }}>
+            <AdminNavIcon name={item.id} /><span>{item.label}</span>
           </button>
+          </Fragment>
         ))}</nav>
         <div className="sidebar-foot"><span className="health-dot" /><div><strong>API 已配置</strong><small>{API_BASE.replace(/^https?:\/\//, '')}</small></div></div>
       </aside>
+      {mobileNav && <button className="nav-backdrop" aria-label="关闭菜单" onClick={() => setMobileNav(false)} />}
       <main className="main-panel">
         <header className="topbar">
-          <div className="title-row"><button className="menu-button" onClick={() => setMobileNav(!mobileNav)}>☰</button><div><span className="breadcrumb">搭慕 / 运营管理</span><h1>{current.label}</h1></div></div>
+          <div className="title-row"><button className="menu-button" aria-label="切换菜单" aria-expanded={mobileNav} onClick={() => setMobileNav(!mobileNav)}><AdminNavIcon name="menu" /></button><div><span className="breadcrumb">搭慕 / 运营管理</span><h1>{current.label}</h1></div></div>
           <div className="top-actions"><span className="today">{new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date())}</span><button className="announcement-button" onClick={() => setAnnouncement(true)}>发布公告</button><div className="admin-avatar">管</div></div>
         </header>
         <div className="page-content"><ActivePage /></div>

@@ -88,7 +88,7 @@ export function EmojiAssetManager() {
       </article>)}</div>
     {!loading && !rows.length && !error && <p>暂无图标，请上传。</p>}
     {editing && <div className="dialog-backdrop"><form className="dialog" onSubmit={save}>
-      <h3>{editing.key ? '替换图标' : '上传新图标'}</h3>
+      <div className="dialog-head"><h3>{editing.key ? '替换图标' : '上传新图标'}</h3><button type="button" aria-label="关闭弹窗" disabled={busy} onClick={() => setEditing(null)}>×</button></div>
       <label>资源键<input name="key" required pattern="[a-z][a-z0-9-]{0,63}" defaultValue={editing.key || ''} readOnly={!!editing.key} /></label>
       <label>对应Emoji<input name="emoji" required maxLength={32} defaultValue={editing.emoji || ''} readOnly={!!editing.key} /></label>
       <label>名称<input name="name" required maxLength={100} defaultValue={editing.name || ''} /></label>

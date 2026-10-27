@@ -125,14 +125,14 @@ async function open(kind) {
   change("#palette", "blue");
   assert.equal(
     d.documentElement.style.getPropertyValue("--primary"),
-    "#8fc8ed",
+    kind === "admin" ? "#1769c2" : "#8fc8ed",
   );
   change("#radius", "24", "input");
   assert.equal(d.documentElement.style.getPropertyValue("--radius"), "24px");
   click("#reset-theme");
   assert.equal(
     d.documentElement.style.getPropertyValue("--primary"),
-    "#8fc8ed",
+    kind === "admin" ? "#1769c2" : "#8fc8ed",
   );
   change("#catalog-search", "不存在的页面", "input");
   assert.equal(d.querySelectorAll("#catalog-nav a").length, 0);
