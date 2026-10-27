@@ -103,6 +103,17 @@ window.Preview = (() => {
       const rgb = prefs.primary
         .match(/[a-f0-9]{2}/gi)
         .map((x) => parseInt(x, 16));
+      root.setProperty(
+        "--accent",
+        "#" +
+          rgb
+            .map((x, i) =>
+              Math.round((x + [20, 54, 77][i]) / 2)
+                .toString(16)
+                .padStart(2, "0"),
+            )
+            .join(""),
+      );
       const luminance = rgb
         .map((x) => x / 255)
         .map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4))

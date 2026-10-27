@@ -1,7 +1,7 @@
 :root {
   --primary: #8fc8ed;
   --on-primary: #173b56;
-  --accent: color-mix(in srgb, var(--primary) 50%, #14364d);
+  --accent: #527f9d;
   --ink: #203e55;
   --muted: #738696;
   --bg: #f3f8fc;
