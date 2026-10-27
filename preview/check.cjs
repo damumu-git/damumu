@@ -114,14 +114,14 @@ async function open(kind) {
   change("#palette", "blue");
   assert.equal(
     d.documentElement.style.getPropertyValue("--primary"),
-    "#416b88",
+    "#8fc8ed",
   );
   change("#radius", "24", "input");
   assert.equal(d.documentElement.style.getPropertyValue("--radius"), "24px");
   click("#reset-theme");
   assert.equal(
     d.documentElement.style.getPropertyValue("--primary"),
-    "#287756",
+    "#8fc8ed",
   );
   change("#catalog-search", "不存在的页面", "input");
   assert.equal(d.querySelectorAll("#catalog-nav a").length, 0);

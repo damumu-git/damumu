@@ -1,18 +1,20 @@
 :root {
-  --primary: #287756;
-  --ink: #203a30;
-  --muted: #78847e;
-  --bg: #f5f6f2;
+  --primary: #8fc8ed;
+  --on-primary: #173b56;
+  --accent: color-mix(in srgb, var(--primary) 50%, #14364d);
+  --ink: #203e55;
+  --muted: #738696;
+  --bg: #f3f8fc;
   --surface: #fff;
-  --line: #e3e8e2;
-  --soft: #eaf2eb;
+  --line: #dfe9f1;
+  --soft: #e7f3fc;
   --radius: 18px;
   --font: 14px;
   --gap: 18px;
   font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
   color: var(--ink);
   font-size: var(--font);
-  background: #e8ece8;
+  background: #eaf1f7;
 }
 * {
   box-sizing: border-box;
@@ -53,7 +55,7 @@ textarea:focus-visible {
   outline-offset: 3px;
 }
 a {
-  color: var(--primary);
+  color: var(--accent);
 }
 button {
   color: inherit;
@@ -63,12 +65,12 @@ button {
   padding: 10px 14px;
 }
 button:hover {
-  border-color: var(--primary);
+  border-color: var(--accent);
 }
 .primary {
   background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--accent);
 }
 .danger {
   color: #a7473d;
@@ -161,7 +163,7 @@ textarea {
 }
 input[type="checkbox"],
 input[type="radio"] {
-  accent-color: var(--primary);
+  accent-color: var(--accent);
   width: 17px;
   height: 17px;
   vertical-align: middle;
@@ -186,7 +188,7 @@ input[type="radio"] {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 2px;
-  color: var(--primary);
+  color: var(--accent);
   text-transform: uppercase;
   display: block;
   margin-bottom: 8px;
@@ -196,7 +198,7 @@ input[type="radio"] {
   padding: 5px 9px;
   border-radius: 7px;
   font-size: 11px;
-  color: var(--primary);
+  color: var(--accent);
   background: var(--soft);
   white-space: nowrap;
 }
@@ -214,7 +216,7 @@ input[type="radio"] {
   width: 43px;
   height: 43px;
   border-radius: 50%;
-  background: #e8efdf;
+  background: #e6f2fc;
   font-size: 24px;
   flex-shrink: 0;
   overflow: hidden;
@@ -242,8 +244,8 @@ input[type="radio"] {
 .chips .active,
 .tabs .active {
   background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--accent);
 }
 .divider {
   height: 1px;
@@ -259,8 +261,8 @@ input[type="radio"] {
   font-size: 12px;
 }
 .placeholder {
-  border: 1px dashed #c6cfc7;
-  background: #f5f6f2;
+  border: 1px dashed #c5d8e7;
+  background: #f3f8fc;
   border-radius: 12px;
   padding: 18px;
   color: var(--muted);
@@ -360,7 +362,7 @@ input[type="radio"] {
   color: #fff;
   font-size: 11px;
   letter-spacing: 2px;
-  background: #203a3070;
+  background: #203e5570;
   padding: 5px 9px;
   border-radius: 5px;
 }
@@ -368,7 +370,7 @@ input[type="radio"] {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: #203a30;
+  background: #203e55;
   color: #fff;
   padding: 10px 18px;
   display: flex;
@@ -378,12 +380,12 @@ input[type="radio"] {
   font-size: 12px;
 }
 .toolbar a {
-  color: #e4efe6;
+  color: #e4f1fc;
   text-decoration: none;
 }
 .toolbar button {
   padding: 6px 10px;
-  border-color: #60766a;
+  border-color: #607e96;
   background: #ffffff0e;
   color: white;
   font-size: 12px;
@@ -394,9 +396,9 @@ input[type="radio"] {
   min-height: calc(100vh - 53px);
 }
 .catalog {
-  background: #f7f8f5;
+  background: #f6f9fc;
   padding: 22px 14px;
-  border-right: 1px solid #d6ddd5;
+  border-right: 1px solid #d6e3ee;
   max-height: calc(100vh - 53px);
   overflow: auto;
   position: sticky;
@@ -416,7 +418,7 @@ input[type="radio"] {
 .catalog summary {
   font-size: 11px;
   letter-spacing: 1px;
-  color: #7a887f;
+  color: #75899b;
   padding: 10px 8px;
   cursor: pointer;
 }
@@ -426,15 +428,15 @@ input[type="radio"] {
   gap: 5px;
   align-items: center;
   text-decoration: none;
-  color: #53665a;
+  color: #526d82;
   padding: 9px 10px;
   font-size: 12px;
   border-radius: 8px;
   margin: 2px 0;
 }
 .catalog a.active {
-  background: #e0ebe0;
-  color: #1e6946;
+  background: #e2f0fc;
+  color: #326e98;
   font-weight: 700;
 }
 .catalog a small {
@@ -444,7 +446,7 @@ input[type="radio"] {
   font-size: 11px;
   line-height: 1.8;
   padding: 18px 9px;
-  color: #7a887f;
+  color: #75899b;
 }
 .workspace {
   min-width: 0;
@@ -462,7 +464,7 @@ input[type="radio"] {
 }
 .page-meta p {
   font-size: 12px;
-  color: #728176;
+  color: #73899b;
   margin-top: 5px;
 }
 .page-meta select {
@@ -529,11 +531,11 @@ input[type="radio"] {
   font-weight: 500;
 }
 .dock a.active {
-  color: var(--primary);
+  color: var(--accent);
 }
 .dock a:nth-child(3) b {
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
   border-radius: 10px;
   width: 33px;
   margin: auto;
@@ -585,7 +587,7 @@ input[type="radio"] {
   margin-top: 8px;
 }
 .app-hero .eyebrow {
-  color: #b4d6b7;
+  color: #b5d9f3;
 }
 .app-hero h1 {
   font-size: 27px;
@@ -617,7 +619,7 @@ input[type="radio"] {
 .chat-bubble.mine {
   margin-left: auto;
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
   border: 0;
   border-radius: 16px 16px 3px 16px;
 }
@@ -670,7 +672,7 @@ input[type="radio"] {
   font-size: 12px;
 }
 .admin-nav a.active {
-  color: var(--primary);
+  color: var(--accent);
   background: var(--soft);
   font-weight: 700;
 }
@@ -792,7 +794,7 @@ td button {
   appearance: none;
   width: 34px;
   height: 20px;
-  background: #c5cfc7;
+  background: #c5d8e7;
   border-radius: 20px;
   position: relative;
   cursor: pointer;
@@ -876,7 +878,7 @@ td button {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #203a30;
+  background: #203e55;
   color: white;
   border-radius: 12px;
   padding: 13px 22px;
@@ -891,7 +893,7 @@ td button {
   top: 64px;
   width: 270px;
   z-index: 100;
-  box-shadow: 0 15px 70px #203a3033;
+  box-shadow: 0 15px 70px #203e5533;
   max-height: calc(100vh - 85px);
   overflow: auto;
 }
@@ -921,7 +923,7 @@ td button {
   font-size: 10px;
 }
 .image-zoom {
-  background: #18271f;
+  background: #182d40;
   padding: 15px;
   border-radius: 18px;
   color: white;
