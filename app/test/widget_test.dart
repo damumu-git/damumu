@@ -29,7 +29,7 @@ void main() {
     await tester.pumpWidget(authenticatedApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('今天，找个搭子'), findsOneWidget);
+    expect(find.text('今天，想和谁一起？'), findsOneWidget);
     expect(find.text('汉江日落野餐局'), findsOneWidget);
 
     await tester.tap(find.text('汉江日落野餐局'));
@@ -127,7 +127,7 @@ void main() {
 
     await tester.tap(find.byTooltip('回首页'));
     await tester.pumpAndSettle();
-    expect(find.text('今天，找个搭子'), findsOneWidget);
+    expect(find.text('今天，想和谁一起？'), findsOneWidget);
     expect(find.byKey(const Key('main-nav-0')), findsOneWidget);
   });
 

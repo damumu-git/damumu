@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { API_BASE, api, mediaUrl } from './api'
 import './App.css'
+import './preview-theme.css'
 
 const navigation = [
   { id: 'dashboard', label: '运营概览', icon: '⌁' },

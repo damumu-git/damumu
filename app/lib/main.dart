@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'auth.dart';
+import 'app_theme.dart';
 import 'external_processing.dart';
 import 'activity_interactions.dart';
 import 'category_service.dart';
@@ -32,10 +33,10 @@ Future<void> main() async {
   runApp(const DaziApp());
 }
 
-const _ink = Color(0xFF17162C);
-const _green = Color(0xFF5B4BDB);
-const _mint = Color(0xFFEDEAFF);
-const _cream = Color(0xFFF3F5FA);
+const _ink = AppPalette.ink;
+const _green = AppPalette.accent;
+const _mint = AppPalette.soft;
+const _cream = AppPalette.background;
 const _orange = Color(0xFFFF6B57);
 _AppShellState? _activeShell;
 _CreateEventPageState? _activeRouteDraft;
@@ -168,66 +169,7 @@ class _DaziAppState extends State<DaziApp> {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          theme: ThemeData(
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: _green,
-              primary: _green,
-              surface: _cream,
-            ),
-            scaffoldBackgroundColor: _cream,
-            fontFamily: 'Noto Sans SC',
-            fontFamilyFallback: const [
-              'Noto Sans KR',
-              'Segoe UI Emoji',
-              'Apple Color Emoji',
-              'Noto Color Emoji',
-              'Noto Emoji',
-              'PingFang SC',
-              'Microsoft YaHei',
-              'Noto Sans CJK SC',
-            ],
-            textTheme: const TextTheme(
-              headlineLarge: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w800,
-                height: 1.12,
-                color: _ink,
-              ),
-              headlineSmall: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: _ink,
-              ),
-              titleLarge: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: _ink,
-              ),
-              bodyLarge: TextStyle(fontSize: 16, height: 1.45, color: _ink),
-              bodyMedium: TextStyle(fontSize: 14, height: 1.4, color: _ink),
-            ),
-            cardTheme: const CardThemeData(
-              elevation: 0,
-              color: Colors.white,
-              margin: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(22)),
-              ),
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: Color(0xFFE7E5DF)),
-              ),
-            ),
-          ),
+          theme: buildAppTheme(),
           home: widget.home ?? _authenticatedHome(),
         ),
       ),
@@ -769,132 +711,95 @@ class _FloatingDock extends StatelessWidget {
     required this.labels,
     required this.onSelected,
   });
-
   final int selectedIndex;
   final int unread;
   final List<String> labels;
   final ValueChanged<int> onSelected;
-
   static const _icons = [
-    Icons.home_rounded,
-    Icons.explore_rounded,
-    Icons.add_rounded,
-    Icons.chat_bubble_rounded,
-    Icons.person_rounded,
+    Icons.home_outlined,
+    Icons.explore_outlined,
+    Icons.add,
+    Icons.chat_bubble_outline,
+    Icons.person_outline,
   ];
-
   @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.transparent,
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(14, 6, 14, 12),
-        child: Container(
-          height: 68,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xF7FFFFFF),
-            borderRadius: BorderRadius.circular(25),
-            border: Border.all(color: const Color(0xFFDDE1EE)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x1A29264A),
-                blurRadius: 24,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(5, (index) {
-              final selected = selectedIndex == index;
-              final isCreate = index == 2;
-              final icon = index == 3 && unread > 0
-                  ? Badge(label: Text('$unread'), child: Icon(_icons[index]))
-                  : Icon(_icons[index]);
-              return Semantics(
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      border: Border(top: BorderSide(color: AppPalette.line)),
+    ),
+    child: SafeArea(
+      top: false,
+      child: SizedBox(
+        height: 68,
+        child: Row(
+          children: List.generate(5, (index) {
+            final selected = selectedIndex == index;
+            final create = index == 2;
+            final icon = Icon(
+              _icons[index],
+              size: 23,
+              color: create
+                  ? AppPalette.onPrimary
+                  : selected
+                  ? _green
+                  : AppPalette.muted,
+            );
+            return Expanded(
+              child: Semantics(
                 button: true,
                 selected: selected,
                 label: labels[index],
                 child: InkWell(
                   key: Key('main-nav-$index'),
-                  borderRadius: BorderRadius.circular(22),
                   onTap: () => onSelected(index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
-                    width: isCreate ? 58 : (selected ? 82 : 50),
-                    height: isCreate ? 58 : 46,
-                    transform: Matrix4.translationValues(
-                      0,
-                      isCreate ? -13 : 0,
-                      0,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 2,
+                      vertical: 8,
                     ),
-                    decoration: BoxDecoration(
-                      gradient: isCreate
-                          ? const LinearGradient(
-                              colors: [_orange, Color(0xFFFF8D72)],
-                            )
-                          : null,
-                      color: isCreate
-                          ? null
-                          : (selected ? _mint : Colors.transparent),
-                      borderRadius: BorderRadius.circular(isCreate ? 20 : 17),
-                      boxShadow: isCreate
-                          ? const [
-                              BoxShadow(
-                                color: Color(0x40FF6B57),
-                                blurRadius: 16,
-                                offset: Offset(0, 7),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: isCreate
-                        ? const Icon(
-                            Icons.add_rounded,
-                            color: Colors.white,
-                            size: 31,
-                          )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              IconTheme(
-                                data: IconThemeData(
-                                  color: selected
-                                      ? _green
-                                      : const Color(0xFF74768A),
-                                  size: 23,
-                                ),
-                                child: icon,
-                              ),
-                              if (selected) ...[
-                                const SizedBox(width: 5),
-                                Flexible(
-                                  child: Text(
-                                    labels[index],
-                                    overflow: TextOverflow.fade,
-                                    softWrap: false,
-                                    style: const TextStyle(
-                                      color: _green,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: create ? 8 : 0,
+                            vertical: 2,
                           ),
+                          decoration: BoxDecoration(
+                            color: create
+                                ? AppPalette.primary
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: index == 3 && unread > 0
+                              ? Badge(label: Text('$unread'), child: icon)
+                              : icon,
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          labels[index],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: selected ? _green : AppPalette.muted,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              );
-            }),
-          ),
+              ),
+            );
+          }),
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class PagePadding extends StatelessWidget {
@@ -1205,211 +1110,144 @@ class _HomePageState extends State<HomePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          InkWell(
-                            onTap: _locating ? null : _showLocationOptions,
-                            borderRadius: BorderRadius.circular(8),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 3),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (_locating)
-                                    const Padding(
-                                      padding: EdgeInsets.only(right: 7),
-                                      child: Icon(
-                                        Icons.location_searching,
-                                        size: 15,
-                                        color: _green,
-                                      ),
-                                    )
-                                  else
-                                    Padding(
-                                      padding: EdgeInsets.only(right: 5),
-                                      child: Icon(
-                                        _manualLocation
-                                            ? Icons.location_on_outlined
-                                            : Icons.my_location,
-                                        size: 15,
-                                        color: _green,
-                                      ),
-                                    ),
-                                  Flexible(
-                                    child: Text(
-                                      _locationLabel,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.grey.shade700,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 3),
-                                  const Icon(Icons.expand_more, size: 16),
-                                ],
-                              ),
+                          Text(
+                            context.tr('previewBrandLine'),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: _green,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.5,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 8),
                           Text(
-                            '今天，找个搭子',
-                            style: Theme.of(context).textTheme.headlineLarge,
+                            context.tr('homeGreeting'),
+                            style: Theme.of(context).textTheme.headlineSmall,
                           ),
                         ],
                       ),
                     ),
-                    IconButton.filledTonal(
+                    IconButton(
                       onPressed: () => _showNotice(context),
-                      icon: const Badge(
-                        smallSize: 8,
-                        child: Icon(Icons.notifications_none_rounded),
-                      ),
+                      icon: const Icon(Icons.notifications_none_outlined),
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF5B4BDB), Color(0xFF7668EA)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                InkWell(
+                  onTap: _locating ? null : _showLocationOptions,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _locating
+                              ? Icons.location_searching
+                              : _manualLocation
+                              ? Icons.location_on_outlined
+                              : Icons.my_location,
+                          size: 15,
+                          color: _green,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            _locationLabel,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppPalette.muted,
+                            ),
+                          ),
+                        ),
+                        const Icon(Icons.expand_more, size: 16),
+                      ],
                     ),
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x335B4BDB),
-                        blurRadius: 28,
-                        offset: Offset(0, 12),
-                      ),
-                    ],
+                  ),
+                ),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: _ink,
+                    borderRadius: BorderRadius.circular(AppPalette.radius),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.radar_rounded, color: Colors.white),
-                          SizedBox(width: 8),
-                          Text(
-                            '附近正在发生',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          Spacer(),
-                          Text(
-                            'LIVE',
-                            style: TextStyle(
-                              color: Color(0xFFFFD3CC),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        context.tr('homeEyebrow'),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppPalette.primary,
+                          letterSpacing: 2,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        key: const Key('home-search-field'),
-                        controller: _searchController,
-                        textInputAction: TextInputAction.search,
-                        onChanged: (_) => setState(() {}),
-                        decoration: InputDecoration(
-                          hintText: '搜一个现在想做的事',
-                          prefixIcon: const Icon(Icons.search, color: _green),
-                          suffixIcon: _searchController.text.isEmpty
-                              ? const Icon(Icons.tune_rounded, size: 20)
-                              : IconButton(
-                                  tooltip: '清除搜索',
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() {});
-                                  },
-                                  icon: const Icon(Icons.close),
-                                ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide.none,
-                          ),
+                      const SizedBox(height: 12),
+                      Text(
+                        context.tr('homeHeroTitle'),
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                          height: 1.4,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        context.tr('homeHeroSubtitle'),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFBDD3E2),
                         ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 18),
+                TextField(
+                  key: const Key('home-search-field'),
+                  controller: _searchController,
+                  textInputAction: TextInputAction.search,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: context.tr('homeSearchHint'),
+                    prefixIcon: const Icon(Icons.search, color: _green),
+                    suffixIcon: _searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: context.tr('clearSearch'),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {});
+                            },
+                            icon: const Icon(Icons.close),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 18),
                 Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: const ['附近热门', '今天', '周末', '新手友好']
                       .map(
                         (filter) => FilterChipLabel(
-                          filter == '附近热门' ? '🔥 $filter' : filter,
+                          filter,
                           selected: _selectedFilters.contains(filter),
                           onTap: () => _toggleFilter(filter),
                         ),
                       )
                       .toList(),
                 ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF211F42), Color(0xFF34305F)],
-                    ),
-                    borderRadius: BorderRadius.circular(26),
-                    border: Border.all(color: const Color(0x22FFFFFF)),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              '第一次参加？',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '从 2–8 人的小活动开始\n见面前可开启安全会面',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: .72),
-                                height: 1.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: const BoxDecoration(
-                          color: _orange,
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text('👋', style: TextStyle(fontSize: 34)),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 22),
                 SectionTitle(
-                  title: '为你推荐 · ${_visibleEvents.length}',
+                  title:
+                      '${context.tr('nearbyMoments')} · ${_visibleEvents.length}',
                   action:
                       _searchController.text.isNotEmpty ||
                           _selectedFilters.isNotEmpty
-                      ? '清除筛选'
+                      ? context.tr('clearFilters')
                       : null,
                   onAction: _clearFilters,
                 ),
@@ -1615,11 +1453,9 @@ class FilterChipLabel extends StatelessWidget {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: selected ? _mint : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? _green : const Color(0xFFE5E3DD),
-          ),
+          color: selected ? AppPalette.primary : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? _green : AppPalette.line),
         ),
         child: Text(
           label,
@@ -1698,8 +1534,14 @@ class SectionTitle extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 14),
     child: Row(
       children: [
-        Text(title, style: Theme.of(context).textTheme.headlineSmall),
-        const Spacer(),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+        ),
         if (action != null)
           TextButton(onPressed: onAction, child: Text(action!)),
       ],
@@ -1711,126 +1553,148 @@ class EventCard extends StatelessWidget {
   const EventCard({required this.event, required this.onTap, super.key});
   final EventItem event;
   final VoidCallback onTap;
-
   @override
   Widget build(BuildContext context) => Card(
+    clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
-      child: Padding(
-        padding: const EdgeInsets.all(15),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 92,
-              height: 112,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: event.id.isEven
-                      ? const [Color(0xFFFFE7D6), Color(0xFFFFF7EC)]
-                      : const [Color(0xFFDCEFE4), Color(0xFFF4F1D5)],
-                ),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: event.coverUrl == null
-                  ? Text(event.emoji, style: const TextStyle(fontSize: 42))
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.network(
-                        absoluteImageUrl(event.coverUrl!),
-                        width: 92,
-                        height: 112,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Text(
-                          event.emoji,
-                          style: const TextStyle(fontSize: 42),
-                        ),
-                      ),
-                    ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          event.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            height: 1.25,
-                          ),
-                        ),
-                      ),
-                      if (event.isJoined)
-                        const Icon(Icons.check_circle, color: _green, size: 19),
-                    ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: 145,
+            child: event.coverUrl == null
+                ? _coverFallback()
+                : Image.network(
+                    absoluteImageUrl(event.coverUrl!),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _coverFallback(),
                   ),
-                  if (event.isPast) _Pill(context.tr('pastActivity')),
-                  if (event.organizerRiskTag != null) ...[
-                    const SizedBox(height: 7),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: _RiskPill(
+          ),
+          Padding(
+            padding: const EdgeInsets.all(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: [
+                    _Pill(event.category, green: true),
+                    if (event.beginnerFriendly)
+                      _Pill(
+                        context.tr(
+                          event.beginnerFriendlyVerified
+                              ? 'beginnerFriendlyVerified'
+                              : 'beginnerFriendlyClaimBadge',
+                        ),
+                        green: true,
+                      ),
+                    if (event.isPast) _Pill(context.tr('pastActivity')),
+                    if (event.isOwned)
+                      _Pill(context.tr('eventOwned'), green: true),
+                    if (event.organizerRiskTag != null)
+                      _RiskPill(
                         text: feedbackTagLabel(
                           context,
                           event.organizerRiskTag!,
                         ),
                       ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        event.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+                    if (event.isJoined)
+                      const Icon(Icons.check_circle, color: _green, size: 19),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  event.time,
+                  style: const TextStyle(fontSize: 12, color: AppPalette.muted),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${event.area} · ${event.distance}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AppPalette.muted),
+                ),
+                const Divider(height: 25),
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        UserAvatarImage(
+                          nickname: event.host,
+                          avatarUrl: event.organizerAvatar,
+                          radius: 13,
+                        ),
+                        const SizedBox(width: 7),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 140),
+                          child: Text(
+                            '${event.host} · ★ ${event.hostScore.toStringAsFixed(1)}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppPalette.muted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '${event.joined}/${event.capacity}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppPalette.muted,
+                      ),
+                    ),
+                    Text(
+                      event.price,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
-                  if (event.isOwned) ...[
-                    const SizedBox(height: 7),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: _Pill('我发布的', green: true),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Text(
-                    event.time,
-                    style: const TextStyle(
-                      color: _green,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${event.area} · ${event.distance}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Text(
-                        '${event.joined}/${event.capacity} 人',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const Spacer(),
-                      Text(
-                        event.price,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     ),
+  );
+  Widget _coverFallback() => Container(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [AppPalette.soft, Color(0xFFCEE5F5)],
+      ),
+    ),
+    alignment: Alignment.center,
+    child: Text(event.emoji, style: const TextStyle(fontSize: 48)),
   );
 }
 
@@ -2198,7 +2062,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                 alignment: Alignment.center,
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFFD7ECDF), Color(0xFFFFEED9)],
+                    colors: [AppPalette.soft, AppPalette.background],
                   ),
                 ),
                 child: e.coverUrl == null
@@ -2431,7 +2295,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     backgroundColor: _canLeave && !e.isOwned
                         ? Colors.grey.shade700
-                        : _green,
+                        : AppPalette.primary,
+                    foregroundColor: _canLeave && !e.isOwned
+                        ? Colors.white
+                        : AppPalette.onPrimary,
                   ),
                   child: _joining
                       ? const _ButtonProgress(label: '提交中…')
@@ -2823,8 +2690,8 @@ class _Pill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
     decoration: BoxDecoration(
-      color: green ? _mint : const Color(0xFFF0EFEA),
-      borderRadius: BorderRadius.circular(20),
+      color: green ? _mint : AppPalette.soft,
+      borderRadius: BorderRadius.circular(7),
     ),
     child: Text(
       text,
@@ -3424,9 +3291,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                               side: BorderSide(
-                                color: isSelected
-                                    ? _green
-                                    : const Color(0xFFE7E5DF),
+                                color: isSelected ? _green : AppPalette.line,
                                 width: isSelected ? 1.5 : 1,
                               ),
                             ),
@@ -3946,7 +3811,10 @@ class _ButtonProgress extends StatelessWidget {
       const SizedBox(
         width: 17,
         height: 17,
-        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: AppPalette.onPrimary,
+        ),
       ),
       const SizedBox(width: 9),
       Text(label),
@@ -4286,33 +4154,39 @@ class _MessagesPageState extends State<MessagesPage> {
               ],
             ),
             const SizedBox(height: 14),
-            SegmentedButton<int>(
-              expandedInsets: EdgeInsets.zero,
-              segments: [
-                ButtonSegment(
-                  value: 0,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: List.generate(
+                3,
+                (index) => ChoiceChip(
                   label: _segmentLabel(
-                    context.tr('eventChats'),
-                    _chatUnread('event'),
+                    context.tr(
+                      ['eventChats', 'directMessages', 'notifications'][index],
+                    ),
+                    index == 2
+                        ? _notifications.where((item) => !item.read).length
+                        : _chatUnread(index == 0 ? 'event' : 'direct'),
+                  ),
+                  selected: _segment == index,
+                  onSelected: (_) => setState(() => _segment = index),
+                  showCheckmark: false,
+                  selectedColor: AppPalette.primary,
+                  backgroundColor: Colors.white,
+                  labelStyle: const TextStyle(
+                    color: AppPalette.onPrimary,
+                    fontSize: 13,
+                  ),
+                  side: BorderSide(
+                    color: _segment == index
+                        ? AppPalette.accent
+                        : AppPalette.line,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                ButtonSegment(
-                  value: 1,
-                  label: _segmentLabel(
-                    context.tr('directMessages'),
-                    _chatUnread('direct'),
-                  ),
-                ),
-                ButtonSegment(
-                  value: 2,
-                  label: _segmentLabel(
-                    context.tr('notifications'),
-                    _notifications.where((item) => !item.read).length,
-                  ),
-                ),
-              ],
-              selected: {_segment},
-              onSelectionChanged: (s) => setState(() => _segment = s.first),
+              ),
             ),
           ],
         ),
@@ -4367,8 +4241,8 @@ class _MessagesPageState extends State<MessagesPage> {
                   children: [
                     SlidableAction(
                       onPressed: (_) => _markConversationRead(item),
-                      backgroundColor: _green,
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppPalette.primary,
+                      foregroundColor: AppPalette.onPrimary,
                       icon: Icons.done_all,
                       label: '已读',
                     ),
@@ -4422,8 +4296,8 @@ class _MessagesPageState extends State<MessagesPage> {
                   children: [
                     SlidableAction(
                       onPressed: (_) => _readNotification(item),
-                      backgroundColor: _green,
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppPalette.primary,
+                      foregroundColor: AppPalette.onPrimary,
                       icon: Icons.done_all,
                       label: '已读',
                     ),
@@ -5398,7 +5272,7 @@ class _Bubble extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
             decoration: BoxDecoration(
-              color: mine ? _green : Colors.white,
+              color: mine ? AppPalette.primary : Colors.white,
               borderRadius: BorderRadius.circular(18).copyWith(
                 bottomRight: mine ? const Radius.circular(4) : null,
                 bottomLeft: mine ? null : const Radius.circular(4),
@@ -5421,10 +5295,7 @@ class _Bubble extends StatelessWidget {
                       replyText!,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: mine ? Colors.white70 : Colors.black54,
-                      ),
+                      style: TextStyle(fontSize: 12, color: AppPalette.muted),
                     ),
                   ),
                 if (mediaUrl != null)
@@ -5462,7 +5333,7 @@ class _Bubble extends StatelessWidget {
                     child: Text(
                       text,
                       style: TextStyle(
-                        color: mine ? Colors.white : _ink,
+                        color: _ink,
                         fontStyle: recalled ? FontStyle.italic : null,
                       ),
                     ),
@@ -5471,7 +5342,7 @@ class _Bubble extends StatelessWidget {
                   Icon(
                     failed ? Icons.error_outline : Icons.schedule,
                     size: 14,
-                    color: mine ? Colors.white70 : Colors.black45,
+                    color: AppPalette.muted,
                   ),
               ],
             ),
@@ -5577,7 +5448,7 @@ class ProfilePage extends StatelessWidget {
                           right: -5,
                           bottom: -5,
                           child: Material(
-                            color: _green,
+                            color: AppPalette.primary,
                             shape: const CircleBorder(),
                             child: InkWell(
                               customBorder: const CircleBorder(),
@@ -5587,7 +5458,7 @@ class ProfilePage extends StatelessWidget {
                                 child: Icon(
                                   Icons.camera_alt,
                                   size: 15,
-                                  color: Colors.white,
+                                  color: AppPalette.onPrimary,
                                 ),
                               ),
                             ),
@@ -5641,13 +5512,13 @@ class ProfilePage extends StatelessWidget {
             onTap: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const SafetyCenterPage())),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(AppPalette.radius),
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Row(
                 children: [
                   const CircleAvatar(
-                    backgroundColor: Color(0xFF365345),
+                    backgroundColor: AppPalette.accent,
                     child: Icon(Icons.shield_outlined, color: Colors.white),
                   ),
                   const SizedBox(width: 13),
@@ -6544,8 +6415,10 @@ class _SafetyCenterPageState extends State<SafetyCenterPage> {
                 child: FilledButton(
                   onPressed: () => setState(() => _active = !_active),
                   style: FilledButton.styleFrom(
-                    backgroundColor: _active ? Colors.white : _orange,
-                    foregroundColor: _active ? _ink : Colors.white,
+                    backgroundColor: _active
+                        ? Colors.white
+                        : AppPalette.primary,
+                    foregroundColor: AppPalette.onPrimary,
                   ),
                   child: Text(_active ? '我现在安全 · 完成确认' : '开始设置'),
                 ),

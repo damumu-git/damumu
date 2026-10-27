@@ -11,12 +11,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'l10n.dart';
+import 'app_theme.dart';
 import 'push_notification_service.dart';
 import 'web_cropper_layout.dart';
 
-const _green = Color(0xFF1F7A55);
-const _mint = Color(0xFFE7F4EC);
-const _ink = Color(0xFF17211B);
+const _green = AppPalette.accent;
+const _mint = AppPalette.soft;
+const _ink = AppPalette.ink;
 const _apiBase = String.fromEnvironment(
   'API_BASE_URL',
   defaultValue: 'https://api.damumu.com/api/v1',
@@ -401,8 +402,11 @@ class _AuthPageState extends State<AuthPage> {
                 children: [
                   const CircleAvatar(
                     radius: 32,
-                    backgroundColor: _green,
-                    child: Icon(Icons.people_alt_rounded, color: Colors.white),
+                    backgroundColor: AppPalette.primary,
+                    child: Icon(
+                      Icons.people_alt_rounded,
+                      color: AppPalette.onPrimary,
+                    ),
                   ),
                   const SizedBox(height: 18),
                   Text(

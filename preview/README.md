@@ -69,12 +69,14 @@ Emoji。更换真正活动图时优先放在相应入口的 `assets/` 目录，�
 
 ## 与正式发布的关系
 
-本次不修改生产 App、Admin、API、数据库或部署脚本。现有 `deploy/compose.yaml` 的
+2026-10-27 已把浅蓝主题及主要组件布局同步到正式 Flutter App 和 React Admin，
+对应实现和验证方式见 [UI_PREVIEW_SYNC.md](../docs/UI_PREVIEW_SYNC.md)。API、数据库及
+部署脚本不涉及本次设计同步。现有 `deploy/compose.yaml` 的
 构建上下文分别为 `../restapi`、`../admin` 和 `../website`，因此根目录下的 `preview/`
 不会进入这些 Docker 镜像。AWS 拉取仓库时会得到预览源码，但不需要发布或运行它。
 
-确认设计后，再将页面结构和主题落实到 Flutter / React，保留实际 API 联动，完成正式
-业务验证后按原方式发布。更新业务代码时需同步核对预览；这不是自动双向同步的设计系统。
+正式页面保留实际 API 联动，按原方式构建发布。后续更新设计或业务代码时，需同步维护
+预览与正式主题；HTML 与 Flutter / React 并不是自动双向同步的设计系统。
 
 ## 验证
 

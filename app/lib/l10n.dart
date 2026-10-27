@@ -42,6 +42,17 @@ const languageLabels = {'zh': '中文', 'en': 'English', 'ko': '한국어'};
 
 const _strings = <String, Map<String, String>>{
   'zh': {
+    'beginnerFriendlyClaimBadge': '组织者声明 · 新手友好',
+    'homeEyebrow': 'A LITTLE COMPANY',
+    'previewBrandLine': 'DAMUMU · 一起出发',
+    'homeGreeting': '今天，想和谁一起？',
+    'homeHeroTitle': '把平常的周末，\n过成喜欢的样子。',
+    'homeHeroSubtitle': '附近的小活动，刚刚好的新朋友。',
+    'homeSearchHint': '搜索活动、地区…',
+    'clearSearch': '清除搜索',
+    'nearbyMoments': '附近的好时光',
+    'clearFilters': '清除筛选',
+    'eventOwned': '我发布的',
     'viewAvatar': '查看大图',
     'like': '喜欢',
     'liked': '已喜欢',
@@ -186,8 +197,10 @@ const _strings = <String, Map<String, String>>{
     'externalProcessingUnavailable': '系统推送和外部地区名称转换暂未启用。你仍可使用站内通知、当前位置查询和手动选区。',
     'optionalSystemPush': '系统推送（可选）',
     'optionalGeocoding': '外部地区名称转换（可选）',
-    'pushProcessingNotice': '启用后 Google FCM 将处理推送令牌、安装标识和通知标识，可能在韩国境外处理。请先阅读当前隐私政策中的接收方、国家、保存期限及撤回方式。关闭后仍可使用站内通知。',
-    'geocodingProcessingNotice': '启用后将向 OpenStreetMap Nominatim 发送坐标、语言和网络请求信息，可能在韩国境外处理。请先阅读当前隐私政策中的详细告知。关闭后仍可手动选区并查询附近活动。',
+    'pushProcessingNotice':
+        '启用后 Google FCM 将处理推送令牌、安装标识和通知标识，可能在韩国境外处理。请先阅读当前隐私政策中的接收方、国家、保存期限及撤回方式。关闭后仍可使用站内通知。',
+    'geocodingProcessingNotice':
+        '启用后将向 OpenStreetMap Nominatim 发送坐标、语言和网络请求信息，可能在韩国境外处理。请先阅读当前隐私政策中的详细告知。关闭后仍可手动选区并查询附近活动。',
     'privacyNoticeAcknowledgement': '我已阅读隐私政策，了解注册所需信息、用途和保存期限',
     'readPrivacyNotice': '查看隐私政策',
     'registrationConfirmationRequired': '请确认年龄并阅读隐私政策',
@@ -264,6 +277,17 @@ const _strings = <String, Map<String, String>>{
     'useSelectedLocation': '使用所选地区',
   },
   'en': {
+    'beginnerFriendlyClaimBadge': 'Organizer says · Beginner friendly',
+    'homeEyebrow': 'A LITTLE COMPANY',
+    'previewBrandLine': 'DAMUMU · GO TOGETHER',
+    'homeGreeting': 'Who will you meet today?',
+    'homeHeroTitle': 'Make an ordinary weekend\nyour kind of day.',
+    'homeHeroSubtitle': 'Small local activities. A little good company.',
+    'homeSearchHint': 'Search activities or places…',
+    'clearSearch': 'Clear search',
+    'nearbyMoments': 'Good moments nearby',
+    'clearFilters': 'Clear filters',
+    'eventOwned': 'Your event',
     'loadOlderMessages': 'Load earlier messages',
     'messageRecalled': 'Message recalled',
     'replyingToMessage': 'Replying to message',
@@ -417,11 +441,14 @@ const _strings = <String, Map<String, String>>{
     'registerAction': 'Create account',
     'minimumAgeConfirmation': 'I confirm that I am at least 14 years old',
     'externalProcessingTitle': 'Optional external processing',
-    'externalProcessingUnavailable': 'System push and external place-name lookup are not enabled yet. In-app notifications, nearby search and manual region selection remain available.',
+    'externalProcessingUnavailable':
+        'System push and external place-name lookup are not enabled yet. In-app notifications, nearby search and manual region selection remain available.',
     'optionalSystemPush': 'System push (optional)',
     'optionalGeocoding': 'External place-name lookup (optional)',
-    'pushProcessingNotice': 'Google FCM processes push tokens, installation IDs and notification identifiers, possibly outside Korea. Read the current privacy notice for recipients, countries, retention and withdrawal. In-app notifications remain available if you decline.',
-    'geocodingProcessingNotice': 'Coordinates, language and network request information are sent to OpenStreetMap Nominatim, possibly outside Korea. Read the detailed privacy notice first. Manual region selection and nearby search remain available if you decline.',
+    'pushProcessingNotice':
+        'Google FCM processes push tokens, installation IDs and notification identifiers, possibly outside Korea. Read the current privacy notice for recipients, countries, retention and withdrawal. In-app notifications remain available if you decline.',
+    'geocodingProcessingNotice':
+        'Coordinates, language and network request information are sent to OpenStreetMap Nominatim, possibly outside Korea. Read the detailed privacy notice first. Manual region selection and nearby search remain available if you decline.',
     'privacyNoticeAcknowledgement':
         'I have read the privacy notice, including required account data, purposes and retention',
     'readPrivacyNotice': 'Read privacy notice',
@@ -505,6 +532,17 @@ const _strings = <String, Map<String, String>>{
     'useSelectedLocation': 'Use selected area',
   },
   'ko': {
+    'beginnerFriendlyClaimBadge': '주최자 안내 · 초보자 환영',
+    'homeEyebrow': 'A LITTLE COMPANY',
+    'previewBrandLine': 'DAMUMU · 함께 떠나요',
+    'homeGreeting': '오늘은 누구와 함께할까요?',
+    'homeHeroTitle': '평범한 주말을,\n내가 좋아하는 하루로.',
+    'homeHeroSubtitle': '가까운 작은 모임, 편안한 새로운 만남.',
+    'homeSearchHint': '활동이나 지역 검색…',
+    'clearSearch': '검색 지우기',
+    'nearbyMoments': '가까운 곳의 좋은 시간',
+    'clearFilters': '필터 지우기',
+    'eventOwned': '내가 만든 활동',
     'loadOlderMessages': '이전 메시지 불러오기',
     'messageRecalled': '메시지가 회수되었습니다',
     'replyingToMessage': '메시지에 답장 중',
@@ -647,11 +685,14 @@ const _strings = <String, Map<String, String>>{
     'registerAction': '가입하고 시작하기',
     'minimumAgeConfirmation': '만 14세 이상임을 확인합니다',
     'externalProcessingTitle': '선택적 외부 처리',
-    'externalProcessingUnavailable': '시스템 푸시와 외부 지역명 조회는 아직 활성화되지 않았습니다. 앱 내 알림, 주변 검색 및 직접 지역 선택은 이용할 수 있습니다.',
+    'externalProcessingUnavailable':
+        '시스템 푸시와 외부 지역명 조회는 아직 활성화되지 않았습니다. 앱 내 알림, 주변 검색 및 직접 지역 선택은 이용할 수 있습니다.',
     'optionalSystemPush': '시스템 푸시(선택)',
     'optionalGeocoding': '외부 지역명 조회(선택)',
-    'pushProcessingNotice': 'Google FCM이 푸시 토큰, 설치 및 알림 식별자를 처리하며 국외에서 처리될 수 있습니다. 현재 방침에서 수령자, 국가, 보유기간 및 철회 방법을 먼저 확인하세요. 거부해도 앱 내 알림을 사용할 수 있습니다.',
-    'geocodingProcessingNotice': '좌표, 언어 및 네트워크 요청 정보가 OpenStreetMap Nominatim으로 전송되며 국외 처리될 수 있습니다. 현재 방침의 상세 고지를 먼저 확인하세요. 거부해도 직접 지역 선택과 주변 검색을 사용할 수 있습니다.',
+    'pushProcessingNotice':
+        'Google FCM이 푸시 토큰, 설치 및 알림 식별자를 처리하며 국외에서 처리될 수 있습니다. 현재 방침에서 수령자, 국가, 보유기간 및 철회 방법을 먼저 확인하세요. 거부해도 앱 내 알림을 사용할 수 있습니다.',
+    'geocodingProcessingNotice':
+        '좌표, 언어 및 네트워크 요청 정보가 OpenStreetMap Nominatim으로 전송되며 국외 처리될 수 있습니다. 현재 방침의 상세 고지를 먼저 확인하세요. 거부해도 직접 지역 선택과 주변 검색을 사용할 수 있습니다.',
     'privacyNoticeAcknowledgement':
         '가입에 필요한 정보, 처리 목적과 보유기간을 포함한 개인정보 처리방침을 읽었습니다',
     'readPrivacyNotice': '개인정보 처리방침 보기',
