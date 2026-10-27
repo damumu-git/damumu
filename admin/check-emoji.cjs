@@ -3,7 +3,7 @@ const {JSDOM,VirtualConsole}=require(process.argv[2] || 'jsdom');
 const dir=path.join(__dirname,'dist/assets');
 const code=fs.readFileSync(path.join(dir,fs.readdirSync(dir).find(n=>n.endsWith('.js'))),'utf8');
 const css=fs.readFileSync(path.join(dir,fs.readdirSync(dir).find(n=>n.endsWith('.css'))),'utf8');
-assert(css.includes('#8fc8ed'));assert(css.includes('--on-primary:'));
+assert(css.includes('--primary:#1769c2'));assert(css.includes('--on-primary:'));
 const date='2026-10-27T12:00:00Z';
 const user={id:'ui-user',nickname:'UI User',role:'organizer',status:'active',trust_score:4.8,created_at:date,last_login_at:date,attended_count:3,no_show_count:0,report_count:0};
 const item={id:'ui-event',title:'UI Event',organizer_name:'UI User',status:'published',starts_at:date,created_at:date,approved_count:2,capacity:6,report_count:0,waitlist_count:0};
@@ -30,6 +30,8 @@ const tick=()=>new Promise(r=>setTimeout(r,50));
 const find=(text)=>[...w.document.querySelectorAll('button')].find(b=>b.textContent.trim()===text);
 (async()=>{
 await tick();await tick();
+assert.equal(w.document.querySelectorAll('.sidebar nav button').length,11);
+for(const button of w.document.querySelectorAll('.sidebar nav button')) {assert.equal(button.querySelectorAll('svg.admin-nav-icon').length,1);assert(!button.querySelector('img'));}
 const labels=['运营概览','用户管理','活动管理','举报治理','安全警报','分类配置','地区管理','系统头像','图标素材','审计日志','功能开关'];
 for(const label of labels){const nav=[...w.document.querySelectorAll('.sidebar nav button')].find(b=>b.textContent.includes(label));assert(nav,label);nav.click();await tick();await tick();assert.equal(w.document.querySelector('.topbar h1').textContent,label);assert(!w.document.querySelector('.error-state'),`Resource error ${label}`);assert(w.document.querySelector('.page-content').textContent.trim());
 if(label==='用户管理'){

@@ -4,6 +4,7 @@ import './index.css'
 import './fonts.css'
 import App from './App.jsx'
 import './controls.css'
+import './enterprise-theme.css'
 import { AdminDialogProvider } from './AdminControls.jsx'
 import { EmojiAssetsProvider } from './EmojiAssets.jsx'
 

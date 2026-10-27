@@ -6,9 +6,9 @@
 
 通用控件由 `src/controls.css` 兜底，特定导航/状态/主操作样式优先。`AdminControls.jsx`提供统一文件选择器和处置/确认弹窗，替代浏览器prompt/confirm；保留原生file表单字段、必填校验及API参数，支持Escape和焦点恢复。新增裸按钮/输入无需另写一套默认样式。
 
-Admin正文、表格、标题、按钮及弹窗使用霞鹜文楷Lite中文、文楷KR韩文及Ysabeau Office英文/数字，字体随服务自托管；离线Admin预览同步。重建和许可见 `FONTS.md`。
+Admin采用Light/Compact风格的灰白蓝管理工作台：224px分组侧栏、统一SVG线性菜单图标、紧凑工具栏、带网格的条纹表格与小圆角表单。字体为自托管Noto Sans SC / KR无衬线，离线预览同步；App字体和主题不变。设计及来源见 `DESIGN.md`，字体重建和许可见 `FONTS.md`。
 
-2026-10-27 已将预览浅蓝设计应用到正式 React 页面。`src/preview-theme.css` 在
+原浅蓝预览样式作为基础保留，最后加载 `src/enterprise-theme.css` 应用当前工作台风格。`src/preview-theme.css` 在
 原 `App.css` 之后加载，统一白色侧栏、浅蓝主按钮、表格、详情、编辑弹窗和响应式布局。
 该文件是正式样式，不依赖 `preview/` 的脚本或示例数据；所有业务继续调用原 API。
 同步说明见仓库根目录 `docs/UI_PREVIEW_SYNC.md`。
