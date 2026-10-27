@@ -90,22 +90,24 @@ void main() {
       await (FontLoader(
         'MaterialIcons',
       )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
-      final rounded = FontLoader(AppTypography.family)
-        ..addFont(
-          rootBundle.load('assets/fonts/ResourceHanRoundedCN-Regular.ttf'),
-        )
-        ..addFont(
-          rootBundle.load('assets/fonts/ResourceHanRoundedCN-Bold.ttf'),
-        );
-      await rounded.load();
-      for (final family in ['Noto Sans KR', 'Noto Emoji']) {
-        final file = {
-          'Noto Sans KR': 'NotoSansKR-VF.ttf',
-          'Noto Emoji': 'NotoEmoji-VF.ttf',
-        }[family]!;
-        await (FontLoader(
-          family,
-        )..addFont(rootBundle.load('assets/fonts/$file'))).load();
+      for (final entry in const {
+        'Ysabeau Office': ['YsabeauOffice-VF.ttf'],
+        'LXGW WenKai Lite': [
+          'LXGWWenKaiLite-Regular.ttf',
+          'LXGWWenKaiLite-Medium.ttf',
+        ],
+        'LXGW WenKai KR': [
+          'LXGWWenKaiKR-Regular.ttf',
+          'LXGWWenKaiKR-Medium.ttf',
+        ],
+        'Noto Sans KR': ['NotoSansKR-VF.ttf'],
+        'Noto Emoji': ['NotoEmoji-VF.ttf'],
+      }.entries) {
+        final loader = FontLoader(entry.key);
+        for (final file in entry.value) {
+          loader.addFont(rootBundle.load('assets/fonts/$file'));
+        }
+        await loader.load();
       }
     });
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -162,5 +164,45 @@ void main() {
       ),
     );
     await capture('app-login');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: boundary,
+        child: DaziApp(
+          key: UniqueKey(),
+          home: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 36),
+                  for (final weight in [
+                    FontWeight.w400,
+                    FontWeight.w500,
+                    FontWeight.w700,
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: Text(
+                        '搭慕 · 周末一起散步\n다무무 · 주말에 함께 산책해요\nDamumu · Meet new friends\n10/27 16:30 · 6명 · ₩12,000',
+                        style: TextStyle(
+                          fontSize: 18,
+                          height: 1.7,
+                          fontWeight: weight,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await capture('app-typography');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }

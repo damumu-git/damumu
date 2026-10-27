@@ -6,7 +6,7 @@
 
 - 2026-10-27：完成 Emoji 静态清单 `docs/EMOJI_INVENTORY.md` 及逐处来源 CSV；共67种字符序列、157处字面量，区分分类/兴趣种子、正式界面字符和预览占位。未读取AWS实时分类，尚未替换素材或修改业务；下一步核对线上配置并选定图标风格。
 
-- 2026-10-27 圆体试用：正式 App 和 App 预览的中文/英文改用官方资源圆体0.990 Regular/Bold，韩文保留Noto Sans KR；Admin未修改。字体TTF及许可入库，Flutter注册资源和许可；原Noto Sans SC文件保留源码但不再重复打包。App预览内嵌同源完整WOFF2字体，file协议无需CDN/服务器，转换后的字符映射、轮廓及字重与TTF一致，界面中文字符覆盖检查通过。Flutter analyze、57项测试、Web发布构建通过（1项既有Mac字体golden跳过），实际圆体渲染图已检查；70个App/Admin预览入口的DOM/状态/交互检查通过。来源与重建方式见 `preview/app/FONTS.md`；此为字体试用，尚未生成Android/iOS商店包或部署AWS。
+- 2026-10-27 三语字体：App/离线App预览改用霞鹜文楷Lite中文（400/500）、文楷KR韩文（400/500）及Ysabeau Office英文/数字（可变字体），保留Noto Sans KR与Emoji回退，Admin未改。官方固定提交的TTF与许可本地打包、注册LicenseRegistry，预览内嵌同源WOFF2，重建及SHA记录见`preview/app/FONTS.md`；旧圆体留存源码但不打包。910个源码中韩文字覆盖与11,172个现代韩文音节核对通过；Flutter analyze、57项测试与Web发布构建通过，1项既有Mac字体golden跳过，70入口预览检查通过。首页/发布/资料/登录及三语混排实际渲染图已检查；未生成Android/iOS商店包或部署AWS，下一步进行真机字重/排版验收（文楷无原生700，渲染器粗体处理可能不同）。
 
 - 2026-10-27：预览浅蓝设计已同步到正式 Flutter App 和 React Admin。App 集中主题 `app/lib/app_theme.dart` 覆盖认证、表单、卡片、弹窗及子页面；首页、竖版封面卡、底部导航、可换行消息分类、本人聊天气泡同步预览风格，保留真实头像/认证/权限/分页/报名/聊天 API。Admin 使用 `admin/src/preview-theme.css` 将十栏目与详情、弹窗统一为白色侧栏和浅蓝主操作；App.jsx 仅增加样式导入。修复窄屏大字号标题和消息分类溢出；新增文案有中英韩。Flutter analyze 通过，57项测试通过、1项旧Mac字体golden跳过；真实Flutter首页、发布、资料、登录渲染图已生成并检查，Admin lint/build及隔离DOM中的十栏目、用户/活动详情、申请控件和分类弹窗检查通过。同步关系见 `docs/UI_PREVIEW_SYNC.md`；没有部署AWS、改数据库或生成Android/iOS商店包。
 

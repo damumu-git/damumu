@@ -32,15 +32,26 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/fonts/ResourceHanRounded-LICENSE.txt
+    - assets/fonts/LXGWWenKai-LICENSE.txt
+    - assets/fonts/LXGWWenKaiKR-LICENSE.txt
+    - assets/fonts/YsabeauOffice-LICENSE.txt
     - assets/fonts/NotoSansKR-LICENSE.txt
   fonts:
-    - family: Resource Han Rounded CN
+    - family: Ysabeau Office
       fonts:
-        - asset: assets/fonts/ResourceHanRoundedCN-Regular.ttf
+        - asset: assets/fonts/YsabeauOffice-VF.ttf
+    - family: LXGW WenKai Lite
+      fonts:
+        - asset: assets/fonts/LXGWWenKaiLite-Regular.ttf
           weight: 400
-        - asset: assets/fonts/ResourceHanRoundedCN-Bold.ttf
-          weight: 700
+        - asset: assets/fonts/LXGWWenKaiLite-Medium.ttf
+          weight: 500
+    - family: LXGW WenKai KR
+      fonts:
+        - asset: assets/fonts/LXGWWenKaiKR-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/LXGWWenKaiKR-Medium.ttf
+          weight: 500
     - family: Noto Sans KR
       fonts:
         - asset: assets/fonts/NotoSansKR-VF.ttf

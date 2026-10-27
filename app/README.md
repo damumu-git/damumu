@@ -2,9 +2,10 @@
 
 ## 界面主题
 
-2026-10-27 圆体试用：中文 / 英文改用内置资源圆体 `Resource Han Rounded CN`
-（Regular / Bold），韩文保留 Noto Sans KR。App 预览同步加载同源字体，Admin 未改动。
-来源、许可证和离线预览字体重建说明见 `preview/app/FONTS.md`（仓库根目录）。
+2026-10-27 三语文楷方案：中文使用霞鹜文楷轻便版，韩文使用文楷 KR，
+英文/数字使用 Ysabeau Office，保留 Noto Sans KR 与 Emoji 回退。字体本地打包；
+App 离线预览使用同源字体，Admin 未改动。来源、许可与重建说明见
+`preview/app/FONTS.md`（仓库根目录）。
 
 2026-10-27 已将预览的浅蓝设计应用到正式 Flutter 页面。统一主题见
 `lib/app_theme.dart`；首页、竖版活动封面卡、底部导航及消息标签已同步，登录、发布、

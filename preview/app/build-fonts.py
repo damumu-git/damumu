@@ -28,8 +28,11 @@ brotli.compress = compress_preview
 HERE = Path(__file__).resolve().parent
 FONTS = HERE.parents[1] / "app" / "assets" / "fonts"
 SOURCES = [
-    ("ResourceHanRoundedCN-Regular.ttf", "Resource Han Rounded CN", "400"),
-    ("ResourceHanRoundedCN-Bold.ttf", "Resource Han Rounded CN", "700"),
+    ("YsabeauOffice-VF.ttf", "Ysabeau Office", "1 1000"),
+    ("LXGWWenKaiLite-Regular.ttf", "LXGW WenKai Lite", "400"),
+    ("LXGWWenKaiLite-Medium.ttf", "LXGW WenKai Lite", "500"),
+    ("LXGWWenKaiKR-Regular.ttf", "LXGW WenKai KR", "400"),
+    ("LXGWWenKaiKR-Medium.ttf", "LXGW WenKai KR", "500"),
     ("NotoSansKR-VF.ttf", "Noto Sans KR", "100 900"),
 ]
 
@@ -56,10 +59,10 @@ for filename, family, weight in SOURCES:
     print(f"{filename}: WOFF2 {len(packed):,} bytes, {len(original_cmap):,} characters retained", flush=True)
 
 css.append(
-    ":root {font-family:'Resource Han Rounded CN','Noto Sans KR','Segoe UI',"
+    ":root {font-family:'Ysabeau Office','LXGW WenKai Lite','LXGW WenKai KR','Noto Sans KR','Segoe UI',"
     "'Microsoft YaHei',sans-serif;font-synthesis:none;}"
 )
 (HERE / "app-fonts.css").write_text("\n".join(css) + "\n", encoding="utf-8")
 (HERE / "licenses").mkdir(exist_ok=True)
-for filename in ["ResourceHanRounded-LICENSE.txt", "NotoSansKR-LICENSE.txt"]:
+for filename in ["LXGWWenKai-LICENSE.txt", "LXGWWenKaiKR-LICENSE.txt", "YsabeauOffice-LICENSE.txt", "NotoSansKR-LICENSE.txt"]:
     copyfile(FONTS / filename, HERE / "licenses" / filename)

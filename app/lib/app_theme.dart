@@ -3,20 +3,34 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 abstract final class AppTypography {
-  static const family = 'Resource Han Rounded CN';
+  // Latin first, Chinese without Hangul next, then the dedicated Korean face.
+  static const family = 'Ysabeau Office';
+  static const fallback = [
+    'LXGW WenKai Lite',
+    'LXGW WenKai KR',
+    'Noto Sans KR',
+    'Segoe UI Emoji',
+    'Apple Color Emoji',
+    'Noto Color Emoji',
+    'Noto Emoji',
+    'PingFang SC',
+    'Microsoft YaHei',
+    'Noto Sans CJK SC',
+  ];
 }
 
 void registerAppFontLicenses() {
   LicenseRegistry.addLicense(() async* {
-    yield LicenseEntryWithLineBreaks(
-      const ['Resource Han Rounded'],
-      await rootBundle.loadString(
-        'assets/fonts/ResourceHanRounded-LICENSE.txt',
-      ),
-    );
-    yield LicenseEntryWithLineBreaks(const [
-      'Noto Sans KR',
-    ], await rootBundle.loadString('assets/fonts/NotoSansKR-LICENSE.txt'));
+    for (final entry in const {
+      'LXGW WenKai Lite': 'LXGWWenKai-LICENSE.txt',
+      'LXGW WenKai KR': 'LXGWWenKaiKR-LICENSE.txt',
+      'Ysabeau Office': 'YsabeauOffice-LICENSE.txt',
+      'Noto Sans KR': 'NotoSansKR-LICENSE.txt',
+    }.entries) {
+      yield LicenseEntryWithLineBreaks([
+        entry.key,
+      ], await rootBundle.loadString('assets/fonts/${entry.value}'));
+    }
   });
 }
 
@@ -53,16 +67,7 @@ ThemeData buildAppTheme() {
     ),
     scaffoldBackgroundColor: AppPalette.background,
     fontFamily: AppTypography.family,
-    fontFamilyFallback: const [
-      'Noto Sans KR',
-      'Segoe UI Emoji',
-      'Apple Color Emoji',
-      'Noto Color Emoji',
-      'Noto Emoji',
-      'PingFang SC',
-      'Microsoft YaHei',
-      'Noto Sans CJK SC',
-    ],
+    fontFamilyFallback: AppTypography.fallback,
   );
   return base.copyWith(
     textTheme: base.textTheme.copyWith(
@@ -102,6 +107,7 @@ ThemeData buildAppTheme() {
       scrolledUnderElevation: 0,
       titleTextStyle: TextStyle(
         fontFamily: AppTypography.family,
+        fontFamilyFallback: AppTypography.fallback,
         fontSize: 20,
         fontWeight: FontWeight.w700,
         color: AppPalette.ink,
@@ -127,6 +133,7 @@ ThemeData buildAppTheme() {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         textStyle: const TextStyle(
           fontFamily: AppTypography.family,
+          fontFamilyFallback: AppTypography.fallback,
           fontSize: 14,
           fontWeight: FontWeight.w700,
         ),
