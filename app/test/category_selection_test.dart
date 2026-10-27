@@ -131,9 +131,9 @@ void main() {
       await tester.ensureVisible(
         find.byKey(const ValueKey('leaf-category-major1')),
       );
-      await tester.tap(find.text('◇ 子类1'));
+      await tester.tap(find.text('子类1'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('◇ 其它').last);
+      await tester.tap(find.text('其它').last);
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('custom-subcategory')), findsOneWidget);
       expect(find.byKey(const ValueKey('major-category-major7')), findsNothing);

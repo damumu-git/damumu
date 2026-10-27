@@ -15,6 +15,7 @@ class ActivityCategory {
     required this.name,
     required this.icon,
     this.iconKey,
+    this.iconUrl,
     this.isFeatured = false,
     this.requiresCustomLabel = false,
     this.parentId,
@@ -26,6 +27,7 @@ class ActivityCategory {
   final String name;
   final String icon;
   final String? iconKey;
+  final String? iconUrl;
   final bool isFeatured;
   final bool requiresCustomLabel;
   final String? parentId;
@@ -38,6 +40,7 @@ class ActivityCategory {
         name: json['name_zh_cn'] as String,
         icon: (json['icon'] as String?) ?? '◇',
         iconKey: json['icon_key'] as String?,
+        iconUrl: json['icon_url'] as String?,
         isFeatured: json['is_featured'] as bool? ?? false,
         requiresCustomLabel: json['requires_custom_label'] as bool? ?? false,
         parentId: json['parent_id'] as String?,

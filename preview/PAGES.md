@@ -76,3 +76,5 @@
 | 警报响应 | `admin/index.html#safety-action` | admin/src/App.jsx · Safety.update | 业务预览 |
 | 删除分类确认 | `admin/index.html#delete-category` | admin/src/App.jsx · Categories | 业务预览 |
 | 删除地区确认 | `admin/index.html#delete-region` | admin/src/App.jsx · Regions | 业务预览 |
+
+| 图标素材 | `admin/index.html#emoji-assets` | admin/src/EmojiAssets.jsx · EmojiAssetManager | 真实素材离线图册，管理操作在正式Admin |

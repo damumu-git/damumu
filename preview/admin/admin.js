@@ -30,6 +30,7 @@
     route("safety", "安全警报", "Safety", true, "!"),
     route("categories", "分类配置", "Categories", true, "⊞"),
     route("regions", "地区管理", "Regions", true, "⌖"),
+    route("emoji-assets", "图标素材", "EmojiAssetManager", true, "▧"),
     route("avatars", "系统头像", "SystemAvatars", true, "◎"),
     route("audit", "审计日志", "Audit", true, "≡"),
     route("settings", "功能开关", "Settings", true, "⚙"),
@@ -380,6 +381,9 @@
     const u = users[userIndex],
       e = events[eventIndex];
     switch (id) {
+      case "emoji-assets":
+        return `${heading("图标素材", "本页展示随项目保存的64×64真实素材；上传与启停请在正式Admin操作。", badge("离线素材预览"))}<div class="grid3">${window.EmojiArtwork.map(item => `<article class="panel"><img src="${item.src}" width="64" height="64" alt="${item.emoji}"><h3>${item.name}</h3><p class="muted">${item.key} · 64×64 PNG</p></article>`).join("")}</div>`;
+
       case "dashboard":
         return `${heading("社区今天，也在发生好事", "以下为虚构统计，用于评审信息层级与页面布局。", badge("离线预览"))}${stats(
           [

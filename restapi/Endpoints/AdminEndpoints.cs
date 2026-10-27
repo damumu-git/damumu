@@ -164,7 +164,7 @@ public static class AdminEndpoints
                        e.capacity, e.approved_count, e.waitlist_count, e.price_amount,
                        e.created_at, e.published_at, e.row_version,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
-                       c.icon AS category_icon,
+                       c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
                        p.name AS place_name, up.nickname AS organizer_name,
                        s.starts_at, s.ends_at,
                        (SELECT count(*) FROM report r WHERE r.target_type IN ('event','activity') AND r.target_id=e.id) AS report_count
@@ -199,7 +199,7 @@ public static class AdminEndpoints
             var item = await db.QueryOneAsync(
                 """
                 SELECT e.*, COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
-                       c.icon AS category_icon, p.name AS place_name,
+                       c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url, p.name AS place_name,
                        p.address_public, up.nickname AS organizer_name,
                        up.avatar_url AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_trust_score,
@@ -519,7 +519,7 @@ public static class AdminEndpoints
                     SELECT child.id, tree.full_path || ' / ' || child.name_zh_cn
                     FROM category child JOIN category_tree tree ON tree.id=child.parent_id
                 )
-                SELECT c.*, parent.name_zh_cn AS parent_name, tree.full_path,
+                SELECT c.*, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS icon_url, parent.name_zh_cn AS parent_name, tree.full_path,
                        (SELECT count(*) FROM category child WHERE child.parent_id=c.id) AS child_count,
                        (SELECT count(*) FROM event e WHERE e.category_id=c.id AND e.deleted_at IS NULL) AS event_count
                 FROM category c

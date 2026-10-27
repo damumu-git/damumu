@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Assets/emoji/*.png" />
     <None Remove="uploads/system-avatars/*.jpg" />
     <Content Include="uploads/system-avatars/*.jpg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -24,4 +25,5 @@
     <PackageReference Include="SkiaSharp" Version="4.151.2" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.151.2" />
   </ItemGroup>
+  <Import Project="EmojiAssets.props" />
 </Project>

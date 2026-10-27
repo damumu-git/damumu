@@ -36,6 +36,10 @@ function params(values) {
 }
 
 export const api = {
+  emojiAssets: () => request('/emoji-assets'),
+  adminEmojiAssets: () => request('/admin/emoji-assets'),
+  uploadEmojiAsset: (form) => request('/admin/emoji-assets', { method: 'POST', body: form }),
+  updateEmojiAsset: (key, body) => request(`/admin/emoji-assets/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify(body) }),
   health: () => request('/health'),
   dashboard: () => request('/admin/dashboard'),
   users: (filters = {}) => request(`/admin/users${params(filters)}`),

@@ -1,0 +1,278 @@
+{
+  "tool": "Built-in image_gen",
+  "delivery": "64x64 transparent PNG; mechanical resampling from generated originals, no SVG substitute",
+  "reference": "Coffee sample approved by the user on 2026-10-27",
+  "base": "Create ONE isolated original pictogram for a matched DAMUMU app icon set. Reference image is STYLE ONLY: preserve its rounded soft dark slate-blue outline, muted mist-blue ceramic-like gentle shading, warm ivory, tiny desaturated taupe accents, friendly clean hand-drawn 2D aesthetic. Change the depicted object completely to the requested subject. No vivid colors, neon, photographic background, white square, framing circle, sticker border, text labels, logos or watermark. Actual transparent alpha background. Simple compact centered silhouette occupying 75% of square, broad clear shapes, very few details, legible as a tiny 64x64 PNG. Prefer a small image. Subject: ",
+  "entries": [
+    {
+      "key": "leaf",
+      "subject": "a small leafy sprig"
+    },
+    {
+      "key": "hiking",
+      "subject": "one hiking boot"
+    },
+    {
+      "key": "board-games",
+      "subject": "one die with pips"
+    },
+    {
+      "key": "sparkles",
+      "subject": "two gentle four-point sparkles"
+    },
+    {
+      "key": "heart",
+      "subject": "one rounded heart"
+    },
+    {
+      "key": "group",
+      "subject": "two simple friendly bust silhouettes"
+    },
+    {
+      "key": "chat",
+      "subject": "two overlapping rounded speech bubbles with three dots"
+    },
+    {
+      "key": "settings",
+      "subject": "a rounded gear"
+    },
+    {
+      "key": "noodles",
+      "subject": "a bowl of noodles and chopsticks"
+    },
+    {
+      "key": "running",
+      "subject": "a person running"
+    },
+    {
+      "key": "theatre",
+      "subject": "two theatre masks"
+    },
+    {
+      "key": "books",
+      "subject": "three stacked books"
+    },
+    {
+      "key": "rice",
+      "subject": "a bowl of rice"
+    },
+    {
+      "key": "workout",
+      "subject": "a small dumbbell"
+    },
+    {
+      "key": "movie",
+      "subject": "a film clapperboard"
+    },
+    {
+      "key": "camera",
+      "subject": "a small camera"
+    },
+    {
+      "key": "dining",
+      "subject": "a plate with fork and spoon"
+    },
+    {
+      "key": "chef",
+      "subject": "a chef hat with a spoon"
+    },
+    {
+      "key": "football",
+      "subject": "a football"
+    },
+    {
+      "key": "yoga",
+      "subject": "a person sitting in a simple yoga pose"
+    },
+    {
+      "key": "art",
+      "subject": "an artists palette and brush"
+    },
+    {
+      "key": "walking",
+      "subject": "a person walking"
+    },
+    {
+      "key": "travel",
+      "subject": "a small rounded suitcase"
+    },
+    {
+      "key": "career",
+      "subject": "a rounded briefcase"
+    },
+    {
+      "key": "learning",
+      "subject": "a friendly stylized brain"
+    },
+    {
+      "key": "paw",
+      "subject": "a single paw print"
+    },
+    {
+      "key": "dumpling",
+      "subject": "two dumplings"
+    },
+    {
+      "key": "brunch",
+      "subject": "one croissant"
+    },
+    {
+      "key": "cake",
+      "subject": "one slice of cake"
+    },
+    {
+      "key": "cooking",
+      "subject": "a frying pan with one egg"
+    },
+    {
+      "key": "wine",
+      "subject": "one wine glass"
+    },
+    {
+      "key": "basketball",
+      "subject": "a basketball"
+    },
+    {
+      "key": "badminton",
+      "subject": "a badminton racket and shuttlecock"
+    },
+    {
+      "key": "cycling",
+      "subject": "a simple bicycle"
+    },
+    {
+      "key": "exhibition",
+      "subject": "a framed landscape artwork"
+    },
+    {
+      "key": "music",
+      "subject": "two musical notes"
+    },
+    {
+      "key": "reading",
+      "subject": "an open book"
+    },
+    {
+      "key": "craft",
+      "subject": "a ball of yarn with two needles"
+    },
+    {
+      "key": "picnic",
+      "subject": "a picnic basket"
+    },
+    {
+      "key": "map",
+      "subject": "a folded map"
+    },
+    {
+      "key": "train",
+      "subject": "a front view of a train"
+    },
+    {
+      "key": "flight",
+      "subject": "a small airplane"
+    },
+    {
+      "key": "korea",
+      "subject": "a simplified South Korean flag with a white cloth blue and muted warm taupe taegeuk and slate trigrams, recognizable but low saturation"
+    },
+    {
+      "key": "chinese-exchange",
+      "subject": "a mahjong tile with a simple central muted blue geometric red-dragon mark"
+    },
+    {
+      "key": "english-exchange",
+      "subject": "three rounded letter blocks showing A B C"
+    },
+    {
+      "key": "networking",
+      "subject": "a friendly handshake"
+    },
+    {
+      "key": "document",
+      "subject": "a sheet of paper with a folded corner and simple lines"
+    },
+    {
+      "key": "coding",
+      "subject": "an open laptop"
+    },
+    {
+      "key": "finance",
+      "subject": "an upward chart"
+    },
+    {
+      "key": "welcome",
+      "subject": "a waving hand"
+    },
+    {
+      "key": "after-work",
+      "subject": "a crescent moon"
+    },
+    {
+      "key": "gaming",
+      "subject": "a game controller"
+    },
+    {
+      "key": "karaoke",
+      "subject": "a small microphone"
+    },
+    {
+      "key": "pet-walk",
+      "subject": "a small dog"
+    },
+    {
+      "key": "study-buddy",
+      "subject": "a notepad and pencil"
+    },
+    {
+      "key": "shopping",
+      "subject": "two shopping bags"
+    },
+    {
+      "key": "custom",
+      "subject": "one pencil"
+    },
+    {
+      "key": "bear",
+      "subject": "a round bear face"
+    },
+    {
+      "key": "cat",
+      "subject": "a rounded cat face"
+    },
+    {
+      "key": "owl",
+      "subject": "a rounded owl face"
+    },
+    {
+      "key": "rabbit",
+      "subject": "a round rabbit face"
+    },
+    {
+      "key": "whale",
+      "subject": "a little whale"
+    },
+    {
+      "key": "otter",
+      "subject": "a rounded otter face"
+    },
+    {
+      "key": "external-link",
+      "subject": "a thick rounded arrow pointing diagonally up right"
+    },
+    {
+      "key": "fox",
+      "subject": "a rounded fox face"
+    }
+  ],
+  "initialSamples": [
+    {
+      "key": "coffee",
+      "subject": "A single rounded mist-blue ceramic coffee cup with handle, warm ivory saucer, taupe coffee surface and two soft steam curves; three-quarter front view, transparent background."
+    },
+    {
+      "key": "camping",
+      "subject": "One small rounded A-frame camping tent in muted mist blue and warm ivory, simple dark opening and one small pale-blue conifer; transparent background."
+    }
+  ]
+}

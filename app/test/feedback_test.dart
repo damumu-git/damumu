@@ -8,6 +8,7 @@ import 'package:zaihandazi/auth.dart';
 import 'package:zaihandazi/feedback.dart';
 import 'package:zaihandazi/feedback_model.dart';
 import 'package:zaihandazi/main.dart';
+import 'package:zaihandazi/emoji_picture.dart';
 
 void main() {
   testWidgets(
@@ -86,7 +87,21 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('❤ 7'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is EmojiPicture && widget.emoji == '❤',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Text &&
+              widget.textSpan?.toPlainText(includePlaceholders: false).trim() ==
+                  '7',
+        ),
+        findsOneWidget,
+      );
       expect(find.text('值得信赖'), findsOneWidget);
       expect(find.text('喜欢'), findsOneWidget);
       expect(find.text('举报'), findsOneWidget);

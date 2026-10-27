@@ -13,6 +13,7 @@ import 'app_theme.dart';
 import 'external_processing.dart';
 import 'activity_interactions.dart';
 import 'category_service.dart';
+import 'emoji_picture.dart';
 import 'chat_image.dart';
 import 'event_service.dart';
 import 'feedback.dart';
@@ -96,7 +97,7 @@ class DaziApp extends StatefulWidget {
   State<DaziApp> createState() => _DaziAppState();
 }
 
-class _DaziAppState extends State<DaziApp> {
+class _DaziAppState extends State<DaziApp> with WidgetsBindingObserver {
   Locale _locale = const Locale('zh');
   late final AuthController _authController;
   late final bool _ownsAuthController;
@@ -108,9 +109,13 @@ class _DaziAppState extends State<DaziApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _authController = widget.authController ?? AuthController();
     _ownsAuthController = widget.authController == null;
-    if (widget.home == null) _authController.restore();
+    if (widget.home == null) {
+      _authController.restore();
+      unawaited(EmojiAssets.load());
+    }
     if (!_isTestEnvironment) _previousErrorBuilder = ErrorWidget.builder;
     AppLocaleScope.restore().then((value) {
       if (mounted) setState(() => _locale = value);
@@ -119,12 +124,20 @@ class _DaziAppState extends State<DaziApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (identical(ErrorWidget.builder, _installedErrorBuilder) &&
         _previousErrorBuilder != null) {
       ErrorWidget.builder = _previousErrorBuilder!;
     }
     if (_ownsAuthController) _authController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.home == null) {
+      unawaited(EmojiAssets.load());
+    }
   }
 
   Future<void> _setLocale(Locale locale) async {
@@ -216,11 +229,13 @@ class EventItem {
     this.beginnerFriendlyVerified = false,
     this.coverUrl,
     this.organizerRiskTag,
+    this.emojiUrl,
   });
 
   final int id;
   final String? apiId;
   final String emoji;
+  final String? emojiUrl;
   final String title;
   final String category;
   final String time;
@@ -558,6 +573,7 @@ class _AppShellState extends State<AppShell> {
       id: rawId.hashCode,
       apiId: rawId,
       emoji: '${json['category_icon'] ?? '✨'}',
+      emojiUrl: json['category_icon_url'] as String?,
       coverUrl: json['cover_url'] as String?,
       organizerRiskTag: json['organizer_risk_tag'] as String?,
       title: '${json['title'] ?? ''}',
@@ -1695,7 +1711,7 @@ class EventCard extends StatelessWidget {
       ),
     ),
     alignment: Alignment.center,
-    child: Text(event.emoji, style: const TextStyle(fontSize: 48)),
+    child: EmojiPicture(event.emoji, url: event.emojiUrl, size: 48),
   );
 }
 
@@ -1903,9 +1919,10 @@ class MapPlaceholder extends StatelessWidget {
                 color: _green,
                 shape: BoxShape.circle,
               ),
-              child: Text(
+              child: EmojiPicture(
                 entry.value.emoji,
-                style: const TextStyle(fontSize: 20),
+                url: entry.value.emojiUrl,
+                size: 20,
               ),
             ),
           ),
@@ -2067,7 +2084,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   ),
                 ),
                 child: e.coverUrl == null
-                    ? Text(e.emoji, style: const TextStyle(fontSize: 84))
+                    ? EmojiPicture(e.emoji, url: e.emojiUrl, size: 64)
                     : GestureDetector(
                         onTap: canOpenOriginal
                             ? () => Navigator.of(context).push(
@@ -2087,10 +2104,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
                           fit: BoxFit.cover,
                           width: double.infinity,
                           height: double.infinity,
-                          errorBuilder: (_, _, _) => Text(
-                            e.emoji,
-                            style: const TextStyle(fontSize: 84),
-                          ),
+                          errorBuilder: (_, _, _) =>
+                              EmojiPicture(e.emoji, url: e.emojiUrl, size: 64),
                         ),
                       ),
               ),
@@ -2624,8 +2639,13 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  '❤ ${profile['like_count'] ?? 0}',
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      const WidgetSpan(child: EmojiPicture('❤', size: 18)),
+                      TextSpan(text: " ${profile['like_count'] ?? 0}"),
+                    ],
+                  ),
                   style: const TextStyle(
                     color: Colors.pink,
                     fontSize: 17,
@@ -3315,7 +3335,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Text(major.icon),
+                                    EmojiPicture(
+                                      major.icon,
+                                      url: major.iconUrl,
+                                      label: major.name,
+                                    ),
                                     const SizedBox(width: 6),
                                     Flexible(
                                       child: Text(
@@ -3998,7 +4022,14 @@ class _CategoryDropdown extends StatelessWidget {
         .map(
           (item) => DropdownMenuItem(
             value: item.id,
-            child: Text('${item.icon} ${item.name}'),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                EmojiPicture(item.icon, url: item.iconUrl, size: 20),
+                const SizedBox(width: 8),
+                Flexible(child: Text(item.name)),
+              ],
+            ),
           ),
         )
         .toList(),
@@ -4500,7 +4531,7 @@ class _ChatTile extends StatelessWidget {
       leading: CircleAvatar(
         radius: 26,
         backgroundColor: _mint,
-        child: Text(emoji, style: const TextStyle(fontSize: 24)),
+        child: EmojiPicture(emoji),
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
       subtitle: Text(message, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -5833,7 +5864,10 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
               contentPadding: const EdgeInsets.all(14),
               leading: CircleAvatar(
                 backgroundColor: _mint,
-                child: Text('${row['category_icon'] ?? '✨'}'),
+                child: EmojiPicture(
+                  '${row['category_icon'] ?? '✨'}',
+                  url: row['category_icon_url'] as String?,
+                ),
               ),
               title: Text(
                 '${row['event_status'] == 'cancelled'
@@ -6119,8 +6153,17 @@ class _OrganizerApplicationsState extends State<_OrganizerApplications> {
                           '${context.tr('partySize')}: $partySize · '
                           '${context.tr('trust')}: $trustScore',
                         ),
-                        Text(
-                          '❤ ${application['like_count'] ?? 0}',
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              const WidgetSpan(
+                                child: EmojiPicture('❤', size: 16),
+                              ),
+                              TextSpan(
+                                text: " ${application['like_count'] ?? 0}",
+                              ),
+                            ],
+                          ),
                           style: const TextStyle(
                             color: Colors.pink,
                             fontWeight: FontWeight.w700,

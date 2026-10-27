@@ -37,7 +37,7 @@ public static class EventEndpoints
                        e.published_at,
                        c.id AS category_id,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
-                       c.icon AS category_icon,
+                       c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
                        city_region.name_zh_cn AS city_name,
                        city_region.name_ko_kr AS city_name_ko_kr,
                        city_region.name_en_us AS city_name_en_us,
@@ -138,7 +138,7 @@ public static class EventEndpoints
                        CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || COALESCE(cover.thumbnail_storage_key, cover.storage_key) END AS cover_url,
                        CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || cover.storage_key END AS cover_original_url,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
-                       c.icon AS category_icon,
+                       c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
                        CASE WHEN e.organizer_user_id=@viewerId OR EXISTS (
                            SELECT 1 FROM event_member viewer_member
                            WHERE viewer_member.event_id=e.id AND viewer_member.user_id=@viewerId

@@ -10,7 +10,7 @@ public static class CatalogEndpoints
             ApiSupport.Ok(await db.QueryAsync(
                 """
                 SELECT id, code, parent_id, level, name_zh_cn, name_en_us,
-                       name_ko_kr, description_zh_cn, icon, icon_key,
+                       name_ko_kr, description_zh_cn, icon, icon_key, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=category.icon_key OR ea.emoji=replace(replace(category.icon,'️',''),'︎','')) ORDER BY (ea.key=category.icon_key) DESC NULLS LAST LIMIT 1) AS icon_url,
                        is_featured, requires_custom_label, color, sort_order
                 FROM category
                 WHERE is_active
@@ -20,7 +20,7 @@ public static class CatalogEndpoints
         api.MapGet("/interests", async (Db db, CancellationToken ct) =>
             ApiSupport.Ok(await db.QueryAsync(
                 """
-                SELECT id, code, name_zh_cn, name_ko_kr, icon, sort_order
+                SELECT id, code, name_zh_cn, name_ko_kr, icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND ea.emoji=replace(replace(interest.icon,'️',''),'︎','')) AS icon_url, sort_order
                 FROM interest
                 WHERE is_active
                 ORDER BY sort_order, name_zh_cn

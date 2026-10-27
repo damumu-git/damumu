@@ -1,0 +1,672 @@
+[
+  {
+    "emoji": "🌿",
+    "name": "绿叶",
+    "key": "leaf",
+    "sha256": "2b13854e1312bbd41e1581e8babd5e6cfe9ba327d63f356d620af2c519edae06",
+    "byte_size": 5161,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/leaf-2b13854e1312.png"
+  },
+  {
+    "emoji": "☕",
+    "name": "咖啡",
+    "key": "coffee",
+    "sha256": "aa44c2636d5614e7c27e8a135bd2e876d59686066bcf91ca627f6c97426450dc",
+    "byte_size": 5278,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/coffee-aa44c2636d56.png"
+  },
+  {
+    "emoji": "🥾",
+    "name": "登山鞋",
+    "key": "hiking",
+    "sha256": "03ce0892aded4b2a085e14dae2941e3671acaab965aa04bff7b751d2cd65ecb1",
+    "byte_size": 5580,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/hiking-03ce0892aded.png"
+  },
+  {
+    "emoji": "🎲",
+    "name": "骰子",
+    "key": "board-games",
+    "sha256": "fff2346df0a760b426e83fca63536a622a9fb217234ddcac746a705713962496",
+    "byte_size": 5050,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/board-games-fff2346df0a7.png"
+  },
+  {
+    "emoji": "✨",
+    "name": "闪光",
+    "key": "sparkles",
+    "sha256": "c9277d93ef8402cf31596dcc8b4392b8086328b3aa8ea97560a38e50a0b93cb9",
+    "byte_size": 2990,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/sparkles-c9277d93ef84.png"
+  },
+  {
+    "emoji": "❤",
+    "name": "爱心",
+    "key": "heart",
+    "sha256": "3ea5707f9354f5df7260bb428c13091093283ee0fa93e4c34dfa3cd7bf8a01ca",
+    "byte_size": 3662,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/heart-3ea5707f9354.png"
+  },
+  {
+    "emoji": "👥",
+    "name": "多人",
+    "key": "group",
+    "sha256": "4289c21bc0c02a8ad5dd4f0c4135fe842b81b696e67a82fc8164e016b5a390e0",
+    "byte_size": 4352,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/group-4289c21bc0c0.png"
+  },
+  {
+    "emoji": "💬",
+    "name": "对话气泡",
+    "key": "chat",
+    "sha256": "edac77d996822c6ae1d73762e5410c70787ff615c2ac9334d981bb04e1144e59",
+    "byte_size": 4696,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/chat-edac77d99682.png"
+  },
+  {
+    "emoji": "⚙",
+    "name": "齿轮",
+    "key": "settings",
+    "sha256": "15276a9c9dca48a9ad8b4573d098850a034642e2d11233a0baace9a1a1e6b723",
+    "byte_size": 5647,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/settings-15276a9c9dca.png"
+  },
+  {
+    "emoji": "🍜",
+    "name": "面食",
+    "key": "noodles",
+    "sha256": "8de129cb2772535692c46d070c7eb47c8c76fdd1249e884ee35fe89ba6dd8278",
+    "byte_size": 5781,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/noodles-8de129cb2772.png"
+  },
+  {
+    "emoji": "🏃",
+    "name": "跑步",
+    "key": "running",
+    "sha256": "5c615b6a00214b9b1565e83c0d4c29c2dcc7b888280da7ebd4969448dc39a922",
+    "byte_size": 4692,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/running-5c615b6a0021.png"
+  },
+  {
+    "emoji": "🎭",
+    "name": "戏剧",
+    "key": "theatre",
+    "sha256": "2f15c44d9241b5b796877baf6827952b305fb7e3cf2bdf5ad15aa090a19bf60f",
+    "byte_size": 5215,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/theatre-2f15c44d9241.png"
+  },
+  {
+    "emoji": "🏕️",
+    "name": "露营",
+    "key": "camping",
+    "sha256": "b97f4210ed8fe6f32dc1b19eafbf5311ed5ec85aff76089e597bda4451c27ef7",
+    "byte_size": 4379,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/camping-b97f4210ed8f.png"
+  },
+  {
+    "emoji": "📚",
+    "name": "书籍",
+    "key": "books",
+    "sha256": "759400386abdab013438ce92646db1f55cf97baa4a87bcd8bdfca883d5ff649a",
+    "byte_size": 6357,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/books-759400386abd.png"
+  },
+  {
+    "emoji": "🍚",
+    "name": "米饭",
+    "key": "rice",
+    "sha256": "0b6ede0131091f0e1630a0b141ef1dfc25549032f611e2de0d5132d4c690f82a",
+    "byte_size": 4800,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/rice-0b6ede013109.png"
+  },
+  {
+    "emoji": "🏋️",
+    "name": "举重",
+    "key": "workout",
+    "sha256": "6b376f587802b9ab736bc3377a7db244b4ff98c8140bec3f792500d0ff81088d",
+    "byte_size": 4190,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/workout-6b376f587802.png"
+  },
+  {
+    "emoji": "🎬",
+    "name": "电影",
+    "key": "movie",
+    "sha256": "cddfaa2eba9036570c2af47e4821ef1e7c547cd5ea9b0461b311362374fd3031",
+    "byte_size": 5426,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/movie-cddfaa2eba90.png"
+  },
+  {
+    "emoji": "📷",
+    "name": "相机",
+    "key": "camera",
+    "sha256": "c19ff71720c838b1759e419e9faa2033053fdd58ba8d3be648617191b57adb62",
+    "byte_size": 5998,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/camera-c19ff71720c8.png"
+  },
+  {
+    "emoji": "🍽️",
+    "name": "餐具",
+    "key": "dining",
+    "sha256": "5867d003dfef9ab8275d68eadda609c35507b78bcef91879e816742e7c9a129b",
+    "byte_size": 6050,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/dining-5867d003dfef.png"
+  },
+  {
+    "emoji": "🧑‍🍳",
+    "name": "厨师",
+    "key": "chef",
+    "sha256": "e64714d73693f51bd167a72e3ea9ef2d7d572676da73bce22b68756931f0079f",
+    "byte_size": 4783,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/chef-e64714d73693.png"
+  },
+  {
+    "emoji": "⚽",
+    "name": "足球",
+    "key": "football",
+    "sha256": "fc6111b630763278c12807ba1c0cd629f03668e9fc2f972f0877c3e238fa37d7",
+    "byte_size": 5505,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/football-fc6111b63076.png"
+  },
+  {
+    "emoji": "🧘",
+    "name": "瑜伽",
+    "key": "yoga",
+    "sha256": "5c9a011573a5b762bd064ec2a5b8967879594ee611617cc844337b29bbe386c9",
+    "byte_size": 4975,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/yoga-5c9a011573a5.png"
+  },
+  {
+    "emoji": "🎨",
+    "name": "调色盘",
+    "key": "art",
+    "sha256": "a1ba33ba9694449ead2df448fd928c4ae6da7d33a92dbe3701bec1c153b14771",
+    "byte_size": 6167,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/art-a1ba33ba9694.png"
+  },
+  {
+    "emoji": "🚶",
+    "name": "步行",
+    "key": "walking",
+    "sha256": "a9a3035682669ac191912d488679f5620a2d60899477e6fc1979b8ad6662dd1c",
+    "byte_size": 3984,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/walking-a9a303568266.png"
+  },
+  {
+    "emoji": "🧳",
+    "name": "行李箱",
+    "key": "travel",
+    "sha256": "7ddf03c9bfbffa74d5f507dd2ebea7a4fd910aa032b577e0be647abf718c907c",
+    "byte_size": 4588,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/travel-7ddf03c9bfbf.png"
+  },
+  {
+    "emoji": "💼",
+    "name": "公文包",
+    "key": "career",
+    "sha256": "de92e43617b1aae662fa9d928fc5de93503a3fcb3fcdbbf06b93ef59a8377f46",
+    "byte_size": 5659,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/career-de92e43617b1.png"
+  },
+  {
+    "emoji": "🧠",
+    "name": "大脑",
+    "key": "learning",
+    "sha256": "4f678e7a9546ff853208e81f68734bda030583187f4dc69c54ccd2452c321f93",
+    "byte_size": 5317,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/learning-4f678e7a9546.png"
+  },
+  {
+    "emoji": "🐾",
+    "name": "爪印",
+    "key": "paw",
+    "sha256": "ad28dd7091953d77f910a63f455af5032d2711952ca49531fdcb5b37e766120b",
+    "byte_size": 4930,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/paw-ad28dd709195.png"
+  },
+  {
+    "emoji": "🥟",
+    "name": "饺子",
+    "key": "dumpling",
+    "sha256": "c135f5965ae0eae29e7c2a7a2d6853d6e12e1ab2032d03fe719083443087eb24",
+    "byte_size": 4437,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/dumpling-c135f5965ae0.png"
+  },
+  {
+    "emoji": "🥐",
+    "name": "可颂",
+    "key": "brunch",
+    "sha256": "757b0a129891be497b09a0ec7bbb9caff46c981458d9aff2dd685e1cb66dd42c",
+    "byte_size": 4949,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/brunch-757b0a129891.png"
+  },
+  {
+    "emoji": "🍰",
+    "name": "蛋糕",
+    "key": "cake",
+    "sha256": "10d884fe417400959bea3a1e260380cbbe4079a86caf7d1ce3cce3de11d4ab03",
+    "byte_size": 4844,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/cake-10d884fe4174.png"
+  },
+  {
+    "emoji": "🍳",
+    "name": "煎蛋",
+    "key": "cooking",
+    "sha256": "21059ce2551bc81f33f26b2d4706d7ea61087157e780b91545f4053e044ff7ec",
+    "byte_size": 5116,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/cooking-21059ce2551b.png"
+  },
+  {
+    "emoji": "🍷",
+    "name": "红酒",
+    "key": "wine",
+    "sha256": "9187501321291b8ab31505f92f21a0ebcba12f6c54ff434f5d7cc41590ee7373",
+    "byte_size": 3607,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/wine-918750132129.png"
+  },
+  {
+    "emoji": "🏀",
+    "name": "篮球",
+    "key": "basketball",
+    "sha256": "df9a93f9406594068d1bda18e7255fe9e8ef36095861831336caf6712036c696",
+    "byte_size": 6095,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/basketball-df9a93f94065.png"
+  },
+  {
+    "emoji": "🏸",
+    "name": "羽毛球",
+    "key": "badminton",
+    "sha256": "d7da578399ddc19a702b760d1f0d9954a665dc1f4b9a6d68955eeb97d1feb645",
+    "byte_size": 4402,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/badminton-d7da578399dd.png"
+  },
+  {
+    "emoji": "🚴",
+    "name": "骑行",
+    "key": "cycling",
+    "sha256": "a03b7f47637a6a5e11917d642333ef9f6a122b18ae0c9103e218459a39fe8f64",
+    "byte_size": 5545,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/cycling-a03b7f47637a.png"
+  },
+  {
+    "emoji": "🖼️",
+    "name": "画框",
+    "key": "exhibition",
+    "sha256": "434ce6874b741866897a929d478df0a8a945e417efba4184b13cd6c7bc95ae6b",
+    "byte_size": 6133,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/exhibition-434ce6874b74.png"
+  },
+  {
+    "emoji": "🎵",
+    "name": "音符",
+    "key": "music",
+    "sha256": "cc4379c6eaa4770985ab5e41be129ce618c449815532109ccbeb0447d073b2a0",
+    "byte_size": 3782,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/music-cc4379c6eaa4.png"
+  },
+  {
+    "emoji": "📖",
+    "name": "翻开的书",
+    "key": "reading",
+    "sha256": "ac2938ec9b580c6316b02353531af3c092cf86a2ceaf5975260606dc20aa2f23",
+    "byte_size": 5620,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/reading-ac2938ec9b58.png"
+  },
+  {
+    "emoji": "🧶",
+    "name": "毛线",
+    "key": "craft",
+    "sha256": "246ba9ded9c48493809d4469037df15a93558235f79acc361c45e308a02cb299",
+    "byte_size": 5576,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/craft-246ba9ded9c4.png"
+  },
+  {
+    "emoji": "🧺",
+    "name": "篮子",
+    "key": "picnic",
+    "sha256": "c3b9fb5a83db213fc2a7fed8c4f92b54e32fd2091c2a5b59b4ec9dab2bbd040a",
+    "byte_size": 6098,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/picnic-c3b9fb5a83db.png"
+  },
+  {
+    "emoji": "🗺️",
+    "name": "地图",
+    "key": "map",
+    "sha256": "8f38571c47fa7805410dd0ee80ebf4b8abcfa17f699bd5caf3ecaa76c8b9e822",
+    "byte_size": 5035,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/map-8f38571c47fa.png"
+  },
+  {
+    "emoji": "🚆",
+    "name": "列车",
+    "key": "train",
+    "sha256": "8341797d1788c3fd7ae7378361e569f938a801a2c91b1ca26c36d344581fb422",
+    "byte_size": 5440,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/train-8341797d1788.png"
+  },
+  {
+    "emoji": "✈️",
+    "name": "飞机",
+    "key": "flight",
+    "sha256": "e93e3070214d356f05c842c5df9e07b51eeb18b151de55c67ca74334657ddb9a",
+    "byte_size": 4773,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/flight-e93e3070214d.png"
+  },
+  {
+    "emoji": "🇰🇷",
+    "name": "韩国国旗",
+    "key": "korea",
+    "sha256": "b366efd75cce2590916a70187e7e873f724745f1c1a3866483dcee844f445f65",
+    "byte_size": 4905,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/korea-b366efd75cce.png"
+  },
+  {
+    "emoji": "🀄",
+    "name": "麻将红中",
+    "key": "chinese-exchange",
+    "sha256": "c7ab4d7bb1a918f4614ac326e01da83d022a6eda1e88072f3e6bf370731c27c3",
+    "byte_size": 4711,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/chinese-exchange-c7ab4d7bb1a9.png"
+  },
+  {
+    "emoji": "🔤",
+    "name": "拉丁字母",
+    "key": "english-exchange",
+    "sha256": "554a6afccd4aa6e64c620800bfcbb247be72e3a8ba7824a8bed37d1ba6e3b56e",
+    "byte_size": 5715,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/english-exchange-554a6afccd4a.png"
+  },
+  {
+    "emoji": "🤝",
+    "name": "握手",
+    "key": "networking",
+    "sha256": "6005332a308c4731ef9256d4ce3fa0602583da6d0ab2eaf2e6e9d8d59f175fbc",
+    "byte_size": 4523,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/networking-6005332a308c.png"
+  },
+  {
+    "emoji": "📄",
+    "name": "文件",
+    "key": "document",
+    "sha256": "7d0c9bb815d564aeaa4e4c24fceb06ceb6001e74fe35500ac101d90a213ae799",
+    "byte_size": 3456,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/document-7d0c9bb815d5.png"
+  },
+  {
+    "emoji": "💻",
+    "name": "电脑",
+    "key": "coding",
+    "sha256": "a2b21ff1c36bb20c3d33ef0ccdeb23b096f7898b602124e99aff2a5a6191c99e",
+    "byte_size": 5177,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/coding-a2b21ff1c36b.png"
+  },
+  {
+    "emoji": "📈",
+    "name": "上升图表",
+    "key": "finance",
+    "sha256": "d90522e1e49b546cd11d59a498ffbae4c0cc1cb83329e95db14b7db4d4a5dbb4",
+    "byte_size": 4486,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/finance-d90522e1e49b.png"
+  },
+  {
+    "emoji": "👋",
+    "name": "挥手",
+    "key": "welcome",
+    "sha256": "356311f38fab02e10583dec21b391ed40054e2e20bd275d4a572530bdae8ca27",
+    "byte_size": 4512,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/welcome-356311f38fab.png"
+  },
+  {
+    "emoji": "🌙",
+    "name": "月亮",
+    "key": "after-work",
+    "sha256": "e05fa5a7d532f34d844094e78d8426afe57185e16c8fbd09cba149b108d39afb",
+    "byte_size": 3505,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/after-work-e05fa5a7d532.png"
+  },
+  {
+    "emoji": "🎮",
+    "name": "游戏手柄",
+    "key": "gaming",
+    "sha256": "0109b888a1c2dbced6f73986aad95591e91faad9805ea6eb71d3c5a60cb5f4f4",
+    "byte_size": 5885,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/gaming-0109b888a1c2.png"
+  },
+  {
+    "emoji": "🎤",
+    "name": "麦克风",
+    "key": "karaoke",
+    "sha256": "380cfbc2671bea9c06870f8266e8587a3beccf0015b23b43414c30046a5fe859",
+    "byte_size": 4652,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/karaoke-380cfbc2671b.png"
+  },
+  {
+    "emoji": "🐕",
+    "name": "狗",
+    "key": "pet-walk",
+    "sha256": "42124cf0e0d4aa2d00b50703ded3a23797f1d6886fd6ce04b7f17e9edcda11ed",
+    "byte_size": 5902,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/pet-walk-42124cf0e0d4.png"
+  },
+  {
+    "emoji": "📝",
+    "name": "记事本",
+    "key": "study-buddy",
+    "sha256": "60e51d3ee6475766c911947836181a4fffff0aaaa6cfa6e0d66289f2c231e4b2",
+    "byte_size": 5520,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/study-buddy-60e51d3ee647.png"
+  },
+  {
+    "emoji": "🛍️",
+    "name": "购物袋",
+    "key": "shopping",
+    "sha256": "4c746f577b6b8ca062eb20e34bf98c713f258ba74c71eb5b06ee7869c4ccb640",
+    "byte_size": 5573,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/shopping-4c746f577b6b.png"
+  },
+  {
+    "emoji": "✏️",
+    "name": "铅笔",
+    "key": "custom",
+    "sha256": "57277f6f98e4c64d93125ad3c01b5505eba6b1a5eda9d69fe1257fa5b08bc09d",
+    "byte_size": 3838,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/custom-57277f6f98e4.png"
+  },
+  {
+    "emoji": "🐻",
+    "name": "熊",
+    "key": "bear",
+    "sha256": "7696b4a23e8c0468c024a592bb50835e29bde7548c15754bccccd1143d0a3ab8",
+    "byte_size": 6452,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/bear-7696b4a23e8c.png"
+  },
+  {
+    "emoji": "🐱",
+    "name": "猫",
+    "key": "cat",
+    "sha256": "788809073e5265ba2acba82a2eceb621941bc7b18b910c5b10e0e3e0756b32d0",
+    "byte_size": 6022,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/cat-788809073e52.png"
+  },
+  {
+    "emoji": "🦉",
+    "name": "猫头鹰",
+    "key": "owl",
+    "sha256": "f42fb04dd95cb85956c9ad951500495009c3b3fe91fcbb30b9d631f84624ec35",
+    "byte_size": 6330,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/owl-f42fb04dd95c.png"
+  },
+  {
+    "emoji": "🐰",
+    "name": "兔",
+    "key": "rabbit",
+    "sha256": "61794044552efbe0a1e7b3b599f3cc467b3d3a45acb1af39ae47221b727b9fc2",
+    "byte_size": 6000,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/rabbit-61794044552e.png"
+  },
+  {
+    "emoji": "🐳",
+    "name": "鲸",
+    "key": "whale",
+    "sha256": "227495c063bfb1258523a81548c02a90b2d5c6d783849f1ec63d9edf0e050971",
+    "byte_size": 4610,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/whale-227495c063bf.png"
+  },
+  {
+    "emoji": "🦦",
+    "name": "水獭",
+    "key": "otter",
+    "sha256": "d0f00a055f799e4f34844d01d92b86550ada9c6c96060372fbbc49dba757195d",
+    "byte_size": 5623,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/otter-d0f00a055f79.png"
+  },
+  {
+    "emoji": "↗",
+    "name": "右上箭头",
+    "key": "external-link",
+    "sha256": "050371a780abb8c2c2532e44df8f921e9fa94dacac742a68b9ced279040f17b5",
+    "byte_size": 3394,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/external-link-050371a780ab.png"
+  },
+  {
+    "emoji": "🦊",
+    "name": "狐狸",
+    "key": "fox",
+    "sha256": "2509a26d1c516be558250685dfd3821c5727ae5d49eeb2af16e791a60e5725a7",
+    "byte_size": 6516,
+    "width": 64,
+    "height": 64,
+    "storage_key": "emoji/fox-2509a26d1c51.png"
+  }
+]

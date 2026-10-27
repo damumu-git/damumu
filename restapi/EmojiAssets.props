@@ -1,0 +1,339 @@
+<Project>
+  <ItemGroup>
+    <Content Include="Assets/emoji/leaf.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/leaf-2b13854e1312.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/coffee.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/coffee-aa44c2636d56.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/hiking.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/hiking-03ce0892aded.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/board-games.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/board-games-fff2346df0a7.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/sparkles.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/sparkles-c9277d93ef84.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/heart.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/heart-3ea5707f9354.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/group.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/group-4289c21bc0c0.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/chat.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/chat-edac77d99682.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/settings.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/settings-15276a9c9dca.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/noodles.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/noodles-8de129cb2772.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/running.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/running-5c615b6a0021.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/theatre.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/theatre-2f15c44d9241.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/camping.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/camping-b97f4210ed8f.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/books.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/books-759400386abd.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/rice.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/rice-0b6ede013109.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/workout.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/workout-6b376f587802.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/movie.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/movie-cddfaa2eba90.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/camera.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/camera-c19ff71720c8.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/dining.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/dining-5867d003dfef.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/chef.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/chef-e64714d73693.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/football.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/football-fc6111b63076.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/yoga.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/yoga-5c9a011573a5.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/art.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/art-a1ba33ba9694.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/walking.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/walking-a9a303568266.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/travel.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/travel-7ddf03c9bfbf.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/career.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/career-de92e43617b1.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/learning.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/learning-4f678e7a9546.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/paw.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/paw-ad28dd709195.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/dumpling.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/dumpling-c135f5965ae0.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/brunch.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/brunch-757b0a129891.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/cake.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/cake-10d884fe4174.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/cooking.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/cooking-21059ce2551b.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/wine.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/wine-918750132129.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/basketball.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/basketball-df9a93f94065.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/badminton.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/badminton-d7da578399dd.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/cycling.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/cycling-a03b7f47637a.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/exhibition.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/exhibition-434ce6874b74.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/music.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/music-cc4379c6eaa4.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/reading.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/reading-ac2938ec9b58.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/craft.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/craft-246ba9ded9c4.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/picnic.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/picnic-c3b9fb5a83db.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/map.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/map-8f38571c47fa.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/train.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/train-8341797d1788.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/flight.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/flight-e93e3070214d.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/korea.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/korea-b366efd75cce.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/chinese-exchange.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/chinese-exchange-c7ab4d7bb1a9.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/english-exchange.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/english-exchange-554a6afccd4a.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/networking.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/networking-6005332a308c.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/document.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/document-7d0c9bb815d5.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/coding.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/coding-a2b21ff1c36b.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/finance.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/finance-d90522e1e49b.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/welcome.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/welcome-356311f38fab.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/after-work.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/after-work-e05fa5a7d532.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/gaming.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/gaming-0109b888a1c2.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/karaoke.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/karaoke-380cfbc2671b.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/pet-walk.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/pet-walk-42124cf0e0d4.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/study-buddy.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/study-buddy-60e51d3ee647.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/shopping.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/shopping-4c746f577b6b.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/custom.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/custom-57277f6f98e4.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/bear.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/bear-7696b4a23e8c.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/cat.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/cat-788809073e52.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/owl.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/owl-f42fb04dd95c.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/rabbit.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/rabbit-61794044552e.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/whale.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/whale-227495c063bf.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/otter.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/otter-d0f00a055f79.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/external-link.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/external-link-050371a780ab.png</TargetPath>
+    </Content>
+    <Content Include="Assets/emoji/fox.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>preset-emoji/fox-2509a26d1c51.png</TargetPath>
+    </Content>
+  </ItemGroup>
+</Project>

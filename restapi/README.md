@@ -1,5 +1,7 @@
 # 慕搭 REST API
 
+图标素材通过新增迁移023及公共 `/api/v1/emoji-assets` 下发，Admin提供上传/替换/启停，分类/活动附加图标URL。默认PNG随API发布并补齐持久化媒体目录。详见仓库根目录 `docs/EMOJI_LIBRARY.md`。
+
 ASP.NET Core 10 + PostgreSQL/PostGIS API，覆盖用户、活动、报名候补、聊天、
 安全会面、评价、举报治理、通知、配置与管理员运营接口。
 

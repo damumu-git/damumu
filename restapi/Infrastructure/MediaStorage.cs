@@ -10,7 +10,7 @@ public sealed class MediaStorage
         "imageUrl", "image_url", "avatarUrl", "avatar_url", "avatarImageUrl",
         "organizer_avatar", "sender_avatar", "coverUrl", "cover_url",
         "coverOriginalUrl", "cover_original_url", "mediaUrl", "media_url",
-        "mediaThumbnailUrl", "media_thumbnail_url"
+        "mediaThumbnailUrl", "media_thumbnail_url", "icon_url", "category_icon_url"
     };
 
     public string RootPath { get; }
@@ -85,6 +85,17 @@ public sealed class MediaStorage
         {
             var target = GetPath($"system-avatars/{Path.GetFileName(source)}");
             // Existing operator-managed assets and uploads must never be overwritten.
+            if (!File.Exists(target)) File.Copy(source, target, overwrite: false);
+        }
+    }
+
+    public void InitializeEmoji(string presetDirectory)
+    {
+        Directory.CreateDirectory(GetPath("emoji"));
+        if (!Directory.Exists(presetDirectory)) return;
+        foreach (var source in Directory.EnumerateFiles(presetDirectory, "*.png"))
+        {
+            var target = GetPath($"emoji/{Path.GetFileName(source)}");
             if (!File.Exists(target)) File.Copy(source, target, overwrite: false);
         }
     }

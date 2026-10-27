@@ -29,6 +29,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 var mediaStorage = app.Services.GetRequiredService<MediaStorage>();
 mediaStorage.Initialize(Path.Combine(AppContext.BaseDirectory, "preset-avatars"));
+mediaStorage.InitializeEmoji(Path.Combine(AppContext.BaseDirectory, "preset-emoji"));
 
 app.Use(async (context, next) =>
 {
@@ -122,6 +123,7 @@ api.MapGet("/health", async (Db db, PushNotificationService push, CancellationTo
 });
 
 api.MapCatalogEndpoints();
+api.MapEmojiAssetEndpoints();
 api.MapUserEndpoints();
 api.MapEventEndpoints();
 api.MapActivityEndpoints();

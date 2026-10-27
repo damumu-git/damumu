@@ -1,3 +1,4 @@
+import { EmojiIcon, EmojiAssetManager, EmojiAssetSelect } from './EmojiAssets.jsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { API_BASE, api, mediaUrl } from './api'
 import './App.css'
@@ -11,6 +12,7 @@ const navigation = [
   { id: 'safety', label: '安全警报', icon: '!' },
   { id: 'categories', label: '分类配置', icon: '⊞' },
   { id: 'regions', label: '地区管理', icon: '⌖' },
+  { id: 'emoji-assets', label: '图标素材', icon: '▧' },
   { id: 'avatars', label: '系统头像', icon: '◎' },
   { id: 'audit', label: '审计日志', icon: '≡' },
   { id: 'settings', label: '功能开关', icon: '⚙' },
@@ -259,7 +261,7 @@ function UserDetail({ id, onBack }) {
         {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
         <div className="detail-metrics">
           <MetricCard label="信誉分" value={Number(user.trust_score ?? 0).toFixed(1)} note={`${user.review_count ?? 0} 次评价`} />
-          <MetricCard label="收到喜欢" value={`❤ ${user.like_count ?? 0}`} note="来自共同活动参与者" tone="rose" />
+          <MetricCard label="收到喜欢" value={<><EmojiIcon emoji="❤" /> {user.like_count ?? 0}</>} note="来自共同活动参与者" tone="rose" />
           <MetricCard label="参与活动" value={user.attended_count ?? 0} note={`组织 ${user.organized_count ?? 0} 场`} tone="blue" />
           <MetricCard label="被举报" value={payload.reports?.length ?? 0} note={`爽约 ${user.no_show_count ?? 0} 次`} tone="amber" />
         </div>
@@ -280,7 +282,7 @@ function UserDetail({ id, onBack }) {
               <Field label="最后登录" value={formatDate(user.last_login_at)} />
               <Field label="语言" value={Array.isArray(user.languages) ? user.languages.join('、') : user.languages} wide />
             </dl>
-            {!!payload.positiveTags?.length && <div className="tag-section"><span className="eyebrow">常见正向反馈</span><div className="tag-cloud">{payload.positiveTags.map((tag) => <span key={tag.tag_code}>❤ {tag.tag_code}<b>{tag.count}</b></span>)}</div></div>}
+            {!!payload.positiveTags?.length && <div className="tag-section"><span className="eyebrow">常见正向反馈</span><div className="tag-cloud">{payload.positiveTags.map((tag) => <span key={tag.tag_code}><EmojiIcon emoji="❤" size={16} /> {tag.tag_code}<b>{tag.count}</b></span>)}</div></div>}
           </section>
           <aside className="detail-side-stack">
             <section className="panel"><div className="section-heading"><div><span className="kicker">Activity history</span><h3>最近活动</h3></div><span>{payload.events?.length ?? 0}</span></div>
@@ -394,7 +396,7 @@ function EventDetail({ id, onBack }) {
         </div>
         <div className="detail-layout event-detail-layout">
           <section className="panel detail-main-card">
-            <div className="event-detail-hero"><div className="event-detail-symbol">{item.category_icon ?? '◇'}</div><div><span className="eyebrow">{item.category_name}</span><h3>{item.title}</h3><p>{item.description || '暂无活动介绍。'}</p></div></div>
+            <div className="event-detail-hero"><div className="event-detail-symbol"><EmojiIcon emoji={item.category_icon} url={item.category_icon_url} size={64} /></div><div><span className="eyebrow">{item.category_name}</span><h3>{item.title}</h3><p>{item.description || '暂无活动介绍。'}</p></div></div>
             <dl className="detail-fields">
               <Field label="组织者" value={`${item.organizer_name ?? '未设置'} · 信誉 ${Number(item.organizer_trust_score ?? 0).toFixed(1)}`} wide />
               <Field label="活动地区" value={[item.city_code, item.district_code].filter(Boolean).join(' · ')} />
@@ -456,7 +458,7 @@ function Events() {
       <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
         <div className="table-wrap management-table"><table><thead><tr><th>活动</th><th>组织者</th><th>时间 / 地点</th><th>参与情况</th><th>治理信号</th><th>状态</th><th>操作</th></tr></thead><tbody>{rows.map((event) => (
           <tr key={event.id} className="clickable-row" onDoubleClick={() => setSelectedId(event.id)}>
-            <td><div className="event-name"><span>{event.category_icon ?? '◇'}</span><div><strong>{event.title}</strong><small>{event.category_name} · {event.id}</small></div></div></td>
+            <td><div className="event-name"><span><EmojiIcon emoji={event.category_icon} url={event.category_icon_url} /></span><div><strong>{event.title}</strong><small>{event.category_name} · {event.id}</small></div></div></td>
             <td><strong>{event.organizer_name ?? '未设置'}</strong><small className="block-note">{event.city_code || '地区未设置'}</small></td>
             <td><strong>{formatDate(event.starts_at)}</strong><small className="block-note">{event.place_name ?? event.district_code ?? event.city_code ?? '地点未设置'}</small></td>
             <td><strong>{event.approved_count}/{event.capacity}</strong><small className="block-note">候补 {event.waitlist_count}</small></td>
@@ -603,7 +605,7 @@ function CategoryEditor({ category, rows, onClose, onSaved }) {
           <label>父级分类<select value={form.parentId ?? ''} onChange={(e) => update('parentId', e.target.value || null)}><option value="">无（作为大分类）</option>{parents.map((row) => <option key={row.id} value={row.id}>{'　'.repeat(row.level - 1)}{row.full_path}</option>)}</select></label>
           <label>唯一代码<input required pattern="[a-z0-9_]+" value={form.code} onChange={(e) => update('code', e.target.value.toLowerCase())} placeholder="例如 outdoor_hiking" /></label>
           <label>图标 Emoji<input value={form.icon ?? ''} onChange={(e) => update('icon', e.target.value)} /></label>
-          <label>插画资源键<input value={form.iconKey ?? ''} onChange={(e) => update('iconKey', e.target.value || null)} placeholder="例如 food；未提供时显示 Emoji" /></label>
+          <label>图标素材<EmojiAssetSelect value={form.iconKey} onChange={(key) => update('iconKey', key)} /></label>
           <label>主题颜色<input type="color" value={form.color || '#1F7A55'} onChange={(e) => update('color', e.target.value)} /></label>
           <label>中文名称<input required value={form.nameZhCn} onChange={(e) => update('nameZhCn', e.target.value)} /></label>
           <label>English<input value={form.nameEnUs ?? ''} onChange={(e) => update('nameEnUs', e.target.value)} /></label>
@@ -653,7 +655,7 @@ function Categories() {
       <PageState {...resource} empty={!visible.length} onRetry={resource.reload}>
         <div className="category-grid">{visible.map((category) => (
           <article className={`category-card level-${category.level} ${category.is_active ? '' : 'disabled'}`} key={category.id} style={{ '--category-color': category.color || '#1F7A55' }}>
-            <span className="category-icon">{category.icon ?? '◇'}</span>
+            <span className="category-icon"><EmojiIcon emoji={category.icon} url={category.icon_url} /></span>
             <div className="category-copy"><span className="category-level">{category.level === 1 ? '大分类' : '小分类'}</span><h4>{category.name_zh_cn}</h4><p className="category-path">{category.full_path}</p><p>{category.name_en_us || '未设置英文'} · {category.name_ko_kr || '未设置韩文'}</p><p>{category.description_zh_cn || '暂无分类说明'}</p><small>{category.child_count} 个子类 · {category.event_count} 场活动 · 排序 {category.sort_order}</small><code>{category.code}</code></div>
             <div className="category-actions"><button onClick={() => setEditing(category)}>编辑</button><button className="danger" onClick={async () => { if (!window.confirm(`确认删除「${category.name_zh_cn}」？`)) return; try { await api.deleteCategory(category.id); setNotice('分类已删除'); resource.reload() } catch (error) { setNotice(error.message) } }}>删除</button><label className="switch"><input type="checkbox" checked={category.is_active} onChange={() => toggle(category)} /><span /></label></div>
           </article>
@@ -833,7 +835,7 @@ function Settings() {
   )
 }
 
-const pages = { dashboard: Dashboard, users: Users, events: Events, reports: Reports, safety: Safety, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, settings: Settings }
+const pages = { 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, reports: Reports, safety: Safety, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, settings: Settings }
 
 function AnnouncementDialog({ onClose }) {
   const [title, setTitle] = useState('')

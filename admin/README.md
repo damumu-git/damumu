@@ -1,5 +1,7 @@
 # 慕搭 Admin
 
+新增“图标素材”管理及分类图片绑定，支持64×64 PNG上传、替换、改名和启停；使用API返回的完整图片URL，不挂载API磁盘。详见仓库根目录 `docs/EMOJI_LIBRARY.md`。
+
 ## 界面主题
 
 2026-10-27 已将预览浅蓝设计应用到正式 React 页面。`src/preview-theme.css` 在

@@ -1070,3 +1070,5 @@ td button {
     scroll-behavior: auto !important;
   }
 }
+
+.emoji-artwork {width:1em;height:1em;max-width:64px;max-height:64px;object-fit:contain;vertical-align:-.14em;display:inline-block;}

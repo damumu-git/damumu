@@ -312,7 +312,7 @@ public static class UserEndpoints
                        e.capacity, e.approved_count, e.price_amount, e.price_currency,
                        em.status AS membership_status, em.member_role, em.checked_in_at,
                        s.starts_at, s.ends_at,
-                       c.name_zh_cn AS category_name, c.icon AS category_icon,
+                       c.name_zh_cn AS category_name, c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
                        city.name_zh_cn AS city_name,
                        city.name_ko_kr AS city_name_ko_kr,
                        city.name_en_us AS city_name_en_us,
