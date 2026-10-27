@@ -1,5 +1,6 @@
 :root {
-  font-family: Inter, "PingFang SC", "Noto Sans CJK SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --admin-font: "Ysabeau Office", "LXGW WenKai Lite", "LXGW WenKai KR", "Noto Sans KR", "Segoe UI Emoji", "Apple Color Emoji", "Microsoft YaHei", sans-serif;
+  font-family: var(--admin-font);
   color: #203e55;
   background: #f3f8fc;
   font-synthesis: none;

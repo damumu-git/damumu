@@ -4,11 +4,13 @@
 
 ## 当前已接通
 
+- 2026-10-27 Admin字体同步：正式React/Admin离线预览采用与App相同的文楷Lite中文、文楷KR韩文及Ysabeau Office英文/数字，保留Noto Sans KR缺字回退；移除残留Georgia混排，字号和业务不变。Admin自带6份同源WOFF2与4份OFL许可，Vite按哈希发布，自托管且Docker构建无需外部App目录；导出与来源见`admin/FONTS.md`。6份字体字符映射/轮廓/字重一致，377个源码中韩文字覆盖通过；Admin lint/build、正式11入口与71预览入口检查通过。隔离Chrome已确认三语字体加载、桌面1440px无横向溢出并检查真实React示例数据截图；未部署AWS，下一步合并后按原流程重建Admin，无新增数据库迁移。
+
 - 2026-10-27 图标素材：67种既有Emoji已生成统一低饱和雾蓝64×64透明PNG，总计339,971字节，来源与完整图册见`docs/EMOJI_LIBRARY.md`。API新增公共图标目录及分类/兴趣/活动图标完整URL；App活动、分类、群聊/私信、喜欢标识与Admin接入图片，保留原字符兼容及失败回退，用户聊天/昵称和JPEG头像不改。Admin新增“图标素材”，支持上传/替换/改名/启停和分类资源绑定、审计；图片使用哈希/UUID版本地址，随API发布并只补齐持久化目录，Admin无共享卷。新增迁移023已在隔离PostGIS执行全部迁移并重复验证；发布版API验证67个媒体地址、权限、校验、创建、替换、停用回退、不可变缓存和审计通过，正式React11入口/表单与离线71入口检查通过，PNG尺寸/透明/CRC/SHA通过；Flutter analyze、57项测试及Web发布构建通过（1项既有Mac字体golden跳过）。尚未在AWS应用023或部署，未生成Android/iOS商店包；下一步合并后备份并执行线上迁移、部署及真机检查。
 
 - 2026-10-27：完成 Emoji 静态清单 `docs/EMOJI_INVENTORY.md` 及逐处来源 CSV；共67种字符序列、157处字面量，区分分类/兴趣种子、正式界面字符和预览占位。未读取AWS实时分类；该清单现已用于下述64px图标替换。
 
-- 2026-10-27 三语字体：App/离线App预览改用霞鹜文楷Lite中文（400/500）、文楷KR韩文（400/500）及Ysabeau Office英文/数字（可变字体），保留Noto Sans KR与Emoji回退，Admin未改。官方固定提交的TTF与许可本地打包、注册LicenseRegistry，预览内嵌同源WOFF2，重建及SHA记录见`preview/app/FONTS.md`；旧圆体留存源码但不打包。910个源码中韩文字覆盖与11,172个现代韩文音节核对通过；Flutter analyze、57项测试与Web发布构建通过，1项既有Mac字体golden跳过，70入口预览检查通过。首页/发布/资料/登录及三语混排实际渲染图已检查；未生成Android/iOS商店包或部署AWS，下一步进行真机字重/排版验收（文楷无原生700，渲染器粗体处理可能不同）。
+- 2026-10-27 三语字体：App/离线App预览改用霞鹜文楷Lite中文（400/500）、文楷KR韩文（400/500）及Ysabeau Office英文/数字（可变字体），保留Noto Sans KR与Emoji回退；Admin已在后续同步（见上条）。官方固定提交的TTF与许可本地打包、注册LicenseRegistry，预览内嵌同源WOFF2，重建及SHA记录见`preview/app/FONTS.md`；旧圆体留存源码但不打包。910个源码中韩文字覆盖与11,172个现代韩文音节核对通过；Flutter analyze、57项测试与Web发布构建通过，1项既有Mac字体golden跳过，70入口预览检查通过。首页/发布/资料/登录及三语混排实际渲染图已检查；未生成Android/iOS商店包或部署AWS，下一步进行真机字重/排版验收（文楷无原生700，渲染器粗体处理可能不同）。
 
 - 2026-10-27：预览浅蓝设计已同步到正式 Flutter App 和 React Admin。App 集中主题 `app/lib/app_theme.dart` 覆盖认证、表单、卡片、弹窗及子页面；首页、竖版封面卡、底部导航、可换行消息分类、本人聊天气泡同步预览风格，保留真实头像/认证/权限/分页/报名/聊天 API。Admin 使用 `admin/src/preview-theme.css` 将十栏目与详情、弹窗统一为白色侧栏和浅蓝主操作；App.jsx 仅增加样式导入。修复窄屏大字号标题和消息分类溢出；新增文案有中英韩。Flutter analyze 通过，57项测试通过、1项旧Mac字体golden跳过；真实Flutter首页、发布、资料、登录渲染图已生成并检查，Admin lint/build及隔离DOM中的十栏目、用户/活动详情、申请控件和分类弹窗检查通过。同步关系见 `docs/UI_PREVIEW_SYNC.md`；没有部署AWS、改数据库或生成Android/iOS商店包。
 
