@@ -28,6 +28,7 @@ import 'push_notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerAppFontLicenses();
   await SocialService.purgeExpiredLocalMessages();
   await PushNotificationService.initializeFirebase();
   runApp(const DaziApp());

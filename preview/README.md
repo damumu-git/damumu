@@ -6,6 +6,9 @@
 - **App**：`app/index.html`
 - **Admin**：`admin/index.html`
 
+App 入口已同步试用资源圆体，中文 / 英文用圆体、韩文用 Noto Sans KR；字体已内嵌，
+不需要本机安装或联网。Admin 字体不受本次调整影响。详见 [App 字体说明](app/FONTS.md)。
+
 也可以在本机文件管理器中双击对应文件。不要只复制一个 HTML 文件，入口引用了
 同目录的 JS 和 `shared/` 中的共用样式、运行逻辑。没有 npm 安装或构建前置步骤。
 

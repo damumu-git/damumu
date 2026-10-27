@@ -90,9 +90,16 @@ void main() {
       await (FontLoader(
         'MaterialIcons',
       )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
-      for (final family in ['Noto Sans SC', 'Noto Sans KR', 'Noto Emoji']) {
+      final rounded = FontLoader(AppTypography.family)
+        ..addFont(
+          rootBundle.load('assets/fonts/ResourceHanRoundedCN-Regular.ttf'),
+        )
+        ..addFont(
+          rootBundle.load('assets/fonts/ResourceHanRoundedCN-Bold.ttf'),
+        );
+      await rounded.load();
+      for (final family in ['Noto Sans KR', 'Noto Emoji']) {
         final file = {
-          'Noto Sans SC': 'NotoSansSC-VF.ttf',
           'Noto Sans KR': 'NotoSansKR-VF.ttf',
           'Noto Emoji': 'NotoEmoji-VF.ttf',
         }[family]!;

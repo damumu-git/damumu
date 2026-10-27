@@ -1,4 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+
+abstract final class AppTypography {
+  static const family = 'Resource Han Rounded CN';
+}
+
+void registerAppFontLicenses() {
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(
+      const ['Resource Han Rounded'],
+      await rootBundle.loadString(
+        'assets/fonts/ResourceHanRounded-LICENSE.txt',
+      ),
+    );
+    yield LicenseEntryWithLineBreaks(const [
+      'Noto Sans KR',
+    ], await rootBundle.loadString('assets/fonts/NotoSansKR-LICENSE.txt'));
+  });
+}
 
 /// Production values matching the approved light-blue preview defaults.
 abstract final class AppPalette {
@@ -32,7 +52,7 @@ ThemeData buildAppTheme() {
       outline: AppPalette.line,
     ),
     scaffoldBackgroundColor: AppPalette.background,
-    fontFamily: 'Noto Sans SC',
+    fontFamily: AppTypography.family,
     fontFamilyFallback: const [
       'Noto Sans KR',
       'Segoe UI Emoji',
@@ -81,7 +101,7 @@ ThemeData buildAppTheme() {
       elevation: 0,
       scrolledUnderElevation: 0,
       titleTextStyle: TextStyle(
-        fontFamily: 'Noto Sans SC',
+        fontFamily: AppTypography.family,
         fontSize: 20,
         fontWeight: FontWeight.w700,
         color: AppPalette.ink,
@@ -106,7 +126,7 @@ ThemeData buildAppTheme() {
         minimumSize: const Size(44, 48),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         textStyle: const TextStyle(
-          fontFamily: 'Noto Sans SC',
+          fontFamily: AppTypography.family,
           fontSize: 14,
           fontWeight: FontWeight.w700,
         ),
