@@ -4,6 +4,8 @@
 
 ## 界面主题
 
+通用控件由 `src/controls.css` 兜底，特定导航/状态/主操作样式优先。`AdminControls.jsx`提供统一文件选择器和处置/确认弹窗，替代浏览器prompt/confirm；保留原生file表单字段、必填校验及API参数，支持Escape和焦点恢复。新增裸按钮/输入无需另写一套默认样式。
+
 Admin正文、表格、标题、按钮及弹窗使用霞鹜文楷Lite中文、文楷KR韩文及Ysabeau Office英文/数字，字体随服务自托管；离线Admin预览同步。重建和许可见 `FONTS.md`。
 
 2026-10-27 已将预览浅蓝设计应用到正式 React 页面。`src/preview-theme.css` 在

@@ -1,3 +1,4 @@
+import { FilePicker } from './AdminControls.jsx'
 import { createContext, useContext, useEffect, useState } from 'react'
 import { api, mediaUrl } from './api'
 import './emoji-assets.css'
@@ -73,8 +74,8 @@ export function EmojiAssetManager() {
   return <section className="panel full-panel">
     <div className="panel-heading"><div><span className="kicker">Icon library</span><h3>图标素材</h3>
       <p>64×64 PNG，最大200KB。替换后使用新地址；停用后保留原Emoji回退。</p></div>
-      <button className="button primary" onClick={() => setEditing({})}>上传新图标</button></div>
-    {error && <p role="alert">{error} <button onClick={load}>重新读取</button></p>}
+      <button className="button primary" disabled={busy} onClick={() => setEditing({})}>上传新图标</button></div>
+    {error && <p role="alert">{error} <button className="button secondary" onClick={load}>重新读取</button></p>}
     {loading && <p>正在读取图标…</p>}
     <label className="emoji-search">搜索图标<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="名称、资源键或Emoji" /></label>
     <div className="emoji-library">{rows.filter((row) => `${row.name} ${row.key} ${row.emoji}`.includes(search)).map((row) =>
@@ -91,8 +92,8 @@ export function EmojiAssetManager() {
       <label>资源键<input name="key" required pattern="[a-z][a-z0-9-]{0,63}" defaultValue={editing.key || ''} readOnly={!!editing.key} /></label>
       <label>对应Emoji<input name="emoji" required maxLength={32} defaultValue={editing.emoji || ''} readOnly={!!editing.key} /></label>
       <label>名称<input name="name" required maxLength={100} defaultValue={editing.name || ''} /></label>
-      <label>64×64 PNG<input name="image" type="file" accept="image/png" required={!editing.key} /></label>
-      <div className="dialog-actions"><button type="button" disabled={busy} onClick={() => setEditing(null)}>取消</button>
+      <label>64×64 PNG<FilePicker name="image" accept="image/png" required={!editing.key} buttonText="选择PNG图片" label="64×64 PNG图片" disabled={busy} /></label>
+      <div className="dialog-actions"><button type="button" className="button ghost" disabled={busy} onClick={() => setEditing(null)}>取消</button>
         <button className="button primary" disabled={busy}>{busy ? '保存中…' : '上传并保存'}</button></div>
     </form></div>}
   </section>

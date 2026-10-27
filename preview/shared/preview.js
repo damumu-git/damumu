@@ -19,7 +19,13 @@ window.Preview = (() => {
   const badge = (label, tone = "") =>
     `<span class="badge ${tone}">${esc(label)}</span>`;
   const field = (label, value = "", type = "text", extra = "") =>
-    `<label class="field">${esc(label)}<input type="${type}" value="${esc(value)}" ${extra}></label>`;
+    type === "file"
+      ? `<label class="field">${esc(label)}<div class="file-picker"><input type="file" aria-label="${esc(label)}" ${extra}><span class="file-picker-button" aria-hidden="true">选择图片</span><span class="file-picker-name">尚未选择文件</span></div></label>`
+      : `<label class="field">${esc(label)}<input type="${type}" value="${esc(value)}" ${extra}></label>`;
+  document.addEventListener("change", (event) => {
+    const picker = event.target.closest?.(".file-picker");
+    if (picker && event.target.type === "file") picker.querySelector(".file-picker-name").textContent = Array.from(event.target.files || []).map(file => file.name).join("、") || "尚未选择文件";
+  });
   const area = (label, value = "") =>
     `<label class="field">${esc(label)}<textarea>${esc(value)}</textarea></label>`;
   const select = (label, options) =>

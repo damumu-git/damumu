@@ -1,0 +1,79 @@
+/* Low-specificity defaults cover new or unclassified controls without
+   overriding navigation, tabs, switches or explicit primary/danger variants. */
+:where(.admin-shell, .dialog-backdrop, .dialog) :where(button) {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 9px 14px;
+  border: 1px solid var(--line, #dfe9f1);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink, #203e55);
+  font: inherit;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color .15s, background-color .15s, box-shadow .15s;
+}
+:where(.admin-shell, .dialog-backdrop, .dialog) :where(button:hover:not(:disabled)) {
+  background: var(--canvas, #f3f8fc);
+  border-color: var(--green, #52809d);
+}
+:where(.admin-shell, .dialog-backdrop, .dialog) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select, textarea) {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #dfe9f1);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--ink, #203e55);
+  font: inherit;
+  line-height: 1.5;
+  transition: border-color .15s, box-shadow .15s;
+}
+:where(.admin-shell, .dialog-backdrop, .dialog) :where(select) {
+  padding-right: 36px;
+  background-image: linear-gradient(45deg, transparent 50%, #738696 50%), linear-gradient(135deg, #738696 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+:where(.admin-shell, .dialog-backdrop, .dialog) :where(textarea) { min-height: 110px; resize: vertical; }
+:where(.admin-shell, .dialog-backdrop, .dialog) :where(input::placeholder, textarea::placeholder) { color: #8b9aa8; opacity: 1; }
+:where(.admin-shell, .dialog-backdrop, .dialog) input[readonly] { background: #f3f8fc; color: #647a8a; }
+:where(.admin-shell, .dialog-backdrop, .dialog) :where(button:disabled, input:disabled, select:disabled, textarea:disabled) { opacity: .55; cursor: not-allowed; }
+:where(.admin-shell, .dialog-backdrop, .dialog) :is(button, input, select, textarea):focus-visible { outline: 3px solid #52809d; outline-offset: 3px; }
+.panel-heading > select { width: auto; min-width: 140px; }
+.dialog { max-height: calc(100dvh - 40px); overflow-y: auto; border: 1px solid var(--line); }
+.dialog-head > button { width: 36px; min-height: 36px; padding: 0; border-radius: 10px; }
+.dialog-description { color: var(--muted); line-height: 1.8; overflow-wrap: anywhere; }
+.action-dialog { color: var(--ink); font: inherit; margin: auto; }
+.action-dialog::backdrop { background: rgb(32 62 85 / 35%); backdrop-filter: blur(4px); }
+.dialog-actions { flex-wrap: wrap; }
+.dialog-actions .button.ghost { color: var(--ink); background: #f3f8fc; border-color: var(--line); }
+.action-dialog .button.danger { color: #9e4037; background: #fff1ef; border-color: #edc6c0; }
+.dialog.category-dialog { width: min(760px, calc(100vw - 40px)); }
+.dialog .category-active { display: flex; align-items: center; justify-content: flex-start; gap: 10px; line-height: 1.6; }
+.dialog .category-active input[type="checkbox"] { flex: 0 0 18px; width: 18px; height: 18px; min-height: 18px; margin: 0; padding: 0; border-radius: 4px; }
+.file-picker { position: relative; display: flex; align-items: center; gap: 10px; min-width: 0; width: 100%; padding: 7px; min-height: 46px; border: 1px solid var(--line); border-radius: 11px; background: #fff; overflow: hidden; }
+.file-picker > input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.file-picker-button { flex-shrink: 0; padding: 7px 11px; border-radius: 8px; background: var(--mint, #e7f3fc); color: var(--on-primary, #173b56); font-weight: 500; line-height: 1.5; }
+.file-picker-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.file-picker:focus-within { outline: 3px solid #52809d; outline-offset: 3px; }
+.file-picker:hover { border-color: #52809d; }
+.file-picker.is-disabled { opacity: .55; }
+.file-picker.is-disabled > input { cursor: not-allowed; }
+input[type="file"]::file-selector-button { padding: 7px 11px; margin-right: 10px; border: 0; border-radius: 8px; color: #173b56; background: #e7f3fc; font: inherit; cursor: pointer; }
+input[type="color"] { width: 48px; min-height: 40px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: #fff; cursor: pointer; }
+@media (max-width: 600px) { .dialog-actions > button { flex: 1; } .panel-heading > select { width: 100%; } .category-form-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.sidebar nav button { justify-content: flex-start; }
+.dialog-head > button:hover { background: var(--mint, #e7f3fc); }

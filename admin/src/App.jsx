@@ -1,3 +1,5 @@
+import { FilePicker } from './AdminControls.jsx'
+import { useAdminDialog } from './admin-dialog-context'
 import { EmojiIcon, EmojiAssetManager, EmojiAssetSelect } from './EmojiAssets.jsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { API_BASE, api, mediaUrl } from './api'
@@ -228,13 +230,14 @@ function Field({ label, value, wide = false }) {
 }
 
 function UserDetail({ id, onBack }) {
+  const dialog = useAdminDialog()
   const [notice, setNotice] = useState('')
   const resource = useResource(() => api.user(id), [id])
   const payload = resource.data?.data
   const user = payload?.user
 
   const changeStatus = async (nextStatus) => {
-    const reason = window.prompt(`将「${user.nickname ?? user.id}」设为${statusText[nextStatus]}，请输入原因：`)
+    const reason = await dialog.prompt(`将「${user.nickname ?? user.id}」设为${statusText[nextStatus]}，请输入原因：`)
     if (reason === null) return
     try {
       await api.updateUserStatus(user.id, { status: nextStatus, reason, actorUserId: null })
@@ -299,6 +302,7 @@ function UserDetail({ id, onBack }) {
 }
 
 function Users() {
+  const dialog = useAdminDialog()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [role, setRole] = useState('')
@@ -310,7 +314,7 @@ function Users() {
   if (selectedId) return <UserDetail id={selectedId} onBack={() => { setSelectedId(null); resource.reload() }} />
 
   const changeStatus = async (user, nextStatus) => {
-    const reason = window.prompt(`将「${user.nickname ?? user.id}」设为${statusText[nextStatus]}，请输入原因：`)
+    const reason = await dialog.prompt(`将「${user.nickname ?? user.id}」设为${statusText[nextStatus]}，请输入原因：`)
     if (reason === null) return
     try {
       await api.updateUserStatus(user.id, { status: nextStatus, reason, actorUserId: null })
@@ -353,6 +357,7 @@ function Users() {
 }
 
 function EventDetail({ id, onBack }) {
+  const dialog = useAdminDialog()
   const [notice, setNotice] = useState('')
   const [approvingUserId, setApprovingUserId] = useState(null)
   const resource = useResource(() => api.event(id), [id])
@@ -360,7 +365,7 @@ function EventDetail({ id, onBack }) {
   const item = payload?.item
 
   const moderate = async (nextStatus) => {
-    const reason = window.prompt(`处置活动「${item.title}」，请输入理由：`)
+    const reason = await dialog.prompt(`处置活动「${item.title}」，请输入理由：`)
     if (reason === null) return
     try {
       await api.moderateEvent(item.id, { status: nextStatus, reasonCode: 'admin_decision', reason, actorUserId: null })
@@ -429,6 +434,7 @@ function EventDetail({ id, onBack }) {
 }
 
 function Events() {
+  const dialog = useAdminDialog()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [selectedId, setSelectedId] = useState(null)
@@ -439,7 +445,7 @@ function Events() {
   if (selectedId) return <EventDetail id={selectedId} onBack={() => { setSelectedId(null); resource.reload() }} />
 
   const moderate = async (event, nextStatus) => {
-    const reason = window.prompt(`处置活动「${event.title}」，请输入理由：`)
+    const reason = await dialog.prompt(`处置活动「${event.title}」，请输入理由：`)
     if (reason === null) return
     try {
       await api.moderateEvent(event.id, { status: nextStatus, reasonCode: 'admin_decision', reason, actorUserId: null })
@@ -473,13 +479,14 @@ function Events() {
 }
 
 function Reports() {
+  const dialog = useAdminDialog()
   const [status, setStatus] = useState('submitted')
   const [notice, setNotice] = useState('')
   const resource = useResource(() => api.reports({ status, limit: 50 }), [status])
   const rows = resource.data?.data ?? []
 
   const update = async (report, nextStatus) => {
-    const note = window.prompt('请输入处置说明：')
+    const note = await dialog.prompt('请输入处置说明：')
     if (note === null) return
     try {
       await api.updateReport(report.id, {
@@ -526,12 +533,13 @@ function Reports() {
 }
 
 function Safety() {
+  const dialog = useAdminDialog()
   const [status, setStatus] = useState('')
   const [notice, setNotice] = useState('')
   const resource = useResource(() => api.safetyAlerts({ status }), [status])
   const rows = resource.data?.data ?? []
   const update = async (alert, nextStatus) => {
-    const note = window.prompt('记录本次响应情况：')
+    const note = await dialog.prompt('记录本次响应情况：')
     if (note === null) return
     try {
       await api.updateSafetyAlert(alert.id, { status: nextStatus, note, actorUserId: null })
@@ -600,7 +608,7 @@ function CategoryEditor({ category, rows, onClose, onSaved }) {
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
       <form className="dialog category-dialog" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
-        <div className="dialog-head"><div><span className="kicker">Taxonomy editor</span><h3>{category ? '编辑分类' : '新建分类'}</h3></div><button type="button" onClick={onClose}>×</button></div>
+        <div className="dialog-head"><div><span className="kicker">Taxonomy editor</span><h3>{category ? '编辑分类' : '新建分类'}</h3></div><button type="button" aria-label="关闭弹窗" onClick={onClose}>×</button></div>
         <div className="category-form-grid">
           <label>父级分类<select value={form.parentId ?? ''} onChange={(e) => update('parentId', e.target.value || null)}><option value="">无（作为大分类）</option>{parents.map((row) => <option key={row.id} value={row.id}>{'　'.repeat(row.level - 1)}{row.full_path}</option>)}</select></label>
           <label>唯一代码<input required pattern="[a-z0-9_]+" value={form.code} onChange={(e) => update('code', e.target.value.toLowerCase())} placeholder="例如 outdoor_hiking" /></label>
@@ -627,6 +635,7 @@ function CategoryEditor({ category, rows, onClose, onSaved }) {
 }
 
 function Categories() {
+  const dialog = useAdminDialog()
   const [notice, setNotice] = useState('')
   const [level, setLevel] = useState(0)
   const [search, setSearch] = useState('')
@@ -657,7 +666,7 @@ function Categories() {
           <article className={`category-card level-${category.level} ${category.is_active ? '' : 'disabled'}`} key={category.id} style={{ '--category-color': category.color || '#1F7A55' }}>
             <span className="category-icon"><EmojiIcon emoji={category.icon} url={category.icon_url} /></span>
             <div className="category-copy"><span className="category-level">{category.level === 1 ? '大分类' : '小分类'}</span><h4>{category.name_zh_cn}</h4><p className="category-path">{category.full_path}</p><p>{category.name_en_us || '未设置英文'} · {category.name_ko_kr || '未设置韩文'}</p><p>{category.description_zh_cn || '暂无分类说明'}</p><small>{category.child_count} 个子类 · {category.event_count} 场活动 · 排序 {category.sort_order}</small><code>{category.code}</code></div>
-            <div className="category-actions"><button onClick={() => setEditing(category)}>编辑</button><button className="danger" onClick={async () => { if (!window.confirm(`确认删除「${category.name_zh_cn}」？`)) return; try { await api.deleteCategory(category.id); setNotice('分类已删除'); resource.reload() } catch (error) { setNotice(error.message) } }}>删除</button><label className="switch"><input type="checkbox" checked={category.is_active} onChange={() => toggle(category)} /><span /></label></div>
+            <div className="category-actions"><button onClick={() => setEditing(category)}>编辑</button><button className="danger" onClick={async () => { if (!(await dialog.confirm(`确认删除「${category.name_zh_cn}」？`))) return; try { await api.deleteCategory(category.id); setNotice('分类已删除'); resource.reload() } catch (error) { setNotice(error.message) } }}>删除</button><label className="switch"><input type="checkbox" checked={category.is_active} onChange={() => toggle(category)} /><span /></label></div>
           </article>
         ))}</div>
       </PageState>
@@ -697,7 +706,7 @@ function RegionEditor({ region, cities, onClose, onSaved }) {
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
       <form className="dialog" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
-        <div className="dialog-head"><div><span className="kicker">Region editor</span><h3>{region ? '编辑地区' : '新建地区'}</h3></div><button type="button" onClick={onClose}>×</button></div>
+        <div className="dialog-head"><div><span className="kicker">Region editor</span><h3>{region ? '编辑地区' : '新建地区'}</h3></div><button type="button" aria-label="关闭弹窗" onClick={onClose}>×</button></div>
         <label>层级<select value={form.level} onChange={(e) => update('level', Number(e.target.value))}><option value={1}>城市/道</option><option value={2}>区/市</option></select></label>
         {form.level === 2 && <label>所属城市<select required value={form.parentCode ?? ''} onChange={(e) => update('parentCode', e.target.value)}><option value="">请选择</option>{cities.map((city) => <option key={city.code} value={city.code}>{city.name_zh_cn}</option>)}</select></label>}
         <label>标准代码<input required readOnly={Boolean(region)} value={form.code} onChange={(e) => update('code', e.target.value.toUpperCase())} placeholder="例如 KR-11" /></label>
@@ -714,6 +723,7 @@ function RegionEditor({ region, cities, onClose, onSaved }) {
 }
 
 function Regions() {
+  const dialog = useAdminDialog()
   const [notice, setNotice] = useState('')
   const [editing, setEditing] = useState(undefined)
   const resource = useResource(api.regions, [])
@@ -733,7 +743,7 @@ function Regions() {
       {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
       <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
         <div className="table-wrap"><table><thead><tr><th>地区</th><th>代码</th><th>层级</th><th>English / 한국어</th><th>活动</th><th>启用</th><th>操作</th></tr></thead><tbody>{rows.map((region) => (
-          <tr key={region.code}><td><strong>{region.name_zh_cn}</strong><small className="block-note">{region.parent_name || '一级地区'}</small></td><td><code>{region.code}</code></td><td>{region.level === 1 ? '城市/道' : '区/市'}</td><td>{region.name_en_us}<small className="block-note">{region.name_ko_kr}</small></td><td>{region.event_count}</td><td><label className="switch"><input type="checkbox" checked={region.is_active} onChange={() => toggle(region)} /><span /></label></td><td><div className="row-actions"><button onClick={() => setEditing(region)}>编辑</button><button className="danger" onClick={async () => { if (!window.confirm(`确认删除「${region.name_zh_cn}」？`)) return; try { await api.deleteRegion(region.code); setNotice('地区已删除'); resource.reload() } catch (error) { setNotice(error.message) } }}>删除</button></div></td></tr>
+          <tr key={region.code}><td><strong>{region.name_zh_cn}</strong><small className="block-note">{region.parent_name || '一级地区'}</small></td><td><code>{region.code}</code></td><td>{region.level === 1 ? '城市/道' : '区/市'}</td><td>{region.name_en_us}<small className="block-note">{region.name_ko_kr}</small></td><td>{region.event_count}</td><td><label className="switch"><input type="checkbox" checked={region.is_active} onChange={() => toggle(region)} /><span /></label></td><td><div className="row-actions"><button onClick={() => setEditing(region)}>编辑</button><button className="danger" onClick={async () => { if (!(await dialog.confirm(`确认删除「${region.name_zh_cn}」？`))) return; try { await api.deleteRegion(region.code); setNotice('地区已删除'); resource.reload() } catch (error) { setNotice(error.message) } }}>删除</button></div></td></tr>
         ))}</tbody></table></div>
       </PageState>
       {editing !== undefined && <RegionEditor region={editing} cities={cities} onClose={() => setEditing(undefined)} onSaved={saved} />}
@@ -747,11 +757,12 @@ function SystemAvatars() {
   const rows = resource.data?.data ?? []
   const upload = async (event) => {
     event.preventDefault()
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     try {
       await api.uploadSystemAvatar(form)
       setNotice('系统头像已上传')
-      event.currentTarget.reset()
+      formElement.reset()
       resource.reload()
     } catch (error) { setNotice(error.message) }
   }
@@ -778,7 +789,7 @@ function SystemAvatars() {
         <input required name="nameEnUs" placeholder="English name" />
         <input required name="nameKoKr" placeholder="한국어 이름" />
         <input name="sortOrder" type="number" defaultValue={rows.length * 10 + 10} />
-        <input required name="image" type="file" accept="image/jpeg" />
+        <FilePicker required name="image" accept="image/jpeg" buttonText="选择头像" label="头像JPEG图片" />
         <button className="button primary">上传头像</button>
       </form>
       <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
@@ -853,7 +864,7 @@ function AnnouncementDialog({ onClose }) {
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
       <form className="dialog" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
-        <div className="dialog-head"><div><span className="kicker">Broadcast</span><h3>发布站内公告</h3></div><button type="button" onClick={onClose}>×</button></div>
+        <div className="dialog-head"><div><span className="kicker">Broadcast</span><h3>发布站内公告</h3></div><button type="button" aria-label="关闭弹窗" onClick={onClose}>×</button></div>
         <label>公告标题<input required maxLength="160" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
         <label>公告内容<textarea required maxLength="1000" rows="5" value={body} onChange={(event) => setBody(event.target.value)} /></label>
         {status && <p className="dialog-status">{status}</p>}

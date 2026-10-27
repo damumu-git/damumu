@@ -30,6 +30,7 @@
     route("safety", "安全警报", "Safety", true, "!"),
     route("categories", "分类配置", "Categories", true, "⊞"),
     route("regions", "地区管理", "Regions", true, "⌖"),
+    route("emoji-upload", "上传图标", "EmojiAssetManager", false),
     route("emoji-assets", "图标素材", "EmojiAssetManager", true, "▧"),
     route("avatars", "系统头像", "SystemAvatars", true, "◎"),
     route("audit", "审计日志", "Audit", true, "≡"),
@@ -381,8 +382,11 @@
     const u = users[userIndex],
       e = events[eventIndex];
     switch (id) {
+      case "emoji-upload":
+        return `${heading("上传新图标", "离线表单预览，不会上传到服务器。")}${l("← 返回图标素材", "emoji-assets", "ghost")}<section class="panel"><form data-form="emoji-icon" class="stack">${f("资源键", "", "text", 'required pattern="[a-z][a-z0-9-]{0,63}"')}${f("对应Emoji", "", "text", 'required')}${f("名称", "", "text", 'required')}${f("64×64 PNG", "", "file", 'accept="image/png" required')}<div class="row">${l("取消", "emoji-assets", "ghost")}<button class="primary" type="submit">上传并保存（模拟）</button></div></form></section>`;
+
       case "emoji-assets":
-        return `${heading("图标素材", "本页展示随项目保存的64×64真实素材；上传与启停请在正式Admin操作。", badge("离线素材预览"))}<div class="grid3">${window.EmojiArtwork.map(item => `<article class="panel"><img src="${item.src}" width="64" height="64" alt="${item.emoji}"><h3>${item.name}</h3><p class="muted">${item.key} · 64×64 PNG</p></article>`).join("")}</div>`;
+        return `${heading("图标素材", "本页展示随项目保存的64×64真实素材；上传与启停请在正式Admin操作。", l("上传新图标", "emoji-upload", "primary"))}<div class="grid3">${window.EmojiArtwork.map(item => `<article class="panel"><img src="${item.src}" width="64" height="64" alt="${item.emoji}"><h3>${item.name}</h3><p class="muted">${item.key} · 64×64 PNG</p></article>`).join("")}</div>`;
 
       case "dashboard":
         return `${heading("社区今天，也在发生好事", "以下为虚构统计，用于评审信息层级与页面布局。", badge("离线预览"))}${stats(
@@ -796,6 +800,7 @@
     const type = e.target.dataset.form;
     if (!type) return;
     e.preventDefault();
+    if (type === "emoji-icon") { P.toast("已模拟保存，不会上传图片或修改数据库"); go("emoji-assets"); }
     if (type === "announcement") {
       P.toast("公告已模拟发布，不会向任何人发送通知");
       go("dashboard");
