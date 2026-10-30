@@ -400,12 +400,15 @@ class _AuthPageState extends State<AuthPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const CircleAvatar(
-                    radius: 32,
-                    backgroundColor: AppPalette.primary,
-                    child: Icon(
-                      Icons.people_alt_rounded,
-                      color: AppPalette.onPrimary,
+                  Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.asset(
+                        'assets/branding/logo.png',
+                        width: 64,
+                        height: 64,
+                        excludeFromSemantics: true,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),

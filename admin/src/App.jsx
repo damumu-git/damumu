@@ -885,7 +885,7 @@ function App() {
   return (
     <div className="admin-shell">
       <aside className={mobileNav ? 'sidebar open' : 'sidebar'}>
-        <div className="brand"><div className="brand-mark">搭</div><div><strong>搭慕</strong><span>管理控制台</span></div></div>
+        <div className="brand"><img className="brand-mark" src="/brand/logo.png" alt="" width="34" height="34" /><div><strong>搭慕</strong><span>管理控制台</span></div></div>
         <nav aria-label="主菜单">{navigation.map((item) => (
           <Fragment key={item.id}>
           {item.id === 'users' && <div className="nav-section-label">业务管理</div>}

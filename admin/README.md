@@ -4,6 +4,8 @@
 
 ## 界面主题
 
+品牌Logo与标签图标使用选定的蓝底暖白“环抱”图片，本地文件位于 `public/brand/` 及 `public/favicon.png`，不依赖API。母版与导出见根目录 `branding/README.md`。
+
 通用控件由 `src/controls.css` 兜底，特定导航/状态/主操作样式优先。`AdminControls.jsx`提供统一文件选择器和处置/确认弹窗，替代浏览器prompt/confirm；保留原生file表单字段、必填校验及API参数，支持Escape和焦点恢复。新增裸按钮/输入无需另写一套默认样式。
 
 Admin采用Light/Compact风格的灰白蓝管理工作台：224px分组侧栏、统一SVG线性菜单图标、紧凑工具栏、带网格的条纹表格与小圆角表单。字体为自托管Noto Sans SC / KR无衬线，离线预览同步；App字体和主题不变。设计及来源见 `DESIGN.md`，字体重建和许可见 `FONTS.md`。

@@ -77,8 +77,9 @@
       color: white;
       font-size: 27px;
       font-weight: 800;
-      background: linear-gradient(135deg, #5b4bdb, #7668ea);
-      box-shadow: 0 14px 32px rgba(91, 75, 219, .25);
+      background: #557cae;
+      object-fit: contain;
+      box-shadow: 0 14px 32px rgba(85, 124, 174, .18);
       animation: loader-breathe 1.15s ease-in-out infinite alternate;
     }
 
@@ -89,7 +90,7 @@
     }
 
     @keyframes loader-breathe {
-      to { transform: translateY(-4px); box-shadow: 0 18px 38px rgba(91, 75, 219, .34); }
+      to { transform: translateY(-4px); box-shadow: 0 18px 38px rgba(85, 124, 174, .24); }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -100,7 +101,7 @@
 <body>
   <div id="app-loader" role="status" aria-label="搭慕正在加载">
     <div class="loader-content">
-      <div class="loader-mark">搭</div>
+      <img class="loader-mark" src="logo.png" alt="" width="54" height="54">
       <div class="loader-name">搭慕</div>
     </div>
   </div>

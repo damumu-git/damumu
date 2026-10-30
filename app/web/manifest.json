@@ -3,9 +3,9 @@
     "short_name": "搭慕",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#557cae",
+    "theme_color": "#557cae",
+    "description": "搭慕，发现附近值得一起参加的活动。",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

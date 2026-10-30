@@ -242,7 +242,7 @@ window.Preview = (() => {
         )
         .join("")}</nav>`;
     function adminShell(content, page) {
-      return `<div class="admin-stage"><div class="admin-shell"><nav class="admin-nav" aria-label="Admin 主导航"><div class="admin-brand">搭慕<small>管理控制台</small></div>${routes
+      return `<div class="admin-stage"><div class="admin-shell"><nav class="admin-nav" aria-label="Admin 主导航"><div class="admin-brand"><img src="../shared/logo.png" alt="" width="34" height="34" style="float:left;margin-right:8px;border-radius:5px">搭慕<small>管理控制台</small></div>${routes
         .filter((r) => r.main)
         .map(
           (r) =>

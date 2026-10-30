@@ -121,6 +121,15 @@ void main() {
       );
     const boundary = Key('ui-capture');
     Future<void> capture(String name) async {
+      if (name == 'app-login') {
+        // Wait for the real bundled raster to decode before capturing the frame.
+        await tester.runAsync(() async {
+          await precacheImage(
+            const AssetImage('assets/branding/logo.png'),
+            tester.element(find.byType(AuthPage)),
+          );
+        });
+      }
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       final render = tester.renderObject<RenderRepaintBoundary>(
