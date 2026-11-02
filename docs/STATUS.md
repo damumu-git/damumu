@@ -1,5 +1,7 @@
 # DAMUMU 当前项目状态
 
+- 2026-11-02 Logo更新：用户选定并上传晴空蓝暖白陶瓷立体版，母版为 `branding/damumu-embrace-3d-master.png`，原图SHA与来源记录在品牌说明；旧平面母版保留。导出脚本切换到新图，同步App登录/注册、Android/iOS桌面及启动图、Flutter Web、官网、Admin和两套离线预览；Android启动背景/Web主题色同步亮蓝。无API、数据库或业务逻辑变化。验证：3项现有Flutter页面/布局/实图渲染检查通过，正式登录页新Logo及24/48/96/160px缩图已目视核对；Admin构建通过且产物Logo与源文件一致；上传母版逐字节一致、五处页面Logo同源、iOS全尺寸/不透明RGB、PWA尺寸、网页图片引用、Android启动留白及XML检查通过。尚未合并main、部署AWS或生成移动端发布包，下一步合并后重新发布。
+
 - 2026-10-30 Logo：用户选定第二款蓝底暖白“环抱”抽象DM方案，母版及可重复尺寸导出脚本位于 `branding/`。已接入Flutter登录/注册、Android五密度桌面图标/自适应图标/启动图、iOS完整AppIcon与启动图、Flutter Web加载/标签/PWA图标、Admin侧栏/标签、四个产品网页页头/页脚及App/Admin离线预览。图片本地打包，无API或数据库变更。验证：Dart格式/Flutter analyze通过，18项既有页面与注册行为测试通过；真实Flutter登录页截图已核对。Admin lint/build通过；App47/Admin25共72个离线入口及四状态检查通过；iOS尺寸/不透明RGB、PWA尺寸、网页图片路径与平台XML检查通过，小尺寸24/48/96/160px已目视核对。尚未生成Android/iOS发布包或部署AWS；下一步合并后重新构建发布。
 
 最后核对：2026-10-27（Asia/Seoul，本次核对正式 UI 同步及构建，其余条目沿用此前记录）。本页只记当前事实、下一步和阻塞；完成历史见 Git。代码、迁移和测试结果优先于本页。

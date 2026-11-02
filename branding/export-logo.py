@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-MASTER = ROOT / 'branding/damumu-embrace-master.png'
+MASTER = ROOT / 'branding/damumu-embrace-3d-master.png'
 SOURCE = Image.open(MASTER).convert('RGB')
 BACKGROUND = SOURCE.getpixel((0, 0))
 
