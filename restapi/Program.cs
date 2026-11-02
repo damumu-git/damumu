@@ -13,6 +13,10 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<Db>();
 builder.Services.AddSingleton<MediaStorage>();
 builder.Services.AddSingleton<AuthService>();
+builder.Services.AddSingleton<SocialAccountService>();
+builder.Services.AddHttpClient<ISocialIdentityVerifier, SocialIdentityVerifier>(client =>
+    client.Timeout = TimeSpan.FromSeconds(10))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddSingleton<AccountDeletionService>();
 builder.Services.AddSingleton<RealtimeConnectionManager>();
 builder.Services.AddSingleton<PushNotificationService>();
@@ -125,6 +129,7 @@ api.MapGet("/health", async (Db db, PushNotificationService push, CancellationTo
 api.MapCatalogEndpoints();
 api.MapEmojiAssetEndpoints();
 api.MapUserEndpoints();
+api.MapSocialAuthEndpoints();
 api.MapEventEndpoints();
 api.MapActivityEndpoints();
 api.MapSocialEndpoints();

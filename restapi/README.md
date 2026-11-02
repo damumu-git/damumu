@@ -1,5 +1,7 @@
 # 慕搭 REST API
 
+Google/Kakao原生登录新增 `/api/v1/auth/social/{provider}` 和迁移024；服务端校验第三方身份后才签发本地会话，不按邮箱自动合并。平台未配置时默认关闭。详见 `docs/SOCIAL_LOGIN_SETUP.md`（仓库根目录）。
+
 图标素材通过新增迁移023及公共 `/api/v1/emoji-assets` 下发，Admin提供上传/替换/启停，分类/活动附加图标URL。默认PNG随API发布并补齐持久化媒体目录。详见仓库根目录 `docs/EMOJI_LIBRARY.md`。
 
 ASP.NET Core 10 + PostgreSQL/PostGIS API，覆盖用户、活动、报名候补、聊天、

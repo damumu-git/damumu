@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.util.Base64
 
 plugins {
     id("com.android.application")
@@ -16,6 +17,13 @@ val releaseTaskRequested = gradle.startParameter.taskNames.any {
     it.contains("release", ignoreCase = true)
 }
 
+// Public SDK key, shared with Flutter through --dart-define. Never put secrets here.
+val dartDefines = (project.findProperty("dart-defines") as? String).orEmpty()
+    .split(",").filter { it.isNotBlank() }.mapNotNull {
+        runCatching { String(Base64.getDecoder().decode(it)).split("=", limit = 2) }
+            .getOrNull()?.takeIf { parts -> parts.size == 2 }
+    }.associate { it[0] to it[1] }
+
 android {
     namespace = "com.damumu.damu"
     compileSdk = 36
@@ -28,6 +36,8 @@ android {
 
     defaultConfig {
         applicationId = "com.damumu.damu"
+        manifestPlaceholders["kakaoNativeAppKey"] =
+            dartDefines["KAKAO_NATIVE_APP_KEY"].orEmpty().ifBlank { "disabled" }
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

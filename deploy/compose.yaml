@@ -10,6 +10,10 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Muda: ${DATABASE_CONNECTION}
       Auth__TokenKey: ${AUTH_TOKEN_KEY}
+      SocialLogin__google__Enabled: ${GOOGLE_LOGIN_ENABLED:-false}
+      SocialLogin__google__ClientId: ${GOOGLE_SERVER_CLIENT_ID:-}
+      SocialLogin__kakao__Enabled: ${KAKAO_LOGIN_ENABLED:-false}
+      SocialLogin__kakao__AppId: ${KAKAO_APP_ID:-}
       Admin__ApiKey: ${ADMIN_API_KEY}
       Firebase__ProjectId: ${FIREBASE_PROJECT_ID:-}
       Media__RootPath: /var/lib/damumu/uploads

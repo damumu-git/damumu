@@ -120,6 +120,10 @@ void main() {
             const AssetImage('assets/branding/logo.png'),
             tester.element(find.byType(AuthPage)),
           );
+          await precacheImage(
+            const AssetImage('assets/auth/google-g.png'),
+            tester.element(find.byType(AuthPage)),
+          );
         });
       }
       await tester.pumpAndSettle();

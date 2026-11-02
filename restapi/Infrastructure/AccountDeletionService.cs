@@ -63,6 +63,7 @@ public sealed class AccountDeletionService(
             ON CONFLICT (storage_key) DO UPDATE SET is_directory=true;
 
             DELETE FROM push_device WHERE user_id=@userId;
+            DELETE FROM user_external_identity WHERE user_id=@userId;
             DELETE FROM user_credential WHERE user_id=@userId;
             DELETE FROM notification WHERE user_id=@userId;
             DELETE FROM conversation_member WHERE user_id=@userId;

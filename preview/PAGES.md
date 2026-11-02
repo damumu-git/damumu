@@ -39,6 +39,7 @@
 | 我的 | `app/index.html#profile` | app/lib/main.dart · ProfilePage | 业务预览 |
 | 邮箱登录 | `app/index.html#login` | app/lib/auth.dart · AuthPage | 业务预览 |
 | 注册账号 | `app/index.html#register` | app/lib/auth.dart · AuthPage | 业务预览 |
+| 第三方登录 · 完成注册 | `app/index.html#social-register` | app/lib/social_registration.dart · SocialRegistrationDialog | 业务预览 |
 | 头像编辑 | `app/index.html#avatar` | app/lib/auth.dart · showAvatarEditor | 业务预览 |
 | 头像裁剪与确认 | `app/index.html#avatar-crop` | app/lib/auth.dart · cropAndUploadAvatar | 业务预览 |
 | 头像全屏预览 | `app/index.html#avatar-preview` | app/lib/activity_interactions.dart · AvatarPreviewPage | 业务预览 |
@@ -60,6 +61,8 @@
 | 安全警报 | `admin/index.html#safety` | admin/src/App.jsx · Safety | 业务预览 |
 | 分类配置 | `admin/index.html#categories` | admin/src/App.jsx · Categories | 业务预览 |
 | 地区管理 | `admin/index.html#regions` | admin/src/App.jsx · Regions | 业务预览 |
+| 上传图标 | `admin/index.html#emoji-upload` | admin/src/App.jsx · EmojiAssetManager | 业务预览 |
+| 图标素材 | `admin/index.html#emoji-assets` | admin/src/App.jsx · EmojiAssetManager | 业务预览 |
 | 系统头像 | `admin/index.html#avatars` | admin/src/App.jsx · SystemAvatars | 业务预览 |
 | 审计日志 | `admin/index.html#audit` | admin/src/App.jsx · Audit | 业务预览 |
 | 功能开关 | `admin/index.html#settings` | admin/src/App.jsx · Settings | 业务预览 |
@@ -76,5 +79,3 @@
 | 警报响应 | `admin/index.html#safety-action` | admin/src/App.jsx · Safety.update | 业务预览 |
 | 删除分类确认 | `admin/index.html#delete-category` | admin/src/App.jsx · Categories | 业务预览 |
 | 删除地区确认 | `admin/index.html#delete-region` | admin/src/App.jsx · Regions | 业务预览 |
-| 图标素材 | `admin/index.html#emoji-assets` | admin/src/EmojiAssets.jsx · EmojiAssetManager | 真实素材离线图册，管理操作在正式Admin |
-| 上传图标 | `admin/index.html#emoji-upload` | admin/src/EmojiAssets.jsx · EmojiAssetManager | 文件控件及保存操作模拟 |

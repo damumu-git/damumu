@@ -7,6 +7,17 @@ using Muda.Api.Infrastructure;
 CancellationChecks.ValidateReasons();
 FeedbackChecks.Validate();
 PrivacyChecks.ValidateRegistration();
+if (args.FirstOrDefault() == "--social-check")
+{
+    await SocialLoginChecks.VerifyTokens();
+    return;
+}
+if (args.FirstOrDefault() == "--social-db")
+{
+    await SocialLoginChecks.VerifyTokens();
+    await SocialLoginChecks.RunDatabase();
+    return;
+}
 if (args.FirstOrDefault() == "--privacy-db")
 {
     await PrivacyChecks.RunDatabase();

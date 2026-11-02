@@ -7,6 +7,10 @@ environment:
   sdk: ^3.12.2
 
 dependencies:
+  google_sign_in: ^7.2.0
+  kakao_flutter_sdk_user: ^2.1.0
+  flutter_svg: ^2.3.2
+  cupertino_icons: ^1.0.8
   firebase_core: ^4.15.0
   firebase_messaging: ^16.7.0
   flutter:
@@ -32,6 +36,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/auth/google-g.png
     - assets/branding/logo.png
     - assets/fonts/NotoSansSC-LICENSE.txt
     - assets/fonts/NotoSansKR-LICENSE.txt

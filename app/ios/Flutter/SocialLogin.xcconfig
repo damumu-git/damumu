@@ -1,0 +1,5 @@
+// Public callback scheme settings. Use matching values in --dart-define.
+// Replace in your local Xcode build settings after creating provider applications.
+// No Client Secret / Kakao Admin Key belongs in the client.
+GOOGLE_REVERSED_CLIENT_ID = com.damumu.disabled.google
+KAKAO_NATIVE_APP_KEY = disabled

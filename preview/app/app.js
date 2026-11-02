@@ -171,6 +171,8 @@
       false,
       "app/lib/auth.dart",
     ),
+    route("social-register", "第三方登录 · 完成注册", "账号与个人中心", "SocialRegistrationDialog",
+      "仅为离线界面预览，不发起Google/Kakao授权或创建真实账号。", false, "app/lib/social_registration.dart"),
     route(
       "avatar",
       "头像编辑",
@@ -502,12 +504,14 @@
       case "login":
       case "register":
         return stack(
-          `<div style="text-align:center;padding:15px 0"><img src="../shared/logo.png" alt="" width="64" height="64" style="display:block;margin:0 auto 18px;border-radius:16px"><span class="eyebrow">DAMUMU · LITTLE MOMENTS</span><h1>${id === "register" ? "从这里，遇见搭子" : "欢迎回来"}</h1><p class="muted">一起发现生活里的小美好</p></div><form data-form="auth" class="stack">${id === "register" ? `${b("🐻　🐱　🦉　选择系统头像", "register-avatar", "wide")}${f("昵称", "", "text", 'required minlength="2"')}` : ""}${f("邮箱", "", "email", 'required placeholder="you@example.com"')}${f("密码", "", "password", 'required minlength="8" placeholder="至少 8 位，包含字母和数字"')}${id === "register" ? `${check("我确认已满14岁").replace('type="checkbox"', 'type="checkbox" required')}${check("我已阅读当前隐私政策").replace('type="checkbox"', 'type="checkbox" required')}${l("阅读隐私政策", "privacy", "ghost")}` : ""}<button type="submit" class="primary wide">${id === "register" ? "创建账号（模拟）" : "登录（模拟）"}</button></form>${l(id === "register" ? "已有账号？登录" : "还没有账号？注册", id === "register" ? "login" : "register", "ghost wide")}${note("仅用于设计预览，请勿输入真实密码。")}`,
+          `<div style="text-align:center;padding:15px 0"><img src="../shared/logo.png" alt="" width="64" height="64" style="display:block;margin:0 auto 18px;border-radius:16px"><span class="eyebrow">DAMUMU · LITTLE MOMENTS</span><h1>${id === "register" ? "从这里，遇见搭子" : "欢迎回来"}</h1><p class="muted">一起发现生活里的小美好</p></div><form data-form="auth" class="stack">${id === "register" ? `${b("🐻　🐱　🦉　选择系统头像", "register-avatar", "wide")}${f("昵称", "", "text", 'required minlength="2"')}` : ""}${f("邮箱", "", "email", 'required placeholder="you@example.com"')}${f("密码", "", "password", 'required minlength="8" placeholder="至少 8 位，包含字母和数字"')}${id === "register" ? `${check("我确认已满14岁").replace('type="checkbox"', 'type="checkbox" required')}${check("我已阅读当前隐私政策").replace('type="checkbox"', 'type="checkbox" required')}${l("阅读隐私政策", "privacy", "ghost")}` : ""}<button type="submit" class="primary wide">${id === "register" ? "创建账号（模拟）" : "登录（模拟）"}</button></form>${l(id === "register" ? "已有账号？登录" : "还没有账号？注册", id === "register" ? "login" : "register", "ghost wide")}${l("Google 登录（预览）", "social-register", "wide")}${l("Kakao 登录（预览）", "social-register", "wide")}${note("仅用于设计预览，请勿输入真实密码。")}`,
         );
       case "avatar":
         return stack(
           `${heading("选择头像", "profile")}<h2>选一个喜欢的自己</h2><div class="grid3">${["🐻", "🐱", "🦉", "🐰", "🦊", "🐳"].map((face) => b(a(face, true), "pick-avatar")).join("")}</div>${l("从设备选择照片", "avatar-crop", "wide")}${b("保存头像（模拟）", "save-avatar", "primary wide")}`,
         );
+      case "social-register":
+        return stack(`${heading("完成注册", "login")}${note("首次Google/Kakao登录后填写。不同登录方式使用独立账号，不按相同邮箱自动合并。此页仅演示界面，不发起平台授权。")}<form data-form="social-register" class="stack">${f("昵称", "", "text", 'required minlength="2" maxlength="30"')}${check("我确认已满14周岁").replace('type="checkbox"', 'type="checkbox" required')}${check("我已阅读当前隐私政策").replace('type="checkbox"', 'type="checkbox" required')}${l("阅读隐私政策", "privacy", "ghost")}<button type="submit" class="primary wide">确认注册（模拟）</button></form>${l("取消", "login", "wide")}`);
       case "avatar-crop":
         return stack(
           `${heading("编辑头像", "avatar")}<input type="file" accept="image/*" data-local-image aria-label="选择本地头像"><div id="local-image" class="scene" style="width:240px;height:240px;border-radius:50%;margin:auto">${scene(1)}</div>${b("水平翻转", "flip")}${note("头像处理界面示意。正式输出为 512×512 JPEG，固定 1:1 裁剪。")}${l("确认并预览头像", "avatar", "primary wide")}`,
@@ -805,6 +809,10 @@
     }
     if (type === "auth") {
       P.toast("登录 / 注册流程模拟完成");
+      location.hash = "home";
+    }
+    if (type === "social-register") {
+      P.toast("仅完成离线演示，未创建真实账号");
       location.hash = "home";
     }
     if (type === "cancel") {

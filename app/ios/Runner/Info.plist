@@ -2,6 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>LSApplicationQueriesSchemes</key>
+	<array><string>kakaokompassauth</string></array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict><key>CFBundleURLSchemes</key><array><string>$(GOOGLE_REVERSED_CLIENT_ID)</string></array></dict>
+		<dict><key>CFBundleURLSchemes</key><array><string>kakao$(KAKAO_NATIVE_APP_KEY)</string></array></dict>
+	</array>
 	<key>FirebaseMessagingAutoInitEnabled</key>
 	<false/>
 	<key>FIREBASE_ANALYTICS_COLLECTION_ENABLED</key>

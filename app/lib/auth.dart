@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' as parser;
 import 'package:image/image.dart' as img;
@@ -14,6 +15,8 @@ import 'l10n.dart';
 import 'app_theme.dart';
 import 'push_notification_service.dart';
 import 'web_cropper_layout.dart';
+import 'social_login.dart';
+import 'social_registration.dart';
 
 const _green = AppPalette.accent;
 const _mint = AppPalette.soft;
@@ -125,6 +128,25 @@ class AuthApi {
   static Future<AuthUser> me(String token) async =>
       AuthUser.fromJson(await _json('/me', token: token));
 
+  static Future<Map<String, dynamic>> social(
+    SocialCredential credential, {
+    String? nickname,
+    String? locale,
+  }) => _json(
+    '/auth/social/${credential.provider.name}',
+    method: 'POST',
+    body: {
+      'token': credential.token,
+      if (nickname != null) ...{
+        'nickname': nickname,
+        'ageConfirmed': true,
+        'privacyAcknowledged': true,
+        'privacyVersion': '2026-10-21',
+        'locale': locale,
+      },
+    },
+  );
+
   static Future<void> deleteAccount(String token) async {
     await _json('/me', method: 'DELETE', token: token);
   }
@@ -166,6 +188,24 @@ class AuthApi {
 
 class AuthController extends ChangeNotifier {
   AuthController();
+
+  Future<bool> loginSocial(
+    SocialCredential credential, {
+    String? nickname,
+    String? locale,
+  }) async {
+    final result = await AuthApi.social(
+      credential,
+      nickname: nickname,
+      locale: locale,
+    );
+    if (result['registrationRequired'] == true) return false;
+    token = result['accessToken'] as String;
+    user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
+    await _saveToken(token);
+    notifyListeners();
+    return true;
+  }
 
   bool loading = true;
   AuthUser? user;
@@ -346,8 +386,10 @@ class _AuthGateState extends State<AuthGate> {
 }
 
 class AuthPage extends StatefulWidget {
-  const AuthPage({super.key, this.avatarLoader});
+  const AuthPage({super.key, this.avatarLoader, this.socialAuthorize});
   final Future<List<SystemAvatarData>> Function(String locale)? avatarLoader;
+  final Future<SocialCredential?> Function(SocialProvider provider)?
+  socialAuthorize;
 
   @override
   State<AuthPage> createState() => _AuthPageState();
@@ -613,6 +655,51 @@ class _AuthPageState extends State<AuthPage> {
                           : context.tr('goRegister'),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  Text(context.tr('socialOr'), textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => _social(SocialProvider.google),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF1F1F1F),
+                      side: const BorderSide(color: Color(0xFF747775)),
+                      textStyle: const TextStyle(
+                        fontFamily: AppTypography.family,
+                        fontFamilyFallback: AppTypography.fallback,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    icon: Image.asset(
+                      'assets/auth/google-g.png',
+                      width: 20,
+                      height: 20,
+                      fit: BoxFit.contain,
+                      excludeFromSemantics: true,
+                    ),
+                    label: Text(context.tr('googleLogin')),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFFEE500),
+                      foregroundColor: const Color(0xFF191919),
+                    ),
+                    onPressed: _busy
+                        ? null
+                        : () => _social(SocialProvider.kakao),
+                    icon: SvgPicture.asset(
+                      'assets/images/icon_talk_login.svg',
+                      package: 'kakao_flutter_sdk_user',
+                      width: 20,
+                      height: 20,
+                      excludeFromSemantics: true,
+                    ),
+                    label: Text(context.tr('kakaoLogin')),
+                  ),
                 ],
               ),
             ),
@@ -621,6 +708,42 @@ class _AuthPageState extends State<AuthPage> {
       ),
     ),
   );
+
+  Future<void> _social(SocialProvider provider) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final credential =
+          await (widget.socialAuthorize ?? SocialLogin.authorize)(provider);
+      if (credential == null || !mounted) return;
+      final auth = AuthScope.of(context);
+      final locale = Localizations.localeOf(context).languageCode;
+      if (await auth.loginSocial(credential)) return;
+      if (!mounted) return;
+      setState(() => _busy = false);
+      final nickname = await showDialog<String>(
+        context: context,
+        builder: (_) => const SocialRegistrationDialog(),
+      );
+      if (nickname == null || !mounted) return;
+      setState(() => _busy = true);
+      await auth.loginSocial(credential, nickname: nickname, locale: locale);
+    } on SocialLoginException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr(error.code))));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('socialFailed'))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
