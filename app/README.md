@@ -6,9 +6,9 @@
 
 正式Logo采用用户选定的蓝底暖白“环抱”方案，登录/注册、本地Android/iOS图标和启动图、Web图标及加载页均已接入。母版与尺寸导出见根目录 `branding/README.md`；安装图标需要重新构建安装包。
 
-2026-10-27 三语文楷方案：中文使用霞鹜文楷轻便版，韩文使用文楷 KR，
-英文/数字使用 Ysabeau Office，保留 Noto Sans KR 与 Emoji 回退。字体本地打包；
-App 离线预览使用同源字体，Admin 未改动。来源、许可与重建说明见
+2026-11-02 无衬线字体：中文、英文及数字使用 Noto Sans SC，韩文使用 Noto Sans KR，
+保留 Emoji 与系统缺字回退。字体本地打包，替代原文楷/Ysabeau方案；
+App 离线预览使用同源字体，Admin 已使用 Noto 无需改动。来源、许可与重建说明见
 `preview/app/FONTS.md`（仓库根目录）。
 
 2026-10-27 已将预览的浅蓝设计应用到正式 Flutter 页面。统一主题见

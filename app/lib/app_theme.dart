@@ -3,11 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 abstract final class AppTypography {
-  // Latin first, Chinese without Hangul next, then the dedicated Korean face.
-  static const family = 'Ysabeau Office';
+  // Use one sans-serif style for Chinese, Latin and numbers; Korean falls back
+  // to the matching Noto face, followed by emoji and system fonts.
+  static const family = 'Noto Sans SC';
   static const fallback = [
-    'LXGW WenKai Lite',
-    'LXGW WenKai KR',
     'Noto Sans KR',
     'Segoe UI Emoji',
     'Apple Color Emoji',
@@ -22,10 +21,9 @@ abstract final class AppTypography {
 void registerAppFontLicenses() {
   LicenseRegistry.addLicense(() async* {
     for (final entry in const {
-      'LXGW WenKai Lite': 'LXGWWenKai-LICENSE.txt',
-      'LXGW WenKai KR': 'LXGWWenKaiKR-LICENSE.txt',
-      'Ysabeau Office': 'YsabeauOffice-LICENSE.txt',
+      'Noto Sans SC': 'NotoSansSC-LICENSE.txt',
       'Noto Sans KR': 'NotoSansKR-LICENSE.txt',
+      'Noto Emoji': 'NotoEmoji-LICENSE.txt',
     }.entries) {
       yield LicenseEntryWithLineBreaks([
         entry.key,

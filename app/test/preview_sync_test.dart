@@ -91,15 +91,7 @@ void main() {
         'MaterialIcons',
       )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
       for (final entry in const {
-        'Ysabeau Office': ['YsabeauOffice-VF.ttf'],
-        'LXGW WenKai Lite': [
-          'LXGWWenKaiLite-Regular.ttf',
-          'LXGWWenKaiLite-Medium.ttf',
-        ],
-        'LXGW WenKai KR': [
-          'LXGWWenKaiKR-Regular.ttf',
-          'LXGWWenKaiKR-Medium.ttf',
-        ],
+        'Noto Sans SC': ['NotoSansSC-VF.ttf'],
         'Noto Sans KR': ['NotoSansKR-VF.ttf'],
         'Noto Emoji': ['NotoEmoji-VF.ttf'],
       }.entries) {
