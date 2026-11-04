@@ -95,7 +95,10 @@ void main() {
           );
           expect(tester.widget<FilledButton>(submit).onPressed, isNull);
           for (final box in tester.widgetList<CheckboxListTile>(
-            find.byType(CheckboxListTile),
+            find.descendant(
+              of: dialog,
+              matching: find.byType(CheckboxListTile),
+            ),
           )) {
             expect(box.value, isFalse);
           }
@@ -103,7 +106,14 @@ void main() {
             find.descendant(of: dialog, matching: find.byType(TextFormField)),
             '新用户',
           );
-          for (final box in find.byType(CheckboxListTile).evaluate().toList()) {
+          for (final box
+              in find
+                  .descendant(
+                    of: dialog,
+                    matching: find.byType(CheckboxListTile),
+                  )
+                  .evaluate()
+                  .toList()) {
             await tester.ensureVisible(find.byWidget(box.widget));
             await tester.tap(find.byWidget(box.widget));
             await tester.pumpAndSettle();

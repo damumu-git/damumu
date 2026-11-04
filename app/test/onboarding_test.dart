@@ -24,7 +24,6 @@ void main() {
     await tester.ensureVisible(find.text('暂不授权'));
     await tester.tap(find.text('暂不授权'));
     await tester.pumpAndSettle();
-    await next(tester);
   }
 
   testWidgets('first run shows introduction before starting authentication', (
@@ -132,7 +131,6 @@ void main() {
       expect(calls, ['camera']);
       expect(find.text('系统未允许权限，你仍可继续。'), findsOneWidget);
       expect(await AppPermissions.choice(AppPermission.camera), isFalse);
-      await next(tester);
       expect(find.text('只分享你选中的照片'), findsOneWidget);
       await tester.ensureVisible(find.text('同意并继续设置'));
       await tester.tap(find.text('同意并继续设置'));
@@ -159,7 +157,6 @@ void main() {
       await tester.tap(find.text('同意并继续设置'));
       await tester.pumpAndSettle();
       expect(find.text('打开系统设置'), findsOneWidget);
-      await next(tester);
       expect(find.text('只分享你选中的照片'), findsOneWidget);
     },
   );

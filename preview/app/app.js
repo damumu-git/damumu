@@ -531,7 +531,7 @@
       case "login":
       case "register":
         return stack(
-          `<div style="text-align:center;padding:15px 0"><img src="../shared/logo.png" alt="" width="64" height="64" style="display:block;margin:0 auto 18px;border-radius:16px"><span class="eyebrow">DAMUMU · LITTLE MOMENTS</span><h1>${id === "register" ? "从这里，遇见搭子" : "欢迎回来"}</h1><p class="muted">一起发现生活里的小美好</p></div><form data-form="auth" class="stack">${id === "register" ? `${b("🐻　🐱　🦉　选择系统头像", "register-avatar", "wide")}${f("昵称", "", "text", 'required minlength="2"')}` : ""}${f("邮箱", "", "email", 'required placeholder="you@example.com"')}${f("密码", "", "password", 'required minlength="8" placeholder="至少 8 位，包含字母和数字"')}${id === "register" ? `${check("我确认已满14岁").replace('type="checkbox"', 'type="checkbox" required')}${check("我已阅读当前隐私政策").replace('type="checkbox"', 'type="checkbox" required')}${l("阅读隐私政策", "privacy", "ghost")}` : ""}<button type="submit" class="primary wide">${id === "register" ? "创建账号（模拟）" : "登录（模拟）"}</button></form>${l(id === "register" ? "已有账号？登录" : "还没有账号？注册", id === "register" ? "login" : "register", "ghost wide")}${l("Google 登录（预览）", "social-register", "wide")}${l("Kakao 登录（预览）", "social-register", "wide")}${note("仅用于设计预览，请勿输入真实密码。")}`,
+          `<div style="text-align:center;padding:15px 0"><img src="../shared/logo.png" alt="" width="64" height="64" style="display:block;margin:0 auto 18px;border-radius:16px"><span class="eyebrow">DAMUMU · LITTLE MOMENTS</span><h1>${id === "register" ? "从这里，遇见搭子" : "欢迎回来"}</h1><p class="muted">一起发现生活里的小美好</p></div><form data-form="auth" class="stack">${id === "register" ? `${b("🐻　🐱　🦉　选择系统头像", "register-avatar", "wide")}${f("昵称", "", "text", 'required minlength="2"')}` : ""}${f("邮箱", "", "email", 'required placeholder="you@example.com"')}${f("密码", "", "password", 'required minlength="8" placeholder="至少 8 位，包含字母和数字"')}${id === "login" ? `<div style="display:flex;flex-wrap:wrap;gap:10px">${[["30 日自动登录", true],["记住 ID（邮箱）",false]].map(([title, checked]) => `<label style="display:flex;align-items:center;gap:9px;flex:1;min-width:140px;padding:13px 10px;border:1px solid #dfe9f1;border-radius:14px;background:${checked ? "#e7f3fc" : "white"};font-size:13px"><input type="checkbox" ${checked ? "checked" : ""} style="accent-color:#52809d;width:18px;height:18px">${title}</label>`).join("")}</div>` : ""}${id === "register" ? `${check("我确认已满14岁").replace('type="checkbox"', 'type="checkbox" required')}${check("我已阅读当前隐私政策").replace('type="checkbox"', 'type="checkbox" required')}${l("阅读隐私政策", "privacy", "ghost")}` : ""}<button type="submit" class="primary wide">${id === "register" ? "创建账号（模拟）" : "登录（模拟）"}</button></form>${l(id === "register" ? "已有账号？登录" : "还没有账号？注册", id === "register" ? "login" : "register", "ghost wide")}${l("Google 登录（预览）", "social-register", "wide")}${l("Kakao 登录（预览）", "social-register", "wide")}${note("仅用于设计预览，请勿输入真实密码。")}`,
         );
       case "avatar":
         return stack(
@@ -796,7 +796,7 @@
   });
   introPages.forEach(([name], index) => {
     for (const [action, value] of [["accept", true], ["decline", false]]) {
-      actions[`intro-${action}:${name}`] = ({ draw }) => { introChoices[name] = value; draw(); };
+      actions[`intro-${action}:${name}`] = ({ go }) => { introChoices[name] = value; go(`intro-${introPages[index + 1][0]}`); };
     }
     actions[`intro-next:${index}`] = ({ go, toast }) => {
       if (index > 0 && index < 5 && introChoices[name] === undefined) {

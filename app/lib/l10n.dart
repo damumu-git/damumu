@@ -42,6 +42,8 @@ const languageLabels = {'zh': '中文', 'en': 'English', 'ko': '한국어'};
 
 const _strings = <String, Map<String, String>>{
   'zh': {
+    'autoLogin30Days': '30 日自动登录',
+    'rememberId': '记住 ID（邮箱）',
     'introBrand': '搭慕 · 让相遇自然发生',
     'intro_welcome_title': '一起，把日常变有趣',
     'intro_welcome_body': '发现附近活动，认识合拍的朋友。向左滑动，了解搭慕，并选择你愿意开启的功能。',
@@ -327,6 +329,8 @@ const _strings = <String, Map<String, String>>{
     'useSelectedLocation': '使用所选地区',
   },
   'en': {
+    'autoLogin30Days': 'Stay signed in for 30 days',
+    'rememberId': 'Remember ID (email)',
     'introBrand': 'DAMUMU · Meet naturally',
     'intro_welcome_title': 'Make everyday moments better',
     'intro_welcome_body':
@@ -648,6 +652,8 @@ const _strings = <String, Map<String, String>>{
     'useSelectedLocation': 'Use selected area',
   },
   'ko': {
+    'autoLogin30Days': '30일 자동 로그인',
+    'rememberId': '아이디(이메일) 저장',
     'introBrand': '다무무 · 자연스러운 만남',
     'intro_welcome_title': '일상을 더 즐겁게',
     'intro_welcome_body':

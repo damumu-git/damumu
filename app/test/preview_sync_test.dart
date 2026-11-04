@@ -114,7 +114,7 @@ void main() {
       );
     const boundary = Key('ui-capture');
     Future<void> capture(String name) async {
-      if (name == 'app-login') {
+      if (name.startsWith('app-login')) {
         // Wait for the real bundled raster to decode before capturing the frame.
         await tester.runAsync(() async {
           await precacheImage(
@@ -169,7 +169,7 @@ void main() {
         ),
       ),
     );
-    await capture('app-login');
+    await capture('app-login-options-20261104');
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     await tester.pumpWidget(
@@ -188,7 +188,6 @@ void main() {
       await tester.ensureVisible(find.text('暂不授权'));
       await tester.tap(find.text('暂不授权'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('下一页'));
       await capture('app-onboarding-$name-20261104-v2');
     }
     await tester.pumpWidget(const SizedBox.shrink());

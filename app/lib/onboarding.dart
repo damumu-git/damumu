@@ -95,12 +95,20 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   AppPermission? _permissionAt(int page) =>
       page > 0 && page < 5 ? _permissions[page - 1] : null;
+  int get _lastAvailablePage {
+    for (var page = 1; page < 5; page++) {
+      if (!_choices.containsKey(_permissionAt(page))) return page;
+    }
+    return 5;
+  }
+
   bool get _canAdvance =>
       _permissionAt(_index) == null ||
       _choices.containsKey(_permissionAt(_index));
 
   Future<void> _choose(AppPermission permission, bool accepted) async {
     if (_busy) return;
+    final selectedPage = _index;
     setState(() => _busy = true);
     try {
       PermissionOutcome? outcome;
@@ -124,6 +132,27 @@ class _OnboardingPageState extends State<OnboardingPage> {
           _outcomes.remove(permission);
         }
       });
+      if (outcome != PermissionOutcome.failed) {
+        if (outcome == PermissionOutcome.denied ||
+            outcome == PermissionOutcome.settings) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(context.tr('permission_${outcome!.name}')),
+              action: outcome == PermissionOutcome.settings
+                  ? SnackBarAction(
+                      label: context.tr('permissionOpenSettings'),
+                      onPressed: Geolocator.openAppSettings,
+                    )
+                  : null,
+            ),
+          );
+        }
+        await _pages.animateToPage(
+          selectedPage + 1,
+          duration: const Duration(milliseconds: 340),
+          curve: Curves.easeInOutCubic,
+        );
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _outcomes[permission] = PermissionOutcome.failed);
@@ -137,8 +166,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
     if (_busy || !_canAdvance) return;
     if (_index < 5) {
       await _pages.nextPage(
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOut,
+        duration: const Duration(milliseconds: 340),
+        curve: Curves.easeInOutCubic,
       );
       return;
     }
@@ -196,23 +225,17 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 ),
               ),
               Expanded(
-                child: PageView.builder(
-                  controller: _pages,
-                  physics: _busy ? const NeverScrollableScrollPhysics() : null,
-                  itemCount: 6,
-                  onPageChanged: (page) {
-                    if (page > _index && !_canAdvance) {
-                      _pages.jumpToPage(_index);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(context.tr('permissionChooseFirst')),
-                        ),
-                      );
-                      return;
-                    }
-                    setState(() => _index = page);
-                  },
-                  itemBuilder: (context, page) => _page(context, page),
+                child: IgnorePointer(
+                  ignoring: _busy,
+                  child: PageView.builder(
+                    controller: _pages,
+                    physics: _PermissionPagePhysics(
+                      lastPage: () => _lastAvailablePage,
+                    ),
+                    itemCount: 6,
+                    onPageChanged: (page) => setState(() => _index = page),
+                    itemBuilder: (context, page) => _page(context, page),
+                  ),
                 ),
               ),
               Padding(
@@ -245,8 +268,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                             onPressed: _busy
                                 ? null
                                 : () => _pages.previousPage(
-                                    duration: const Duration(milliseconds: 260),
-                                    curve: Curves.easeOut,
+                                    duration: const Duration(milliseconds: 340),
+                                    curve: Curves.easeInOutCubic,
                                   ),
                             tooltip: context.tr('introBack'),
                             icon: const Icon(Icons.arrow_back_rounded),
@@ -397,5 +420,23 @@ class _OnboardingPageState extends State<OnboardingPage> {
         ],
       ),
     );
+  }
+}
+
+// Bound the gesture before it crosses an unanswered page, instead of snapping
+// the viewport back from onPageChanged. PageView retains its native page snap.
+class _PermissionPagePhysics extends ClampingScrollPhysics {
+  const _PermissionPagePhysics({required this.lastPage, super.parent});
+  final int Function() lastPage;
+  @override
+  _PermissionPagePhysics applyTo(ScrollPhysics? ancestor) =>
+      _PermissionPagePhysics(lastPage: lastPage, parent: buildParent(ancestor));
+  @override
+  double applyBoundaryConditions(ScrollMetrics position, double value) {
+    final limit = lastPage() * position.viewportDimension;
+    if (value > limit && value > position.pixels) {
+      return value - (position.pixels > limit ? position.pixels : limit);
+    }
+    return super.applyBoundaryConditions(position, value);
   }
 }

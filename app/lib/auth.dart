@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'l10n.dart';
 import 'app_permissions.dart';
+import 'login_preferences.dart';
 import 'app_theme.dart';
 import 'push_notification_service.dart';
 import 'web_cropper_layout.dart';
@@ -211,6 +212,15 @@ class AuthController extends ChangeNotifier {
   bool restoreFailed = false;
   bool _restoring = false;
   int _sessionVersion = 0;
+  bool _persistSession = true;
+
+  Future<void> _setAutoLogin(bool enabled) async {
+    _persistSession = enabled;
+    await (await SharedPreferences.getInstance()).setBool(
+      LoginPreferences.autoKey,
+      enabled,
+    );
+  }
 
   // This is only a local expiry hint. /me verifies the signature and account.
   bool get sessionExpired {
@@ -225,6 +235,7 @@ class AuthController extends ChangeNotifier {
     SocialCredential credential, {
     String? nickname,
     String? locale,
+    bool autoLogin = true,
   }) async {
     final result = await AuthApi.social(
       credential,
@@ -232,6 +243,7 @@ class AuthController extends ChangeNotifier {
       locale: locale,
     );
     if (result['registrationRequired'] == true) return false;
+    await _setAutoLogin(autoLogin);
     token = result['accessToken'] as String;
     user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
     await _saveToken(token);
@@ -252,11 +264,14 @@ class AuthController extends ChangeNotifier {
     restoreFailed = false;
     notifyListeners();
     try {
-      final savedToken = (await SharedPreferences.getInstance()).getString(
-        'auth_token',
-      );
+      final preferences = await SharedPreferences.getInstance();
       if (version != _sessionVersion) return;
-      token = savedToken;
+      _persistSession = preferences.getBool(LoginPreferences.autoKey) ?? true;
+      // A non-persistent login remains valid while this app process is alive.
+      token = background
+          ? token
+          : (_persistSession ? preferences.getString('auth_token') : null);
+      if (!_persistSession) await preferences.remove('auth_token');
       if (token != null && sessionExpired) {
         await _discardSession();
       } else if (token != null) {
@@ -300,8 +315,15 @@ class AuthController extends ChangeNotifier {
     await _saveToken(null);
   }
 
-  Future<void> login(String email, String password) async {
+  Future<void> login(
+    String email,
+    String password, {
+    bool autoLogin = true,
+    bool rememberId = false,
+  }) async {
     final result = await AuthApi.login(email.trim(), password);
+    await _setAutoLogin(autoLogin);
+    await LoginPreferences.saveId(email, rememberId);
     token = result['accessToken'] as String;
     user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
     await _saveToken(token);
@@ -324,6 +346,7 @@ class AuthController extends ChangeNotifier {
       ageConfirmed: ageConfirmed,
       privacyAcknowledged: privacyAcknowledged,
     );
+    await _setAutoLogin(true);
     token = result['accessToken'] as String;
     user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
     await _saveToken(token);
@@ -367,6 +390,7 @@ class AuthController extends ChangeNotifier {
     final currentToken = token;
     if (currentToken == null) throw StateError('Missing authentication token');
     await AuthApi.deleteAccount(currentToken);
+    await LoginPreferences.saveId('', false);
     _sessionVersion++;
     restoreFailed = false;
     await _clearPrivateLocalData(user?.id);
@@ -384,7 +408,7 @@ class AuthController extends ChangeNotifier {
 
   Future<void> _saveToken(String? value) async {
     final preferences = await SharedPreferences.getInstance();
-    value == null
+    value == null || !_persistSession
         ? await preferences.remove('auth_token')
         : await preferences.setString('auth_token', value);
   }
@@ -509,6 +533,9 @@ class _AuthPageState extends State<AuthPage> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _register = false;
+  bool _autoLogin = true;
+  bool _rememberId = false;
+  bool _optionsLoaded = false;
   bool _busy = false;
   bool _obscure = true;
   bool _ageConfirmed = false;
@@ -520,6 +547,18 @@ class _AuthPageState extends State<AuthPage> {
   void initState() {
     super.initState();
     _avatars = (widget.avatarLoader ?? AuthApi.systemAvatars)('zh');
+    _loadLoginOptions();
+  }
+
+  Future<void> _loadLoginOptions() async {
+    final options = await LoginPreferences.load();
+    if (!mounted) return;
+    setState(() {
+      _autoLogin = options.autoLogin;
+      _rememberId = options.rememberId;
+      if (_email.text.isEmpty) _email.text = options.email;
+      _optionsLoaded = true;
+    });
   }
 
   @override
@@ -699,6 +738,57 @@ class _AuthPageState extends State<AuthPage> {
                           : null;
                     },
                   ),
+                  if (!_register) ...[
+                    const SizedBox(height: 16),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final options = [
+                          _LoginOption(
+                            key: const Key('auto-login-option'),
+                            label: context.tr('autoLogin30Days'),
+                            value: _autoLogin,
+                            onChanged: _busy || !_optionsLoaded
+                                ? null
+                                : (value) => setState(() => _autoLogin = value),
+                          ),
+                          _LoginOption(
+                            key: const Key('remember-id-option'),
+                            label: context.tr('rememberId'),
+                            value: _rememberId,
+                            onChanged: _busy || !_optionsLoaded
+                                ? null
+                                : (value) async {
+                                    setState(() => _rememberId = value);
+                                    // Unchecking removes the previously remembered ID immediately.
+                                    if (!value) {
+                                      await LoginPreferences.saveId('', false);
+                                    }
+                                  },
+                          ),
+                        ];
+                        if (constraints.maxWidth < 340 ||
+                            Localizations.localeOf(context).languageCode ==
+                                'en' ||
+                            MediaQuery.textScalerOf(context).scale(14) > 18) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              options[0],
+                              const SizedBox(height: 8),
+                              options[1],
+                            ],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(child: options[0]),
+                            const SizedBox(width: 10),
+                            Expanded(child: options[1]),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                   if (_register) ...[
                     CheckboxListTile(
                       value: _ageConfirmed,
@@ -826,7 +916,7 @@ class _AuthPageState extends State<AuthPage> {
       if (credential == null || !mounted) return;
       final auth = AuthScope.of(context);
       final locale = Localizations.localeOf(context).languageCode;
-      if (await auth.loginSocial(credential)) return;
+      if (await auth.loginSocial(credential, autoLogin: _autoLogin)) return;
       if (!mounted) return;
       setState(() => _busy = false);
       final nickname = await showDialog<String>(
@@ -835,7 +925,12 @@ class _AuthPageState extends State<AuthPage> {
       );
       if (nickname == null || !mounted) return;
       setState(() => _busy = true);
-      await auth.loginSocial(credential, nickname: nickname, locale: locale);
+      await auth.loginSocial(
+        credential,
+        nickname: nickname,
+        locale: locale,
+        autoLogin: _autoLogin,
+      );
     } on SocialLoginException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -874,7 +969,12 @@ class _AuthPageState extends State<AuthPage> {
           privacyAcknowledged: _privacyAcknowledged,
         );
       } else {
-        await auth.login(_email.text, _password.text);
+        await auth.login(
+          _email.text,
+          _password.text,
+          autoLogin: _autoLogin,
+          rememberId: _rememberId,
+        );
       }
     } catch (error) {
       if (mounted) {
@@ -888,6 +988,57 @@ class _AuthPageState extends State<AuthPage> {
       if (mounted) setState(() => _busy = false);
     }
   }
+}
+
+class _LoginOption extends StatelessWidget {
+  const _LoginOption({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+  final String label;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  @override
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: const Duration(milliseconds: 160),
+    decoration: BoxDecoration(
+      color: value ? AppPalette.soft : Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: value ? AppPalette.primary : AppPalette.line),
+    ),
+    child: Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: CheckboxListTile(
+        value: value,
+        onChanged: onChanged == null
+            ? null
+            : (selected) => onChanged!(selected ?? false),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        checkboxShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(5),
+        ),
+        side: const BorderSide(color: AppPalette.accent, width: 1.5),
+        activeColor: AppPalette.accent,
+        checkColor: Colors.white,
+        title: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: AppPalette.ink,
+          ),
+        ),
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 6),
+        dense: true,
+        visualDensity: VisualDensity.compact,
+      ),
+    ),
+  );
 }
 
 class SystemAvatarData {

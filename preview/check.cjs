@@ -146,9 +146,8 @@ async function open(kind) {
     click('[data-action="intro-next:1"]');
     await tick();
     assert.equal(w.location.hash, "#intro-camera", "Permission choice is required");
-    for (const [index, name] of ["camera", "photos", "notifications", "location"].entries()) {
+    for (const name of ["camera", "photos", "notifications", "location"]) {
       click(`[data-action="intro-decline:${name}"]`);
-      click(`[data-action="intro-next:${index + 1}"]`);
       await tick();
     }
     assert.equal(w.location.hash, "#intro-ready");
@@ -157,7 +156,7 @@ async function open(kind) {
     assert.equal(w.location.hash, "#login", "All permissions can be declined");
     await go("intro-photos");
     click('[data-action="intro-accept:photos"]');
-    assert.ok(d.querySelector("#stage").textContent.includes("只读取所选图片"));
+    assert.equal(w.location.hash, "#intro-notifications");
     await go("home");
     change("[data-feed-search]", "咖啡", "input");
     assert.equal(d.querySelectorAll(".event-card").length, 1);
