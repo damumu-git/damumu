@@ -137,6 +137,9 @@ class _DaziAppState extends State<DaziApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && widget.home == null) {
       unawaited(EmojiAssets.load());
+      if (_authController.token != null && !_authController.loading) {
+        unawaited(_authController.restore(background: true));
+      }
     }
   }
 
@@ -195,6 +198,9 @@ class _DaziAppState extends State<DaziApp> with WidgetsBindingObserver {
     builder: (context, _) {
       if (_authController.loading) {
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      if (_authController.restoreFailed) {
+        return SessionRecovery(controller: _authController);
       }
       return _authController.user == null ? const AuthPage() : const AppShell();
     },

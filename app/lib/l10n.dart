@@ -192,6 +192,7 @@ const _strings = <String, Map<String, String>>{
     'socialFailed': '登录未完成，请稍后重试或使用邮箱登录。',
     'registerSubtitle': '认识新朋友，从一张喜欢的头像开始',
     'loginSubtitle': '登录后继续发现身边的活动',
+    'sessionRestoreFailed': '暂时无法恢复登录，请检查网络后重试。登录状态已保留。',
     'chooseAvatar': '选择系统头像',
     'nickname': '昵称',
     'email': '邮箱',
@@ -450,6 +451,8 @@ const _strings = <String, Map<String, String>>{
     'socialFailed': 'Sign-in was not completed. Try again later or use email.',
     'registerSubtitle': 'Meet new people, starting with an avatar you like',
     'loginSubtitle': 'Sign in to keep discovering nearby activities',
+    'sessionRestoreFailed':
+        'Could not restore your session. Check your connection and retry. Your sign-in is saved.',
     'chooseAvatar': 'Choose a system avatar',
     'nickname': 'Nickname',
     'email': 'Email',
@@ -703,6 +706,8 @@ const _strings = <String, Map<String, String>>{
     'socialFailed': '로그인을 완료하지 못했습니다. 잠시 후 다시 시도하거나 이메일로 로그인해 주세요.',
     'registerSubtitle': '마음에 드는 아바타로 새로운 만남을 시작하세요',
     'loginSubtitle': '로그인하고 주변 모임을 계속 찾아보세요',
+    'sessionRestoreFailed':
+        '로그인을 복원할 수 없습니다. 연결을 확인하고 다시 시도하세요. 로그인 정보는 유지됩니다.',
     'chooseAvatar': '시스템 아바타 선택',
     'nickname': '닉네임',
     'email': '이메일',

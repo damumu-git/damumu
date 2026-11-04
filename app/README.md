@@ -45,17 +45,14 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080/api/v1
 运营与未决事项见`docs/PRIVACY_OPERATIONS.md`。注册页面旧golden依赖macOS字体，Windows
 不执行该快照；新确认流程有跨平台行为测试，macOS基准需在发布机检查更新。
 
-## 本地测试账号
+## 30 天自动登录
 
-Debug 构建在没有有效登录态时会自动登录固定测试账号：
+邮箱注册/登录及Google、Kakao成功登录后保存本地会话；重新打开App时由`/me`验证后进入首页。
+有效期为服务端签发起固定30天，不因重新打开App自动续期。过期、服务端拒绝、主动退出或注销后需要重新登录。
+断网、超时和临时服务故障保留凭据，显示重试入口；回到前台会重新验证登录状态，不绕过服务端检查。
+不会保存密码或第三方平台Token用于自动登录；仅复用已有的本地会话Token。
 
-```text
-邮箱：tester@muda.local
-密码：MudaTest2026!
-```
-
-Release 构建不会启用自动登录。需要显式关闭时传入
-`--dart-define=DEV_AUTO_LOGIN=false`。
+开发测试账号默认不自动登录。开发者需明确传入`--dart-define=DEV_AUTO_LOGIN=true`才会启用旧测试入口；正式构建不要开启。
 
 ## 活动列表分页
 

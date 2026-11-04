@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -27,7 +28,7 @@ const _apiBase = String.fromEnvironment(
 );
 const _devAutoLogin = bool.fromEnvironment(
   'DEV_AUTO_LOGIN',
-  defaultValue: kDebugMode,
+  defaultValue: false,
 );
 const _devTestEmail = String.fromEnvironment(
   'DEV_TEST_EMAIL',
@@ -74,6 +75,14 @@ class AuthUser {
   );
 }
 
+class AuthApiException implements Exception {
+  const AuthApiException(this.statusCode, this.message);
+  final int statusCode;
+  final String message;
+  @override
+  String toString() => message;
+}
+
 class AuthApi {
   static Future<Map<String, dynamic>> _json(
     String path, {
@@ -85,8 +94,17 @@ class AuthApi {
     request.headers['Content-Type'] = 'application/json';
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     if (body != null) request.body = jsonEncode(body);
-    final streamed = await request.send();
-    final response = await http.Response.fromStream(streamed);
+    final response = await (() async {
+      final streamed = await request.send();
+      return http.Response.fromStream(streamed);
+    })().timeout(const Duration(seconds: 15));
+    // Authentication failure must remain identifiable even for non-JSON errors.
+    if (path == '/me' &&
+        (response.statusCode == 401 ||
+            response.statusCode == 403 ||
+            response.statusCode == 404)) {
+      throw AuthApiException(response.statusCode, 'Session unavailable');
+    }
     final decoded = response.body.isEmpty
         ? <String, dynamic>{}
         : jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -189,6 +207,19 @@ class AuthApi {
 class AuthController extends ChangeNotifier {
   AuthController();
 
+  bool restoreFailed = false;
+  bool _restoring = false;
+  int _sessionVersion = 0;
+
+  // This is only a local expiry hint. /me verifies the signature and account.
+  bool get sessionExpired {
+    final parts = token?.split('.');
+    if (parts == null || parts.length != 3) return false;
+    final expires = int.tryParse(parts[1]);
+    return expires != null &&
+        expires <= DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+  }
+
   Future<bool> loginSocial(
     SocialCredential credential, {
     String? nickname,
@@ -211,28 +242,61 @@ class AuthController extends ChangeNotifier {
   AuthUser? user;
   String? token;
 
-  Future<void> restore() async {
-    token = (await SharedPreferences.getInstance()).getString('auth_token');
-    if (token != null) {
-      try {
-        user = await AuthApi.me(token!);
-      } catch (_) {
-        await _saveToken(null);
-      }
-    }
-    if (user == null && _devAutoLogin) {
-      try {
-        final result = await AuthApi.login(_devTestEmail, _devTestPassword);
-        token = result['accessToken'] as String;
-        user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
-        await _saveToken(token);
-      } catch (_) {
-        // Keep the regular login page available when the local API is offline
-        // or the development seed account has not been created yet.
-      }
-    }
-    loading = false;
+  Future<void> restore({bool background = false}) async {
+    if (_restoring) return;
+    _restoring = true;
+    final version = _sessionVersion;
+    final keepCurrentPage = background && user != null;
+    loading = !keepCurrentPage;
+    restoreFailed = false;
     notifyListeners();
+    try {
+      final savedToken = (await SharedPreferences.getInstance()).getString(
+        'auth_token',
+      );
+      if (version != _sessionVersion) return;
+      token = savedToken;
+      if (token != null && sessionExpired) {
+        await _discardSession();
+      } else if (token != null) {
+        try {
+          final restored = await AuthApi.me(token!);
+          if (version != _sessionVersion) return;
+          user = restored;
+        } on AuthApiException {
+          if (version != _sessionVersion) return;
+          await _discardSession();
+        } catch (_) {
+          if (version != _sessionVersion) return;
+          // Offline/timeout/server failure does not revoke a valid session.
+          restoreFailed = !keepCurrentPage;
+          if (!keepCurrentPage) user = null;
+        }
+      }
+      if (user == null && token == null && _devAutoLogin) {
+        try {
+          final result = await AuthApi.login(_devTestEmail, _devTestPassword);
+          if (version != _sessionVersion) return;
+          token = result['accessToken'] as String;
+          user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
+          await _saveToken(token);
+        } catch (_) {
+          // Explicit development-only opt-in; never used in release by default.
+        }
+      }
+    } finally {
+      _restoring = false;
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _discardSession() async {
+    await _clearPrivateLocalData(user?.id);
+    user = null;
+    token = null;
+    restoreFailed = false;
+    await _saveToken(null);
   }
 
   Future<void> login(String email, String password) async {
@@ -286,18 +350,24 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await PushNotificationService.instance.stop(token);
-    await _clearPrivateLocalData(user?.id);
-    user = null;
-    token = null;
-    await _saveToken(null);
+    _sessionVersion++;
+    final previousToken = token;
+    await _discardSession();
+    loading = false;
     notifyListeners();
+    try {
+      await PushNotificationService.instance.stop(previousToken);
+    } catch (_) {
+      // Local logout must complete even if push cleanup fails.
+    }
   }
 
   Future<void> deleteAccount() async {
     final currentToken = token;
     if (currentToken == null) throw StateError('Missing authentication token');
     await AuthApi.deleteAccount(currentToken);
+    _sessionVersion++;
+    restoreFailed = false;
     await _clearPrivateLocalData(user?.id);
     try {
       await PushNotificationService.instance.stop(currentToken);
@@ -377,10 +447,47 @@ class _AuthGateState extends State<AuthGate> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
+        if (_controller.restoreFailed) {
+          return SessionRecovery(controller: _controller);
+        }
         return _controller.user == null
             ? const AuthPage()
             : widget.authenticatedBuilder(context);
       },
+    ),
+  );
+}
+
+class SessionRecovery extends StatelessWidget {
+  const SessionRecovery({super.key, required this.controller});
+  final AuthController controller;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined, size: 40, color: _green),
+            const SizedBox(height: 16),
+            Text(
+              context.tr('sessionRestoreFailed'),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: controller.restore,
+              child: Text(context.tr('retry')),
+            ),
+            TextButton(
+              onPressed: controller.logout,
+              child: Text(context.tr('logout')),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }
