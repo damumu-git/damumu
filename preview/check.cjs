@@ -139,6 +139,25 @@ async function open(kind) {
   change("#catalog-search", "", "input");
   assert.equal(d.querySelectorAll("#catalog-nav a").length, routes.length);
   if (kind === "app") {
+    await go("intro-welcome");
+    click('[data-action="intro-next:0"]');
+    await tick();
+    assert.equal(w.location.hash, "#intro-camera");
+    click('[data-action="intro-next:1"]');
+    await tick();
+    assert.equal(w.location.hash, "#intro-camera", "Permission choice is required");
+    for (const [index, name] of ["camera", "photos", "notifications", "location"].entries()) {
+      click(`[data-action="intro-decline:${name}"]`);
+      click(`[data-action="intro-next:${index + 1}"]`);
+      await tick();
+    }
+    assert.equal(w.location.hash, "#intro-ready");
+    click('[data-action="intro-next:5"]');
+    await tick();
+    assert.equal(w.location.hash, "#login", "All permissions can be declined");
+    await go("intro-photos");
+    click('[data-action="intro-accept:photos"]');
+    assert.ok(d.querySelector("#stage").textContent.includes("只读取所选图片"));
     await go("home");
     change("[data-feed-search]", "咖啡", "input");
     assert.equal(d.querySelectorAll(".event-card").length, 1);

@@ -54,6 +54,12 @@
 | 帮助与社区规则 | `app/index.html#help` | app/lib/main.dart · _ProfileInfoPage | 业务预览 |
 | 安全中心 | `app/index.html#safety` | app/lib/main.dart · SafetyCenterPage | 现有占位 / 说明 |
 | 紧急帮助 | `app/index.html#emergency` | app/lib/main.dart · _showEmergency | 现有占位 / 说明 |
+| 首次启动 · 一起，把日常变有趣 | `app/index.html#intro-welcome` | app/lib/onboarding.dart · OnboardingPage | 业务预览 |
+| 首次启动 · 用照片记录相遇 | `app/index.html#intro-camera` | app/lib/onboarding.dart · OnboardingPage | 业务预览 |
+| 首次启动 · 只分享你选中的照片 | `app/index.html#intro-photos` | app/lib/onboarding.dart · OnboardingPage | 业务预览 |
+| 首次启动 · 不错过重要的消息 | `app/index.html#intro-notifications` | app/lib/onboarding.dart · OnboardingPage | 业务预览 |
+| 首次启动 · 发现身边的好活动 | `app/index.html#intro-location` | app/lib/onboarding.dart · OnboardingPage | 业务预览 |
+| 首次启动 · 准备好，遇见新日常 | `app/index.html#intro-ready` | app/lib/onboarding.dart · OnboardingPage | 业务预览 |
 | 运营概览 | `admin/index.html#dashboard` | admin/src/App.jsx · Dashboard | 业务预览 |
 | 用户管理 | `admin/index.html#users` | admin/src/App.jsx · Users | 业务预览 |
 | 活动管理 | `admin/index.html#events` | admin/src/App.jsx · Events | 业务预览 |

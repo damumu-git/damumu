@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import 'social_service.dart';
 import 'external_processing.dart';
+import 'app_permissions.dart';
 
 const _firebaseApiKey = String.fromEnvironment('FIREBASE_API_KEY');
 const _firebaseAppId = String.fromEnvironment('FIREBASE_APP_ID');
@@ -78,7 +79,8 @@ class PushNotificationService {
   }
 
   Future<void> start(String authToken) async {
-    if (!await externalProcessingAllowed('push')) {
+    if (await AppPermissions.choice(AppPermission.notifications) != true ||
+        !await externalProcessingAllowed('push')) {
       await stop(authToken);
       return;
     }
@@ -87,7 +89,11 @@ class PushNotificationService {
     try {
       await initializeFirebase();
       final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission(alert: true, badge: true, sound: true);
+      final settings = await messaging.getNotificationSettings();
+      if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+          settings.authorizationStatus != AuthorizationStatus.provisional) {
+        return;
+      }
       final token = await messaging.getToken(
         vapidKey: kIsWeb && _firebaseWebVapidKey.isNotEmpty
             ? _firebaseWebVapidKey

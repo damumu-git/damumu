@@ -352,9 +352,36 @@
       "",
       `<div class="row">${a(eventData[selected].face)}<div><h3>${eventData[selected].title}</h3><small>${eventData[selected].time}</small></div></div>`,
     );
+  const introPages = [
+    ["welcome", "一起，把日常变有趣", "发现附近活动，认识合拍的朋友。向左滑动，了解搭慕，并选择你愿意开启的功能。"],
+    ["camera", "用照片记录相遇", "相机用于拍摄头像、聊天图片和活动照片。拒绝后仍可使用系统头像和文字。"],
+    ["photos", "只分享你选中的照片", "使用系统照片选择器，不申请整个相册权限；只读取实际选中的图片。拒绝后仍可使用系统头像与文字。"],
+    ["notifications", "不错过重要的消息", "用于报名结果、活动变动和新消息提醒。拒绝后站内消息照常可用。系统权限与Firebase外部处理同意分别管理。"],
+    ["location", "发现身边的好活动", "只请求使用期间定位，可以使用大致位置；不持续后台定位。拒绝后可手动选择地区。"],
+    ["ready", "准备好，遇见新日常", "选择完成，接下来前往登录。也可在我的 → 权限设置中重新选择。"],
+  ];
+  introPages.forEach(([name, title]) => routes.push(route(`intro-${name}`, `首次启动 · ${title}`, "首次启动与权限", "OnboardingPage", "离线演示，不弹出真实系统权限窗口。", false, "app/lib/onboarding.dart")));
+  const introChoices = {};
   const actions = {};
   function render(id) {
     const e = eventData[selected];
+    if (id.startsWith("intro-")) {
+      const index = introPages.findIndex(([name]) => id === `intro-${name}`);
+      if (index >= 0) {
+        const [name, title, body] = introPages[index];
+        const permission = index > 0 && index < 5;
+        const choice = introChoices[name];
+        return stack(`<div class="row between"><img src="../shared/logo.png" width="36" height="36" alt="搭慕" style="border-radius:10px"><small>${index + 1} / 6</small></div>
+          <div style="padding:40px 6px 20px;text-align:center">
+          <div style="width:120px;height:120px;margin:0 auto 28px;border-radius:36px;background:var(--soft,#e7f3fc);display:grid;place-items:center;color:#52809d;font-size:38px">${index === 0 ? "DM" : index === 5 ? "✓" : "0" + index}</div>
+          <h1>${title}</h1><p style="line-height:1.8">${body}</p></div>
+          ${note("所有权限均为可选。拒绝不会阻止登录；只限制相应功能。此页仅演示，系统权限不发生变化。")}
+          ${permission ? `${b("同意并继续设置（模拟）", `intro-accept:${name}`, "primary wide")}${b("暂不授权", `intro-decline:${name}`, "wide")}${choice === undefined ? "" : `<p role="status">${choice ? (name === "photos" ? "已选择：只读取所选图片（模拟）" : "已选择同意（模拟，实际授权由手机系统决定）") : "已选择暂不授权，可稍后修改。"}</p>`}` : ""}
+          <div class="row" style="justify-content:center;padding:16px;color:#52809d">${introPages.map((_, i) => i === index ? "━━" : "●").join("　")}</div>
+          ${index ? l("上一页", `intro-${introPages[index - 1][0]}`, "ghost") : ""}
+          ${b(index === 5 ? "开始使用 · 前往登录" : "下一页 →", `intro-next:${index}`, "primary wide")}`);
+      }
+    }
     switch (id) {
       case "home":
         return stack(
@@ -499,7 +526,7 @@
                   `<div><strong>${v}</strong><small>${k}</small></div>`,
               )
               .join("")}</div>`,
-          )}<div class="app-hero" data-route="safety" role="button" tabindex="0"><span class="eyebrow">CARE FOR EACH OTHER</span><h2>安全中心　→</h2><p>安心见面，从多一点准备开始</p></div>${panel("", `${menu("我的活动", "查看我发布和参加的活动", "my-activities")}${menu("信誉与评价", "守时 · 友善 · 沟通顺畅", "trust")}${menu("屏蔽与举报", "", "blocks")}`)}${panel("", `${menu("帮助与规则", "", "help")}${menu("隐私与账号", "", "privacy")}${menu("通知与外部处理", "当前外部服务默认停用", "external")}${menu("语言", "简体中文", "language")}${menu("注销账号", "", "delete-account")}${menu("退出登录", "", "logout")}`)}`,
+          )}<div class="app-hero" data-route="safety" role="button" tabindex="0"><span class="eyebrow">CARE FOR EACH OTHER</span><h2>安全中心　→</h2><p>安心见面，从多一点准备开始</p></div>${panel("", `${menu("我的活动", "查看我发布和参加的活动", "my-activities")}${menu("信誉与评价", "守时 · 友善 · 沟通顺畅", "trust")}${menu("屏蔽与举报", "", "blocks")}`)}${panel("", `${menu("帮助与规则", "", "help")}${menu("隐私与账号", "", "privacy")}${menu("权限设置", "首次启动介绍与权限选择", "intro-welcome")}${menu("通知与外部处理", "当前外部服务默认停用", "external")}${menu("语言", "简体中文", "language")}${menu("注销账号", "", "delete-account")}${menu("退出登录", "", "logout")}`)}`,
         );
       case "login":
       case "register":
@@ -766,6 +793,17 @@
         target.parentElement.innerHTML = badge("已拒绝", "red");
         P.toast();
       });
+  });
+  introPages.forEach(([name], index) => {
+    for (const [action, value] of [["accept", true], ["decline", false]]) {
+      actions[`intro-${action}:${name}`] = ({ draw }) => { introChoices[name] = value; draw(); };
+    }
+    actions[`intro-next:${index}`] = ({ go, toast }) => {
+      if (index > 0 && index < 5 && introChoices[name] === undefined) {
+        toast("请选择同意或暂不授权，再继续。"); return;
+      }
+      go(index === 5 ? "login" : `intro-${introPages[index + 1][0]}`);
+    };
   });
   const runtime = P.boot({ kind: "app", routes, render, actions });
   document.addEventListener("input", (e) => {

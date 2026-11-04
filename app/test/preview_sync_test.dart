@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zaihandazi/app_theme.dart';
 import 'package:zaihandazi/auth.dart';
 import 'package:zaihandazi/main.dart';
+import 'package:zaihandazi/onboarding.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -169,6 +170,27 @@ void main() {
       ),
     );
     await capture('app-login');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: boundary,
+        child: DaziApp(
+          key: UniqueKey(),
+          home: OnboardingPage(onFinished: () async {}),
+        ),
+      ),
+    );
+    await capture('app-onboarding-welcome-20261104-v2');
+    await tester.tap(find.text('下一页'));
+    await capture('app-onboarding-camera-20261104-v2');
+    for (final name in ['photos', 'notifications', 'location', 'ready']) {
+      await tester.ensureVisible(find.text('暂不授权'));
+      await tester.tap(find.text('暂不授权'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('下一页'));
+      await capture('app-onboarding-$name-20261104-v2');
+    }
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     await tester.pumpWidget(

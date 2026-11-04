@@ -42,6 +42,47 @@ const languageLabels = {'zh': '中文', 'en': 'English', 'ko': '한국어'};
 
 const _strings = <String, Map<String, String>>{
   'zh': {
+    'introBrand': '搭慕 · 让相遇自然发生',
+    'intro_welcome_title': '一起，把日常变有趣',
+    'intro_welcome_body': '发现附近活动，认识合拍的朋友。向左滑动，了解搭慕，并选择你愿意开启的功能。',
+    'intro_camera_title': '用照片记录相遇',
+    'intro_camera_body': '同意后将请求相机权限，用于拍摄头像、聊天图片或活动照片。只在你主动拍摄时使用相机。',
+    'intro_camera_fallback': '不授权也可正常使用；你仍可选择系统头像或发送文字。',
+    'intro_photos_title': '只分享你选中的照片',
+    'intro_photos_body':
+        '同意使用系统照片选择器，为头像、活动或聊天选择图片。此步骤不会打开相册，也不会申请整个相册的访问权限；使用时再由你选图。',
+    'intro_photos_fallback': '不授权可继续使用文字和系统头像；不会扫描或批量读取相册。',
+    'intro_notifications_title': '不错过重要的消息',
+    'intro_notifications_body': '同意后将请求系统通知权限，用于报名结果、活动变动和新消息提醒。你可以选择不接收通知。',
+    'intro_notifications_fallback': '不授权不会影响站内消息；进入 App 后仍可查看通知和聊天。',
+    'intro_location_title': '发现身边的好活动',
+    'intro_location_body':
+        '同意后将请求使用 App 期间的定位权限，用于附近活动和距离展示。可以选择大致位置；不申请持续后台定位。',
+    'intro_location_fallback': '不授权可手动选择城市或地区，继续浏览与报名。',
+    'intro_ready_title': '准备好，遇见新日常',
+    'intro_ready_body': '你的选择已记录。接下来登录或注册，开始发现活动。也可随时到“我的 → 权限设置”重新选择。',
+    'introOptional': '所有权限均为可选。拒绝不会阻止登录；只有相应功能受到限制。系统授权与隐私政策确认分别处理。',
+    'introPushSeparate':
+        '允许系统通知不会自动开启消息推送。推送使用 Google Firebase 服务，需要在“我的”中另行查看服务说明并开启。',
+    'permissionAgree': '同意并继续设置',
+    'permissionDecline': '暂不授权',
+    'permissionSkipped': '已选择暂不授权，可稍后修改。',
+    'permission_granted': '系统权限已允许。',
+    'permission_denied': '系统未允许权限，你仍可继续。',
+    'permission_settings': '系统已关闭此权限，可前往系统设置修改，也可继续。',
+    'permission_selectedOnly': '已同意使用选择器；只读取你实际选中的图片。',
+    'permission_unsupported': '当前平台不支持预先请求该权限；不会显示手机系统授权弹窗。',
+    'permission_failed': '权限请求未完成，可重试或选择暂不授权。',
+    'permissionOpenSettings': '打开系统设置',
+    'permissionSettingsRequired': '请在系统设置中开启权限',
+    'permissionChooseFirst': '请选择同意或暂不授权，再继续。',
+    'permissionSaveFailed': '选择保存失败，请重试。',
+    'permissionSettings': '权限设置',
+    'introNext': '下一页',
+    'introBack': '上一页',
+    'introStart': '开始使用 · 前往登录',
+    'introDone': '完成设置',
+
     'beginnerFriendlyClaimBadge': '组织者声明 · 新手友好',
     'homeEyebrow': 'A LITTLE COMPANY',
     'previewBrandLine': 'DAMUMU · 一起出发',
@@ -286,6 +327,59 @@ const _strings = <String, Map<String, String>>{
     'useSelectedLocation': '使用所选地区',
   },
   'en': {
+    'introBrand': 'DAMUMU · Meet naturally',
+    'intro_welcome_title': 'Make everyday moments better',
+    'intro_welcome_body':
+        'Discover nearby activities and people you click with. Swipe left to explore and choose your optional features.',
+    'intro_camera_title': 'Capture your moments',
+    'intro_camera_body':
+        'Allow camera access to take an avatar, chat photo or activity photo. The camera is used only when you choose to take a picture.',
+    'intro_camera_fallback':
+        'You can continue without access, use a default avatar and send text messages.',
+    'intro_photos_title': 'Only the photos you choose',
+    'intro_photos_body':
+        'Use the system photo picker for avatars, activities and chats. This step does not open your library or request full-library access. Choose individual photos when needed.',
+    'intro_photos_fallback':
+        'Continue with text and default avatars. We do not scan or bulk-read your library.',
+    'intro_notifications_title': 'Stay in the loop',
+    'intro_notifications_body':
+        'Allow system notifications for application results, activity changes and new messages. You may choose to receive none.',
+    'intro_notifications_fallback':
+        'In-app notifications and chats remain available when you open the app.',
+    'intro_location_title': 'Find activities nearby',
+    'intro_location_body':
+        'Allow location while using the app to find nearby activities and show distances. Approximate location is fine. No continuous background location is requested.',
+    'intro_location_fallback':
+        'Choose your city or district manually to browse and join activities without location access.',
+    'intro_ready_title': 'Ready for something new',
+    'intro_ready_body':
+        'Your choices are saved. Sign in or register to discover activities. Revisit permissions anytime in My → Permissions.',
+    'introOptional':
+        'All permissions are optional. Declining does not prevent sign-in; only related features are limited. System permission and privacy acknowledgment are separate.',
+    'introPushSeparate':
+        'Allowing system notifications does not turn on message push. Push uses Google Firebase; review its service notice and enable it separately in My.',
+    'permissionAgree': 'Agree and set up',
+    'permissionDecline': 'Not now',
+    'permissionSkipped': 'Not enabled. You can change this later.',
+    'permission_granted': 'System permission allowed.',
+    'permission_denied': 'System permission declined. You can continue.',
+    'permission_settings':
+        'Access is disabled. You can change it in system settings or continue.',
+    'permission_selectedOnly':
+        'Photo picker enabled; only selected images are read.',
+    'permission_unsupported':
+        'This platform cannot request this mobile permission here. No mobile permission dialog is shown.',
+    'permission_failed': 'The request did not finish. Retry or choose Not now.',
+    'permissionOpenSettings': 'Open system settings',
+    'permissionSettingsRequired': 'Enable access in system settings',
+    'permissionChooseFirst': 'Choose Agree or Not now before continuing.',
+    'permissionSaveFailed': 'Could not save your choices. Please retry.',
+    'permissionSettings': 'Permissions',
+    'introNext': 'Next',
+    'introBack': 'Previous',
+    'introStart': 'Get started · Sign in',
+    'introDone': 'Done',
+
     'beginnerFriendlyClaimBadge': 'Organizer says · Beginner friendly',
     'homeEyebrow': 'A LITTLE COMPANY',
     'previewBrandLine': 'DAMUMU · GO TOGETHER',
@@ -554,6 +648,53 @@ const _strings = <String, Map<String, String>>{
     'useSelectedLocation': 'Use selected area',
   },
   'ko': {
+    'introBrand': '다무무 · 자연스러운 만남',
+    'intro_welcome_title': '일상을 더 즐겁게',
+    'intro_welcome_body':
+        '주변 모임과 잘 맞는 친구를 만나보세요. 왼쪽으로 넘기며 앱을 알아보고 원하는 기능을 선택하세요.',
+    'intro_camera_title': '사진으로 남기는 만남',
+    'intro_camera_body': '프로필·채팅·모임 사진을 촬영할 때 카메라를 사용합니다. 직접 촬영을 선택했을 때만 사용해요.',
+    'intro_camera_fallback': '거절해도 앱을 이용하고 기본 프로필과 문자 메시지를 사용할 수 있어요.',
+    'intro_photos_title': '선택한 사진만 공유해요',
+    'intro_photos_body':
+        '시스템 사진 선택기로 프로필·모임·채팅에 사용할 사진을 골라요. 지금 앨범을 열거나 전체 사진 접근을 요청하지 않으며, 필요할 때 직접 선택합니다.',
+    'intro_photos_fallback':
+        '거절해도 문자와 기본 프로필을 사용할 수 있어요. 앨범을 스캔하거나 한꺼번에 읽지 않습니다.',
+    'intro_notifications_title': '중요한 소식을 놓치지 않도록',
+    'intro_notifications_body':
+        '신청 결과, 모임 변경, 새 메시지를 알리기 위한 시스템 알림 권한을 요청합니다. 받지 않아도 괜찮아요.',
+    'intro_notifications_fallback': '거절해도 앱에서 알림과 채팅을 확인할 수 있어요.',
+    'intro_location_title': '내 주변의 좋은 모임',
+    'intro_location_body':
+        '앱 사용 중 위치로 주변 모임과 거리를 표시합니다. 대략적인 위치도 괜찮아요. 지속적인 백그라운드 위치는 요청하지 않습니다.',
+    'intro_location_fallback': '거절하면 도시·지역을 직접 선택해 모임을 둘러보고 신청할 수 있어요.',
+    'intro_ready_title': '새로운 일상을 만날 준비',
+    'intro_ready_body':
+        '선택을 저장했어요. 로그인하거나 가입해 모임을 찾아보세요. 내 정보 → 권한 설정에서 언제든 다시 선택할 수 있어요.',
+    'introOptional':
+        '모든 권한은 선택 사항입니다. 거절해도 로그인할 수 있으며 해당 기능만 제한됩니다. 시스템 권한과 개인정보 처리방침 확인은 별개입니다.',
+    'introPushSeparate':
+        '시스템 알림 허용만으로 푸시가 켜지지 않습니다. 푸시는 Google Firebase를 사용하며, 내 정보에서 서비스 안내를 확인하고 따로 켤 수 있어요.',
+    'permissionAgree': '동의하고 설정하기',
+    'permissionDecline': '지금은 허용 안 함',
+    'permissionSkipped': '허용하지 않았어요. 나중에 바꿀 수 있습니다.',
+    'permission_granted': '시스템 권한을 허용했어요.',
+    'permission_denied': '시스템 권한이 거절되었어요. 계속할 수 있습니다.',
+    'permission_settings': '시스템에서 권한이 꺼져 있어요. 설정에서 바꾸거나 계속할 수 있습니다.',
+    'permission_selectedOnly': '사진 선택기를 사용하며 직접 선택한 사진만 읽어요.',
+    'permission_unsupported':
+        '현재 플랫폼은 이 모바일 권한의 사전 요청을 지원하지 않아 시스템 창이 표시되지 않습니다.',
+    'permission_failed': '권한 요청을 완료하지 못했어요. 다시 시도하거나 허용 안 함을 선택하세요.',
+    'permissionOpenSettings': '시스템 설정 열기',
+    'permissionSettingsRequired': '시스템 설정에서 권한을 켜주세요',
+    'permissionChooseFirst': '동의 또는 허용 안 함을 선택하고 계속하세요.',
+    'permissionSaveFailed': '선택을 저장하지 못했어요. 다시 시도하세요.',
+    'permissionSettings': '권한 설정',
+    'introNext': '다음',
+    'introBack': '이전',
+    'introStart': '시작하기 · 로그인',
+    'introDone': '설정 완료',
+
     'beginnerFriendlyClaimBadge': '주최자 안내 · 초보자 환영',
     'homeEyebrow': 'A LITTLE COMPANY',
     'previewBrandLine': 'DAMUMU · 함께 떠나요',

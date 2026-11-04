@@ -13,6 +13,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'l10n.dart';
+import 'app_permissions.dart';
 import 'app_theme.dart';
 import 'push_notification_service.dart';
 import 'web_cropper_layout.dart';
@@ -1084,7 +1085,12 @@ Future<void> _pickAvatar(
   final networkUnavailable = sheetContext.tr('networkUnavailable');
   var uploading = false;
   try {
+    if (!await AppPermissions.ensureImage(sheetContext, source) ||
+        !sheetContext.mounted) {
+      return;
+    }
     final picked = await ImagePicker().pickImage(
+      requestFullMetadata: false,
       source: source,
       maxWidth: 1536,
       maxHeight: 1536,

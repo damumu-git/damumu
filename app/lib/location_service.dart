@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'external_processing.dart';
+import 'app_permissions.dart';
 
 class AppLocation {
   const AppLocation({
@@ -76,6 +77,13 @@ class LocationService {
     required String languageCode,
     bool forceRefresh = false,
   }) async {
+    if (await AppPermissions.choice(AppPermission.location) == false) {
+      throw LocationFailure(switch (languageCode) {
+        'ko' => '도시 또는 지역을 직접 선택해 주세요',
+        'en' => 'Choose a city or district manually',
+        _ => '请选择城市或地区',
+      });
+    }
     if (!forceRefresh) {
       final cached = await _readCache(languageCode);
       if (cached != null) return cached;

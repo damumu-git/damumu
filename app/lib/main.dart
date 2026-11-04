@@ -9,6 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'auth.dart';
+import 'app_permissions.dart';
+import 'onboarding.dart';
 import 'app_theme.dart';
 import 'external_processing.dart';
 import 'activity_interactions.dart';
@@ -113,7 +115,6 @@ class _DaziAppState extends State<DaziApp> with WidgetsBindingObserver {
     _authController = widget.authController ?? AuthController();
     _ownsAuthController = widget.authController == null;
     if (widget.home == null) {
-      _authController.restore();
       unawaited(EmojiAssets.load());
     }
     if (!_isTestEnvironment) _previousErrorBuilder = ErrorWidget.builder;
@@ -187,7 +188,12 @@ class _DaziAppState extends State<DaziApp> with WidgetsBindingObserver {
             GlobalCupertinoLocalizations.delegate,
           ],
           theme: buildAppTheme(),
-          home: widget.home ?? _authenticatedHome(),
+          home:
+              widget.home ??
+              FirstRunGate(
+                onReady: _authController.restore,
+                builder: (_) => _authenticatedHome(),
+              ),
         ),
       ),
     );
@@ -1079,6 +1085,10 @@ class _HomePageState extends State<HomePage> {
     );
     if (!mounted) return;
     if (action == 'automatic') {
+      if (!await AppPermissions.ensure(context, AppPermission.location) ||
+          !mounted) {
+        return;
+      }
       await _locate(forceRefresh: true, offerManual: true);
     } else if (action == 'manual') {
       await _chooseManualLocation();
@@ -2956,7 +2966,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
     if (_coverBusy) return;
     setState(() => _coverBusy = true);
     try {
+      if (!await AppPermissions.ensureImage(context, ImageSource.gallery) ||
+          !mounted) {
+        return;
+      }
       final picked = await ImagePicker().pickImage(
+        requestFullMetadata: false,
         source: ImageSource.gallery,
         maxWidth: 2048,
         maxHeight: 2048,
@@ -4956,7 +4971,11 @@ class _ChatPageState extends State<ChatPage> {
     final processFailedMessage = context.tr('chatImageProcessFailed');
     XFile? picked;
     try {
+      if (!await AppPermissions.ensureImage(context, source) || !mounted) {
+        return;
+      }
       picked = await ImagePicker().pickImage(
+        requestFullMetadata: false,
         source: source,
         imageQuality: 90,
         maxWidth: 2400,
@@ -5653,10 +5672,45 @@ class ProfilePage extends StatelessWidget {
                 subtitle: context.tr('privacySubtitle'),
                 onTap: () => _openPrivacyPolicy(context),
               ),
+              _Menu(
+                icon: Icons.tune_rounded,
+                title: context.tr('permissionSettings'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (pageContext) => OnboardingPage(
+                      review: true,
+                      onChoiceChanged: (permission, enabled) async {
+                        if (permission != AppPermission.notifications ||
+                            auth.token == null) {
+                          return;
+                        }
+                        if (enabled) {
+                          await PushNotificationService.instance.start(
+                            auth.token!,
+                          );
+                        } else {
+                          await PushNotificationService.instance.stop(
+                            auth.token,
+                          );
+                        }
+                      },
+                      onFinished: () async {
+                        if (pageContext.mounted) Navigator.pop(pageContext);
+                      },
+                    ),
+                  ),
+                ),
+              ),
               ExternalProcessingSettings(
                 onPushChanged: (enabled) async {
                   if (auth.token == null) return;
                   if (enabled) {
+                    if (!await AppPermissions.ensure(
+                      context,
+                      AppPermission.notifications,
+                    )) {
+                      return;
+                    }
                     await PushNotificationService.instance.start(auth.token!);
                   } else {
                     await PushNotificationService.instance.stop(auth.token);

@@ -95,3 +95,5 @@ node preview/check.cjs C:/path/to/node_modules/jsdom --inventory
 重建页面清单。检查使用 DOM 实现，不启动浏览器或服务，不能替代实际视觉验收。
 浏览器工具禁止访问 `file://`，本轮没有绕过限制启动服务器；真实浏览器中的排版、字体、
 窄屏和图片效果需通过本机直接打开确认。
+
+2026-11-04：App新增六页首次启动与权限介绍，入口`app/index.html#intro-welcome`；同意/拒绝为离线演示，不调用设备系统权限。正式Flutter按逐项选择触发真实系统授权。
