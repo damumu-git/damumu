@@ -3,3 +3,6 @@
 // No Client Secret / Kakao Admin Key belongs in the client.
 GOOGLE_REVERSED_CLIENT_ID = com.damumu.disabled.google
 KAKAO_NATIVE_APP_KEY = disabled
+
+// Optional machine-specific public callback settings.
+#include? "SocialLogin.local.xcconfig"

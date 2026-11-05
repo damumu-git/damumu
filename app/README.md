@@ -20,6 +20,11 @@ App 离线预览使用同源字体，Admin 已使用 Noto 无需改动。来源�
 
 Google/Kakao原生登录代码已接入，默认未开放；需要创建平台应用、执行迁移024并配置公开ID后真机联调。首次登录仍需昵称、满14岁及政策确认；Web/桌面暂保留邮箱登录。配置见根目录 `docs/SOCIAL_LOGIN_SETUP.md`。
 
+开发启动脚本会自动读取本机`app/config/social-login.local.json`；模板为
+`app/config/social-login.example.json`。iOS可选读取`ios/Flutter/SocialLogin.local.xcconfig`中的回调设置。
+两个本机文件均不入Git；发布构建须显式传入`--dart-define-from-file=config/social-login.local.json`，
+不要把下载的OAuth plist覆盖到Firebase推送配置。完整说明见`docs/SOCIAL_LOGIN_SETUP.md`（仓库根目录）。
+
 默认 API 地址是 `https://api.damumu.com/api/v1`，正常移动端开发不需要启动本地
 REST API 或 Admin。仅在隔离数据库上开发服务端时显式覆盖，例如 Android 模拟器：
 

@@ -36,3 +36,10 @@ restapi/.codex-build/
 restapi/uploads/avatars/
 restapi/uploads/events/
 restapi/uploads/messages/
+
+# Local social sign-in configuration and downloaded OAuth exports
+app/config/*.local.json
+app/ios/Flutter/SocialLogin.local.xcconfig
+**/client_secret_*.apps.googleusercontent.com.json
+**/client_*.apps.googleusercontent.com.plist
+restapi/appsettings.Local.json

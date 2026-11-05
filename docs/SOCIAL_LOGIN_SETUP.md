@@ -1,8 +1,42 @@
 # Google / Kakao 原生登录配置
 
 代码覆盖 Android / iOS App 的第三方登录、服务端身份校验和首次注册。
-当前尚未创建平台应用，因此默认关闭，未进行真实账号授权验收。
+默认关闭，尚未进行真实账号授权验收。当前客户端导入与待办见`STATUS.md`。
 Flutter Web / 桌面端暂不发起第三方授权，继续使用邮箱；离线预览只演示页面。
+
+## 本机配置文件
+
+`dev.ps1`和`dev.sh`启动App时会自动加载`app/config/social-login.local.json`，文件相对App目录并被Git忽略。
+可按`app/config/social-login.example.json`准备，仅包含公开ID和启用开关，不能放Client Secret/Admin Key。
+显式传入的命令行参数放在该默认配置之后；发布构建不经过开发启动脚本时需明确传递：
+
+```bash
+cd app
+flutter build appbundle --dart-define-from-file=config/social-login.local.json
+# 在macOS上构建iOS也使用相同参数：
+flutter build ipa --dart-define-from-file=config/social-login.local.json
+```
+
+iOS的`SocialLogin.xcconfig`会可选加载同目录`SocialLogin.local.xcconfig`，用于设置
+`GOOGLE_REVERSED_CLIENT_ID`及将来Kakao回调；该本机文件也不入Git。
+迁移到其他开发/发布机时需分别准备这两个本机配置文件，不要认为Git会分发用户本机配置。
+下载的Google iOS OAuth plist不是Firebase的`GoogleService-Info.plist`，不要覆盖推送配置。
+
+Google导出JSON根节点必须为`web`才能作为`GOOGLE_SERVER_CLIENT_ID`的来源；
+`installed`导出属于安装型客户端，不能据此推断Web受众，不能把其Client ID填入服务端。
+Android客户端通过平台端登记包名/签名生效，无需把Android Client ID传给现有Flutter SDK。
+无法确认Web客户端类型时保持社交登录关闭。原始下载文件不加入Git，Client Secret不参与现有登录流程。
+
+本地API在Development环境可读取`restapi/appsettings.Local.json`，结构如下；生产环境不加载，
+环境变量和命令行参数优先。该文件被Git、Docker上下文及发布输出排除。
+
+```json
+{"SocialLogin":{"google":{"Enabled":false,"ClientId":"<Web Client ID>"}}}
+```
+
+AWS仍通过`deploy/.env`配置；开发脚本默认访问AWS API，因此本机API配置不会自动改变AWS。
+本机`.dev-data/google-login-server.env`是待复制核对的公开Google配置片段，不含数据库密码或Client Secret。
+确认客户端类型、隐私披露及迁移后再打开开关并部署，不能把配置文件导入视为已完成真实授权验收。
 
 ## 登录及数据行为
 

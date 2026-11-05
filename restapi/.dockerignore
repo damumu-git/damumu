@@ -6,3 +6,8 @@ obj
 uploads/avatars
 uploads/events
 uploads/messages
+
+# Machine-local settings and downloaded OAuth credentials
+appsettings.Local.json
+client_secret_*.apps.googleusercontent.com.json
+client_*.apps.googleusercontent.com.plist

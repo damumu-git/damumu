@@ -40,6 +40,10 @@ if [[ "$SERVICES_ONLY" == false ]]; then
     exit 1
   }
   echo "启动 Flutter App（API：${API_BASE_URL}）"
+  SOCIAL_LOGIN_CONFIG="$ROOT_DIR/app/config/social-login.local.json"
+  if [[ -f "$SOCIAL_LOGIN_CONFIG" ]]; then
+    set -- "--dart-define-from-file=$SOCIAL_LOGIN_CONFIG" "$@"
+  fi
   cd "$ROOT_DIR/app"
   exec "$FLUTTER" run --dart-define="API_BASE_URL=$API_BASE_URL" "$@"
 fi

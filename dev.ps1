@@ -26,6 +26,10 @@ function Resolve-Executable([string[]]$Names, [string]$Description) {
 
 if (-not $servicesOnly) {
     $flutter = Resolve-Executable @('flutter.bat', 'flutter.exe', 'flutter') 'Flutter'
+    $socialLoginConfig = Join-Path $repositoryRoot 'app/config/social-login.local.json'
+    if (Test-Path -LiteralPath $socialLoginConfig) {
+        $flutterArguments = @("--dart-define-from-file=$socialLoginConfig") + $flutterArguments
+    }
     Write-Host "启动 Flutter App（API：$apiBaseUrl）"
     Push-Location (Join-Path $repositoryRoot 'app')
     try {

@@ -6,6 +6,13 @@ using Microsoft.Extensions.FileProviders;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Environment.IsDevelopment())
+{
+    // Machine-local settings are never published. Explicit environment/CLI
+    // values retain precedence over this optional development-only file.
+    builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true)
+        .AddEnvironmentVariables().AddCommandLine(args);
+}
 
 var connectionString = builder.Configuration.GetConnectionString("Muda")
     ?? throw new InvalidOperationException("ConnectionStrings:Muda is required.");
