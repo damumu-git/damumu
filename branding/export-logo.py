@@ -47,7 +47,4 @@ for item in json.loads((catalog / 'Contents.json').read_text())['images']:
     if 'filename' in item:
         size = round(float(item['size'].split('x')[0]) * float(item['scale'].rstrip('x')))
         export(str((catalog / item['filename']).relative_to(ROOT)), size)
-for scale, suffix in [(1, ''), (2, '@2x'), (3, '@3x')]:
-    export(f'app/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage{suffix}.png', 160 * scale)
-
 print(f'Exported approved logo; solid padding color #{BACKGROUND[0]:02x}{BACKGROUND[1]:02x}{BACKGROUND[2]:02x}')

@@ -1,5 +1,7 @@
 # DAMUMU 当前项目状态
 
+- 2026-11-05 iOS 启动过渡：TestFlight `1.0.0 (1)` 真机反馈显示白底方形 Logo 与引导内容叠在一起。iOS 原生启动页和 Flutter 容器改为与引导页一致的浅蓝 `#F3F8FC`，并移除原生启动图。Windows 上核对 storyboard 与主题配色、入口和资源引用；下一步在 Codemagic 重新归档并通过 TestFlight 验收冷启动过渡。
+
 - 2026-11-05 iOS TestFlight 构建：Codemagic 已通过签名设置，Xcode 归档因 Firebase Core 和 Messaging 要求 iOS 15.0、工程仍设为 13.0 而失败。已将 Debug、Profile 和 Release 的最低部署版本统一设为 iOS 15.0；下一步在 Codemagic 使用修复提交重新归档并上传，Windows 无法验证 iOS 归档。
 
 - 2026-11-05 Google / Kakao 联调配置：收到独立的 Google Web Client ID，已替换本机 App 和 API 中的安装型 ID，核对 iOS 客户端及回调，启用本机 App 与 Development API 的两个登录入口。已更新 AWS 配置片段并保留部署前关闭状态。公开 ID 与 Native App Key 保存在 Git 忽略的本机文件。两个提供方的 30 日会话恢复此前已通过模拟测试，真实授权仍待 AWS 迁移 024、部署及手机验收。
