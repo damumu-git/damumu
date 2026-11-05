@@ -2,7 +2,7 @@ import AdminNavIcon from './AdminNavIcon.jsx'
 import { FilePicker } from './AdminControls.jsx'
 import { useAdminDialog } from './admin-dialog-context'
 import { EmojiIcon, EmojiAssetManager, EmojiAssetSelect } from './EmojiAssets.jsx'
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { API_BASE, api, mediaUrl } from './api'
 import './App.css'
 import './preview-theme.css'
@@ -18,6 +18,7 @@ const navigation = [
   { id: 'emoji-assets', label: '图标素材' },
   { id: 'avatars', label: '系统头像' },
   { id: 'audit', label: '审计日志' },
+  { id: 'event-log', label: '事件日志' },
   { id: 'settings', label: '功能开关' },
 ]
 
@@ -67,18 +68,23 @@ const compactNumber = (value) =>
 
 function useResource(loader, dependencies = []) {
   const [state, setState] = useState({ data: null, loading: true, error: '' })
+  const requestId = useRef(0)
   const load = useCallback(async () => {
+    const id = ++requestId.current
     setState((current) => ({ ...current, loading: true, error: '' }))
     try {
       const response = await loader()
-      setState({ data: response, loading: false, error: '' })
+      if (id === requestId.current) setState({ data: response, loading: false, error: '' })
     } catch (error) {
-      setState({ data: null, loading: false, error: error.message })
+      if (id === requestId.current) setState({ data: null, loading: false, error: error.message })
     }
   // The dependency list is supplied by each resource page.
   // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/use-memo
   }, dependencies)
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    return () => { requestId.current += 1 }
+  }, [load])
   return { ...state, reload: load }
 }
 
@@ -823,6 +829,63 @@ function Audit() {
   )
 }
 
+function EventLogPage() {
+  const [level, setLevel] = useState('')
+  const [days, setDays] = useState('7')
+  const [authOnly, setAuthOnly] = useState(false)
+  const [traceInput, setTraceInput] = useState('')
+  const [traceId, setTraceId] = useState('')
+  const [cursors, setCursors] = useState([null])
+  const cursor = cursors.at(-1)
+  const resource = useResource(() => api.eventLog({ level, days, authOnly, traceId, ...cursor }), [level, days, authOnly, traceId, cursor])
+  const rows = resource.data?.data ?? []
+  const next = resource.data?.meta?.next
+  const changeFilter = (setter, value) => { setter(value); setCursors([null]) }
+  const submit = (event) => {
+    event.preventDefault()
+    const value = traceInput.trim()
+    if (value === traceId && !cursor) resource.reload()
+    else changeFilter(setTraceId, value)
+  }
+  return (
+    <section className="panel full-panel">
+      <div className="panel-heading"><div><span className="kicker">Event log</span><h3>事件日志</h3><p>查看 API 请求失败和服务异常，使用追踪编号定位具体请求。</p></div></div>
+      <form className="filter-bar event-log-filters" onSubmit={submit}>
+        <label className="search-box"><input aria-label="追踪编号" placeholder="输入完整追踪编号" value={traceInput} onChange={(event) => setTraceInput(event.target.value)} maxLength={80} /></label>
+        <button className="button secondary" type="submit">查询</button>
+        <select aria-label="日志级别" value={level} onChange={(event) => changeFilter(setLevel, event.target.value)}>
+          <option value="">全部级别</option><option value="error">错误</option><option value="warning">警告</option>
+        </select>
+        <select aria-label="时间范围" value={days} onChange={(event) => changeFilter(setDays, event.target.value)}>
+          <option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="93">全部保留记录</option>
+        </select>
+        <label><input type="checkbox" checked={authOnly} onChange={(event) => changeFilter(setAuthOnly, event.target.checked)} /> 仅登录与注册</label>
+      </form>
+      <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
+        <div className="table-wrap event-log-table"><table>
+          <thead><tr><th>时间</th><th>级别</th><th>来源 / 接口</th><th>错误代码</th><th>追踪编号</th></tr></thead>
+          <tbody>{rows.map((row) => (
+            <tr key={row.id}>
+              <td><time dateTime={row.occurred_at}>{new Date(row.occurred_at).toLocaleString('zh-CN', { hour12: false })}</time></td>
+              <td>{row.level === 'error' ? '错误' : '警告'}</td>
+              <td><strong>{row.source}</strong><br /><code>{[row.http_method, row.route].filter(Boolean).join(' ') || '—'}</code></td>
+              <td><code>{row.status_code ? `${row.status_code} ` : ''}{row.code}</code>
+                {row.exception_type && <details><summary>异常详情</summary><code>{row.exception_type}{row.sql_state ? ` · SQLSTATE ${row.sql_state}` : ''}</code>{row.fault_site && <p><code>{row.fault_site}</code></p>}</details>}
+              </td>
+              <td><code>{row.trace_id ?? '—'}</code></td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      </PageState>
+      <div className="event-log-pagination">
+        <button className="button secondary" disabled={!cursor || resource.loading} onClick={() => setCursors(cursors.slice(0, -1))}>上一页</button>
+        <span>第 {cursors.length} 页</span>
+        <button className="button secondary" disabled={!next || resource.loading} onClick={() => setCursors([...cursors, next])}>下一页</button>
+      </div>
+    </section>
+  )
+}
+
 function Settings() {
   const [notice, setNotice] = useState('')
   const resource = useResource(api.featureFlags, [])
@@ -847,7 +910,7 @@ function Settings() {
   )
 }
 
-const pages = { 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, reports: Reports, safety: Safety, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, settings: Settings }
+const pages = { 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, reports: Reports, safety: Safety, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
 
 function AnnouncementDialog({ onClose }) {
   const [title, setTitle] = useState('')

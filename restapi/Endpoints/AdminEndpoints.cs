@@ -9,6 +9,35 @@ public static class AdminEndpoints
     {
         var admin = api.MapGroup("/admin").RequireAdmin();
 
+        admin.MapGet("/event-log", async (HttpContext context, Db db, string? level, string? traceId,
+            bool? authOnly, int? days, DateTimeOffset? before, long? beforeId, CancellationToken ct) =>
+        {
+            if (level is not (null or "warning" or "error") || traceId?.Length > 80 ||
+                before.HasValue != beforeId.HasValue || beforeId is <= 0)
+                throw new ApiException(400, "event_log_filter_invalid", "日志筛选条件无效");
+            context.Response.Headers.CacheControl = "no-store";
+            const int pageSize = 50;
+            var since = DateTime.UtcNow.Date.AddDays(1 - Math.Clamp(days ?? 7, 1, 93));
+            var rows = await db.QueryAsync(
+                """
+                SELECT occurred_at, id::text AS id, level, source, code, trace_id,
+                       http_method, route, status_code, exception_type, fault_site, sql_state
+                FROM public.event_log
+                WHERE occurred_at >= @since
+                  AND (@level IS NULL OR level = @level)
+                  AND (@traceId IS NULL OR trace_id = @traceId)
+                  AND (NOT @authOnly OR route LIKE '/api/v1/auth/%')
+                  AND (@before IS NULL OR (occurred_at, id) < (@before, @beforeId))
+                ORDER BY occurred_at DESC, event_log.id DESC
+                LIMIT @take
+                """, new { since, level, traceId, authOnly = authOnly == true,
+                    before = before?.UtcDateTime, beforeId, take = pageSize + 1 }, ct);
+            if (rows.Count <= pageSize) return ApiSupport.Ok(rows, new { next = (object?)null });
+            rows.RemoveAt(pageSize);
+            var last = rows[^1];
+            return ApiSupport.Ok(rows, new { next = new { before = last["occurred_at"], beforeId = last["id"] } });
+        });
+
         admin.MapGet("/dashboard", async (Db db, CancellationToken ct) =>
         {
             var metrics = await db.QueryOneAsync(

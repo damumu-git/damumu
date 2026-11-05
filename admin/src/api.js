@@ -85,6 +85,7 @@ export const api = {
   updateFeatureFlag: (key, body) =>
     request(`/admin/feature-flags/${key}`, { method: 'PATCH', body: JSON.stringify(body) }),
   audit: (filters = {}) => request(`/admin/audit${params(filters)}`),
+  eventLog: (filters = {}) => request(`/admin/event-log${params(filters)}`),
   announcement: (body) =>
     request('/admin/announcements', { method: 'POST', body: JSON.stringify(body) }),
 }

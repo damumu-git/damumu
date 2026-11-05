@@ -233,6 +233,8 @@ const _strings = <String, Map<String, String>>{
     'socialUnavailable': '该登录方式暂未开放，请使用邮箱登录。',
     'socialWebUnavailable': '此入口暂仅支持 Android / iOS App，请使用邮箱登录。',
     'socialFailed': '登录未完成，请稍后重试或使用邮箱登录。',
+    'authRequestFailed': '请求失败，请稍后重试。',
+    'authTraceId': '追踪编号',
     'registerSubtitle': '认识新朋友，从一张喜欢的头像开始',
     'loginSubtitle': '登录后继续发现身边的活动',
     'sessionRestoreFailed': '暂时无法恢复登录，请检查网络后重试。登录状态已保留。',
@@ -547,6 +549,8 @@ const _strings = <String, Map<String, String>>{
     'socialWebUnavailable':
         'This option currently supports the Android / iOS app only. Please use email.',
     'socialFailed': 'Sign-in was not completed. Try again later or use email.',
+    'authRequestFailed': 'The request failed. Please try again later.',
+    'authTraceId': 'Trace ID',
     'registerSubtitle': 'Meet new people, starting with an avatar you like',
     'loginSubtitle': 'Sign in to keep discovering nearby activities',
     'sessionRestoreFailed':
@@ -851,6 +855,8 @@ const _strings = <String, Map<String, String>>{
     'socialUnavailable': '아직 제공되지 않는 로그인 방식입니다. 이메일로 로그인해 주세요.',
     'socialWebUnavailable': '현재 Android / iOS 앱에서만 지원합니다. 이메일로 로그인해 주세요.',
     'socialFailed': '로그인을 완료하지 못했습니다. 잠시 후 다시 시도하거나 이메일로 로그인해 주세요.',
+    'authRequestFailed': '요청에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+    'authTraceId': '추적 번호',
     'registerSubtitle': '마음에 드는 아바타로 새로운 만남을 시작하세요',
     'loginSubtitle': '로그인하고 주변 모임을 계속 찾아보세요',
     'sessionRestoreFailed':

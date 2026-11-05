@@ -2,6 +2,8 @@
 
 - 2026-11-05 iOS TestFlight 构建：Codemagic 已通过签名设置，Xcode 归档因 Firebase Core 和 Messaging 要求 iOS 15.0、工程仍设为 13.0 而失败。已将 Debug、Profile 和 Release 的最低部署版本统一设为 iOS 15.0；下一步在 Codemagic 使用修复提交重新归档并上传，Windows 无法验证 iOS 归档。
 
+- 2026-11-05 登录排查与事件日志：生产健康检查正常，Google 占位令牌请求返回 `503 social_login_unavailable`，需核对 AWS 的 Google 启用开关、Web Client ID、迁移 024 和授权。邮箱注册在隔离库正常，线上失败仍待对应请求的追踪编号或容器日志。迁移 025 新增按 UTC 月分区的 `event_log`，Admin 可筛选并按游标分页，App 认证失败显示追踪编号。隔离 PostgreSQL 已验证迁移重复执行、清理过期分区、低权限写入、注册、重复邮箱、模拟数据库异常、管理员鉴权和分页。下一步合并并备份、执行迁移 025、部署 API/Admin，重新测试真机。
+
 - 2026-11-05 Google / Kakao 联调配置：收到独立的 Google Web Client ID，已替换本机 App 和 API 中的安装型 ID，核对 iOS 客户端及回调，启用本机 App 与 Development API 的两个登录入口。已更新 AWS 配置片段并保留部署前关闭状态。公开 ID 与 Native App Key 保存在 Git 忽略的本机文件。两个提供方的 30 日会话恢复此前已通过模拟测试，真实授权仍待 AWS 迁移 024、部署及手机验收。
 
 - 2026-11-05 Kakao 本机配置已写入 App Native App Key、iOS 回调及 API 数字 App ID，另生成待复制的 AWS 环境片段。已核对配置一致性与 Git 忽略。登录保持关闭，后续需核对 Kakao 后台平台登记及登录设置、确认隐私披露、执行迁移 024 后真机验收。

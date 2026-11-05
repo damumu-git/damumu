@@ -1,8 +1,9 @@
-using System.Diagnostics;
+using Activity = System.Diagnostics.Activity;
 using Muda.Api;
 using Muda.Api.Endpoints;
 using Muda.Api.Infrastructure;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.AspNetCore.Routing;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,8 @@ var connectionString = builder.Configuration.GetConnectionString("Muda")
     ?? throw new InvalidOperationException("ConnectionStrings:Muda is required.");
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<Db>();
+builder.Services.AddSingleton<EventLog>();
+builder.Services.AddHostedService(services => services.GetRequiredService<EventLog>());
 builder.Services.AddSingleton<MediaStorage>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<SocialAccountService>();
@@ -38,38 +41,54 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+var eventLog = app.Services.GetRequiredService<EventLog>();
+app.Services.GetRequiredService<ILoggerFactory>().AddProvider(new EventLogProvider(eventLog));
 var mediaStorage = app.Services.GetRequiredService<MediaStorage>();
 mediaStorage.Initialize(Path.Combine(AppContext.BaseDirectory, "preset-avatars"));
 mediaStorage.InitializeEmoji(Path.Combine(AppContext.BaseDirectory, "preset-emoji"));
 
 app.Use(async (context, next) =>
 {
-    context.Response.Headers["X-Trace-Id"] = Activity.Current?.Id ?? context.TraceIdentifier;
+    var traceId = Activity.Current?.Id ?? context.TraceIdentifier;
+    context.Response.Headers["X-Trace-Id"] = traceId;
     try
     {
         await next();
+        var status = context.Response.StatusCode;
+        if (status >= 500 || (status is >= 400 and < 500 && context.GetEndpoint() is RouteEndpoint &&
+            context.Request.Path.StartsWithSegments("/api/v1")))
+            eventLog.RecordRequest(context, traceId, status, $"http_{status}");
     }
     catch (ApiException exception)
     {
-        context.Response.StatusCode = exception.StatusCode;
-        await context.Response.WriteAsJsonAsync(new
-        {
-            data = (object?)null,
-            meta = (object?)null,
-            error = new { code = exception.Code, message = exception.Message },
-            traceId = Activity.Current?.Id ?? context.TraceIdentifier
-        });
+        eventLog.RecordRequest(context, traceId, exception.StatusCode, exception.Code, exception);
+        if (context.Response.HasStarted) throw;
+        await WriteError(context, traceId, exception.StatusCode, exception.Code, exception.Message);
     }
     catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
     {
-        context.Response.StatusCode = 409;
-        await context.Response.WriteAsJsonAsync(new
+        eventLog.RecordRequest(context, traceId, 409, "conflict", exception);
+        if (context.Response.HasStarted) throw;
+        await WriteError(context, traceId, 409, "conflict", "数据已存在或发生状态冲突");
+    }
+    catch (BadHttpRequestException exception)
+    {
+        eventLog.RecordRequest(context, traceId, exception.StatusCode, "invalid_request", exception);
+        if (context.Response.HasStarted) throw;
+        await WriteError(context, traceId, exception.StatusCode, "invalid_request", "请求格式无效");
+    }
+    catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { }
+    catch (Exception exception)
+    {
+        eventLog.RecordRequest(context, traceId, 500, "internal_error", exception);
+        app.Logger.LogError("Request {TraceId} failed ({FailureType}, {SqlState})",
+            traceId, exception.GetType().FullName, (exception as PostgresException)?.SqlState);
+        if (context.Response.HasStarted)
         {
-            data = (object?)null,
-            meta = (object?)null,
-            error = new { code = "conflict", message = "数据已存在或发生状态冲突" },
-            traceId = Activity.Current?.Id ?? context.TraceIdentifier
-        });
+            context.Abort();
+            return;
+        }
+        await WriteError(context, traceId, 500, "internal_error", "请求失败，请稍后重试");
     }
 });
 
@@ -147,5 +166,17 @@ api.MapAdminEndpoints();
 api.MapRealtimeEndpoints();
 
 app.Run();
+
+static async Task WriteError(HttpContext context, string traceId, int status, string code, string message)
+{
+    context.Response.StatusCode = status;
+    await context.Response.WriteAsJsonAsync(new
+    {
+        data = (object?)null,
+        meta = (object?)null,
+        error = new { code, message },
+        traceId
+    }, context.RequestAborted);
+}
 
 public partial class Program;

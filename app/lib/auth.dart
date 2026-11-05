@@ -78,9 +78,16 @@ class AuthUser {
 }
 
 class AuthApiException implements Exception {
-  const AuthApiException(this.statusCode, this.message);
+  const AuthApiException(
+    this.statusCode,
+    this.message, {
+    this.code,
+    this.traceId,
+  });
   final int statusCode;
   final String message;
+  final String? code;
+  final String? traceId;
   @override
   String toString() => message;
 }
@@ -100,19 +107,34 @@ class AuthApi {
       final streamed = await request.send();
       return http.Response.fromStream(streamed);
     })().timeout(const Duration(seconds: 15));
-    // Authentication failure must remain identifiable even for non-JSON errors.
-    if (path == '/me' &&
-        (response.statusCode == 401 ||
-            response.statusCode == 403 ||
-            response.statusCode == 404)) {
-      throw AuthApiException(response.statusCode, 'Session unavailable');
+    if (response.statusCode >= 200 &&
+        response.statusCode < 300 &&
+        response.bodyBytes.isEmpty) {
+      return <String, dynamic>{};
     }
-    final decoded = response.body.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final error = decoded['error'] as Map<String, dynamic>?;
-      throw Exception(error?['message'] ?? '请求失败，请稍后重试');
+    Map<String, dynamic>? decoded;
+    try {
+      final value = jsonDecode(utf8.decode(response.bodyBytes));
+      if (value is Map<String, dynamic>) decoded = value;
+    } on FormatException {
+      // Proxies may return an HTML or empty error response.
+    }
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        decoded == null) {
+      final error = decoded?['error'];
+      final trace = response.headers['x-trace-id'] ?? decoded?['traceId'];
+      final code = error is Map ? error['code'] : null;
+      final message = error is Map ? error['message'] : null;
+      throw AuthApiException(
+        response.statusCode,
+        message is String && response.statusCode < 500 ? message : '',
+        code: code is String ? code : null,
+        traceId:
+            trace is String && RegExp(r'^[A-Za-z0-9:-]{1,80}$').hasMatch(trace)
+            ? trace
+            : null,
+      );
     }
     return (decoded['data'] as Map?)?.cast<String, dynamic>() ?? decoded;
   }
@@ -279,14 +301,16 @@ class AuthController extends ChangeNotifier {
           final restored = await AuthApi.me(token!);
           if (version != _sessionVersion) return;
           user = restored;
-        } on AuthApiException {
+        } catch (error) {
           if (version != _sessionVersion) return;
-          await _discardSession();
-        } catch (_) {
-          if (version != _sessionVersion) return;
-          // Offline/timeout/server failure does not revoke a valid session.
-          restoreFailed = !keepCurrentPage;
-          if (!keepCurrentPage) user = null;
+          if (error is AuthApiException &&
+              const [401, 403, 404].contains(error.statusCode)) {
+            await _discardSession();
+          } else {
+            // Offline/timeout/server failure does not revoke a valid session.
+            restoreFailed = !keepCurrentPage;
+            if (!keepCurrentPage) user = null;
+          }
         }
       }
       if (user == null && token == null && _devAutoLogin) {
@@ -937,12 +961,8 @@ class _AuthPageState extends State<AuthPage> {
           context,
         ).showSnackBar(SnackBar(content: Text(context.tr(error.code))));
       }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('socialFailed'))));
-      }
+    } catch (error) {
+      if (mounted) _showAuthFailure(error, fallback: 'socialFailed');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -977,16 +997,32 @@ class _AuthPageState extends State<AuthPage> {
         );
       }
     } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.toString().replaceFirst('Exception: ', '')),
-          ),
-        );
-      }
+      if (mounted) _showAuthFailure(error, fallback: 'authRequestFailed');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  void _showAuthFailure(Object error, {required String fallback}) {
+    final failure = error is AuthApiException ? error : null;
+    final message = switch (failure?.code) {
+      'social_login_unavailable' => context.tr('socialUnavailable'),
+      _ when failure != null && failure.message.isNotEmpty => failure.message,
+      _ => context.tr(fallback),
+    };
+    final traceId = failure?.traceId;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          traceId == null
+              ? message
+              : '$message\n${context.tr('authTraceId')} $traceId',
+        ),
+        duration: traceId == null
+            ? const Duration(seconds: 4)
+            : const Duration(seconds: 8),
+      ),
+    );
   }
 }
 
