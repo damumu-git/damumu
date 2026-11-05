@@ -1,5 +1,7 @@
 # DAMUMU 当前项目状态
 
+- 2026-11-05 Kakao 本机配置已写入 App Native App Key、iOS 回调及 API 数字 App ID，另生成待复制的 AWS 环境片段。已核对配置一致性与 Git 忽略。登录保持关闭，后续需核对 Kakao 后台平台登记及登录设置、确认隐私披露、执行迁移 024 后真机验收。
+
 - 2026-11-05 Google客户端导入：用户提供iOS OAuth plist与installed类型JSON，iOS Bundle ID核对为com.damumu.damu，公开iOS ID及反转回调已写入Git忽略的App本机配置；用户指定的另一Client ID同步App服务器受众字段、本地API配置和待复制的AWS环境片段，但与installed导出一致，Web类型尚未核实，App/API Google登录保持关闭。dev.ps1/dev.sh自动读取本机Dart配置，iOS xcconfig可选读取本机回调；API仅Development读取appsettings.Local.json，环境/CLI优先，本机文件从Git/Docker/发布输出排除。下载原件不入Git、不保留Client Secret，不覆盖Firebase推送配置；Kakao未配置，AWS未部署。验证：PowerShell/Bash语法及实参转发、iOS回调/ID一致、禁用状态、Git忽略通过；带本机配置运行4项Flutter社交登录测试通过，API发布构建/排除本机配置与服务端登录边界检查通过（NuGet漏洞数据源暂不可达，出现NU1900）。真实Google授权仍需客户端类型确认、迁移/披露和真机验收。
 
 - 2026-11-04 main汇总：今日30天自动登录、首次启动权限介绍、授权自动翻页及登录复选框已快进合入main；一并包含其基线上的Google/Kakao登录代码、Noto Sans SC/KR与晴空蓝立体Logo。合入代码与已验证的f1a9884一致（94项Flutter测试通过、1项旧字体golden跳过，静态分析及79个离线入口检查通过），本次仅补充合并状态，无新增业务改动。Google/Kakao平台尚未配置，默认关闭；服务端迁移024仍需在AWS备份审查后执行。未部署AWS或发布移动安装包，原生真机验收仍待完成。下方“尚未合并”等文字为各次任务当时的历史状态，以本条及Git当前状态为准。
