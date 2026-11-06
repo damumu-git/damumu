@@ -116,6 +116,13 @@ void main() {
                   'en': {'title': 'Han River walk'},
                 },
               },
+              {
+                'id': 'original-activity',
+                'title': '서울 공원 산책',
+                'description': '함께 산책해요',
+                'category_name': '산책',
+                'translations': <String, dynamic>{},
+              },
             ],
             nextCursor: null,
             hasMore: false,
@@ -123,6 +130,7 @@ void main() {
     );
     expect(find.text('汉江散步'), findsOneWidget);
     expect(find.text('한강 산책'), findsNothing);
+    expect(find.text('서울 공원 산책'), findsOneWidget);
     tester
         .widget<AppLocaleScope>(find.byType(AppLocaleScope))
         .onChanged(const Locale('en'));
@@ -130,6 +138,7 @@ void main() {
     expect(find.text('Han River walk'), findsOneWidget);
     expect(find.text('Walking'), findsOneWidget);
     expect(find.text('汉江散步'), findsNothing);
+    expect(find.text('서울 공원 산책'), findsOneWidget);
   });
 
   testWidgets(

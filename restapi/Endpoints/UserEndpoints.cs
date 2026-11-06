@@ -181,7 +181,17 @@ public static class UserEndpoints
                        COALESCE(t.score, 0) AS trust_score,
                        COALESCE(t.review_count, 0) AS review_count,
                        COALESCE(t.attended_count, 0) AS attended_count,
-                       COALESCE(t.organized_count, 0) AS organized_count
+                       COALESCE(t.no_show_count, 0) AS no_show_count,
+                       (SELECT count(*) FROM event_member em
+                        JOIN event e ON e.id=em.event_id
+                        WHERE em.user_id=u.id AND e.organizer_user_id<>u.id
+                          AND em.status IN ('approved','attended')
+                          AND e.deleted_at IS NULL AND e.status IN ('published','full','completed')
+                       ) AS joined_count,
+                       (SELECT count(*) FROM event e
+                        WHERE e.organizer_user_id=u.id AND e.deleted_at IS NULL
+                          AND e.status IN ('published','full','completed')
+                       ) AS organized_count
                 FROM app_user u
                 LEFT JOIN user_profile p ON p.user_id=u.id
                 LEFT JOIN user_credential c ON c.user_id=u.id

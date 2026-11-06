@@ -96,6 +96,55 @@ void main() {
     }
   });
 
+  testWidgets('个人资料显示服务器统计，无样本时显示占位', (tester) async {
+    final auth = AuthController()
+      ..user = AuthUser.fromJson({
+        'id': 'profile-user',
+        'nickname': '林夏',
+        'email': 'linxia@example.com',
+        'trust_score': 4.2,
+        'review_count': 2,
+        'joined_count': 7,
+        'organized_count': 2,
+        'attended_count': 3,
+        'no_show_count': 1,
+      });
+    await tester.pumpWidget(
+      DaziApp(
+        home: AuthScope(
+          controller: auth,
+          child: const Scaffold(body: ProfilePage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (final value in ['4.2', '7', '2', '75%']) {
+      expect(find.text(value), findsOneWidget);
+    }
+    auth.user = AuthUser.fromJson({
+      'id': 'profile-user',
+      'nickname': '林夏',
+      'email': 'linxia@example.com',
+      'trust_score': 0,
+      'review_count': 0,
+      'joined_count': 0,
+      'organized_count': 0,
+      'attended_count': 0,
+      'no_show_count': 0,
+    });
+    await tester.pumpWidget(
+      DaziApp(
+        home: AuthScope(
+          controller: auth,
+          child: const Scaffold(body: ProfilePage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('—'), findsNWidgets(2));
+    expect(find.text('0'), findsNWidgets(2));
+  });
+
   testWidgets('设置页可发起账号删除并二次确认', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpWidget(authenticatedApp());

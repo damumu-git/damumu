@@ -489,6 +489,10 @@ class _AppShellState extends State<AppShell> {
         _index = value;
       });
       if (value == 3) await _loadUnread();
+      if (value == 4) {
+        final auth = AuthScope.of(context);
+        if (auth.token != null) await auth.restore(background: true);
+      }
     }
   }
 
@@ -5703,6 +5707,8 @@ class ProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = AuthScope.of(context);
     final user = auth.user!;
+    final trustScore = (user.reviewCount ?? 0) > 0 ? user.trustScore : null;
+    final attendance = user.attendancePercentage;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
       children: [
@@ -5789,10 +5795,22 @@ class ProfilePage extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _Stat(value: '4.8', label: context.tr('trust')),
-                    _Stat(value: '12', label: context.tr('joined')),
-                    _Stat(value: '3', label: context.tr('organized')),
-                    _Stat(value: '96%', label: context.tr('attendance')),
+                    _Stat(
+                      value: trustScore?.toStringAsFixed(1) ?? '—',
+                      label: context.tr('trust'),
+                    ),
+                    _Stat(
+                      value: user.joinedCount?.toString() ?? '—',
+                      label: context.tr('joined'),
+                    ),
+                    _Stat(
+                      value: user.organizedCount?.toString() ?? '—',
+                      label: context.tr('organized'),
+                    ),
+                    _Stat(
+                      value: attendance == null ? '—' : '$attendance%',
+                      label: context.tr('attendance'),
+                    ),
                   ],
                 ),
               ],

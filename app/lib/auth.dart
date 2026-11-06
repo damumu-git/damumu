@@ -48,6 +48,12 @@ class AuthUser {
     required this.email,
     this.avatarUrl,
     this.avatarImageUrl,
+    this.trustScore,
+    this.reviewCount,
+    this.joinedCount,
+    this.organizedCount,
+    this.attendedCount,
+    this.noShowCount,
   });
 
   final String id;
@@ -55,6 +61,21 @@ class AuthUser {
   final String email;
   final String? avatarUrl;
   final String? avatarImageUrl;
+  final double? trustScore;
+  final int? reviewCount;
+  final int? joinedCount;
+  final int? organizedCount;
+  final int? attendedCount;
+  final int? noShowCount;
+
+  int? get attendancePercentage {
+    final attended = attendedCount;
+    final noShow = noShowCount;
+    if (attended == null || noShow == null || attended + noShow == 0) {
+      return null;
+    }
+    return (100 * attended / (attended + noShow)).round();
+  }
 
   AuthUser copyWith({
     String? nickname,
@@ -66,6 +87,12 @@ class AuthUser {
     email: email,
     avatarUrl: avatarUrl ?? this.avatarUrl,
     avatarImageUrl: avatarImageUrl ?? this.avatarImageUrl,
+    trustScore: trustScore,
+    reviewCount: reviewCount,
+    joinedCount: joinedCount,
+    organizedCount: organizedCount,
+    attendedCount: attendedCount,
+    noShowCount: noShowCount,
   );
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
@@ -74,6 +101,12 @@ class AuthUser {
     email: '${json['email'] ?? ''}',
     avatarUrl: json['avatarUrl'] as String?,
     avatarImageUrl: json['avatarImageUrl'] as String?,
+    trustScore: (json['trust_score'] as num?)?.toDouble(),
+    reviewCount: (json['review_count'] as num?)?.toInt(),
+    joinedCount: (json['joined_count'] as num?)?.toInt(),
+    organizedCount: (json['organized_count'] as num?)?.toInt(),
+    attendedCount: (json['attended_count'] as num?)?.toInt(),
+    noShowCount: (json['no_show_count'] as num?)?.toInt(),
   );
 }
 
@@ -298,9 +331,12 @@ class AuthController extends ChangeNotifier {
         await _discardSession();
       } else if (token != null) {
         try {
+          final profileAtRequest = user;
           final restored = await AuthApi.me(token!);
           if (version != _sessionVersion) return;
-          user = restored;
+          if (!keepCurrentPage || identical(user, profileAtRequest)) {
+            user = restored;
+          }
         } catch (error) {
           if (version != _sessionVersion) return;
           if (error is AuthApiException &&
