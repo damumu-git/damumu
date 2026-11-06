@@ -1,5 +1,7 @@
 # DAMUMU 当前项目状态
 
+- 2026-11-06 iOS 定位声明：TestFlight `1.0.0 (6)` 报告 `ITMS-90683`。已将 `geolocator_apple` 锁定到支持 Swift Package Manager 前台定位构建开关的 2.3.15。下一次 Codemagic 构建须在工作流设置 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`，上传新构建后核对 Apple 警告和前台定位弹窗。
+
 - 2026-11-06 移动端键盘：点击输入区域以外时统一取消输入焦点，登录、注册和第三方授权开始前收起键盘，切换底部页面也清除焦点。登录页和首页支持滚动时收起。通过 iOS 平台行为的 Flutter 测试核对点外收起、搜索键和切换标签，真机登录后过渡待 TestFlight 验收。
 
 - 2026-11-05 iOS TestFlight 构建：Codemagic 已通过签名设置，Xcode 归档因 Firebase Core 和 Messaging 要求 iOS 15.0、工程仍设为 13.0 而失败。已将 Debug、Profile 和 Release 的最低部署版本统一设为 iOS 15.0；下一步在 Codemagic 使用修复提交重新归档并上传，Windows 无法验证 iOS 归档。
