@@ -38,6 +38,7 @@ flutter:
   assets:
     - assets/auth/google-g.png
     - assets/branding/logo.png
+    - assets/activity-covers/
     - assets/fonts/NotoSansSC-LICENSE.txt
     - assets/fonts/NotoSansKR-LICENSE.txt
     - assets/fonts/NotoEmoji-LICENSE.txt

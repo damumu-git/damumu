@@ -646,7 +646,9 @@ public static class AdminEndpoints
         admin.MapGet("/regions", async (Db db, CancellationToken ct) =>
             ApiSupport.Ok(await db.QueryAsync(
                 """
-                SELECT r.*, parent.name_zh_cn AS parent_name,
+                SELECT r.code, r.parent_code, r.level, r.name_zh_cn, r.name_ko_kr,
+                       r.name_en_us, r.sort_order, r.is_active, r.created_at, r.updated_at,
+                       parent.name_zh_cn AS parent_name,
                        (SELECT count(*) FROM administrative_region child WHERE child.parent_code=r.code) AS child_count,
                        (SELECT count(*) FROM event e
                         WHERE (e.city_code=r.code OR e.district_code=r.code) AND e.deleted_at IS NULL) AS event_count
@@ -664,7 +666,8 @@ public static class AdminEndpoints
                 INSERT INTO administrative_region
                     (code, parent_code, level, name_zh_cn, name_ko_kr, name_en_us, sort_order, is_active)
                 VALUES (@code, @parentCode, @level, @nameZhCn, @nameKoKr, @nameEnUs, @sortOrder, @isActive)
-                RETURNING *
+                RETURNING code, parent_code, level, name_zh_cn, name_ko_kr, name_en_us,
+                          sort_order, is_active, created_at, updated_at
                 """, new {
                     code = request.Code.Trim(), request.ParentCode, request.Level,
                     nameZhCn = Required(request.NameZhCn, "请输入中文名称"),
@@ -687,7 +690,9 @@ public static class AdminEndpoints
                 SET parent_code=@parentCode, level=@level, name_zh_cn=@nameZhCn,
                     name_ko_kr=@nameKoKr, name_en_us=@nameEnUs,
                     sort_order=@sortOrder, is_active=@isActive, updated_at=now()
-                WHERE code=@code RETURNING *
+                WHERE code=@code
+                RETURNING code, parent_code, level, name_zh_cn, name_ko_kr, name_en_us,
+                          sort_order, is_active, created_at, updated_at
                 """, new {
                     code, request.ParentCode, request.Level,
                     nameZhCn = Required(request.NameZhCn, "请输入中文名称"),
@@ -881,17 +886,17 @@ public static class AdminEndpoints
             throw new ApiException(400, "region_name_language_invalid", "中文名称必须填写中文，不能填写韩文名称");
         if (!Regex.IsMatch(nameKoKr, "[가-힣]"))
             throw new ApiException(400, "region_name_language_invalid", "韩文名称必须填写韩文");
-        if (request.Level is not (1 or 2))
-            throw new ApiException(400, "region_level_invalid", "地区层级只能是城市或区县");
+        if (request.Level is < 1 or > 3)
+            throw new ApiException(400, "region_level_invalid", "地区层级只能是一级、二级或三级");
         if ((request.Level == 1) != string.IsNullOrWhiteSpace(request.ParentCode))
-            throw new ApiException(400, "region_parent_invalid", "城市不能有上级，区县必须选择所属城市");
-        if (request.Level == 2)
+            throw new ApiException(400, "region_parent_invalid", "一级地区没有上级，其它地区必须选择上级");
+        if (request.Level > 1)
         {
             var parentLevel = await db.ScalarAsync<short>(
                 "SELECT level FROM administrative_region WHERE code=@parentCode",
                 new { request.ParentCode }, ct);
-            if (parentLevel != 1)
-                throw new ApiException(400, "region_parent_invalid", "请选择有效的上级城市");
+            if (parentLevel != request.Level - 1)
+                throw new ApiException(400, "region_parent_invalid", "请选择相邻层级的上级地区");
         }
     }
 

@@ -694,7 +694,9 @@ const regionPayload = (region, overrides = {}) => ({
   ...overrides,
 })
 
-function RegionEditor({ region, cities, onClose, onSaved }) {
+const regionLevelLabels = { 1: '城市/道', 2: '区/市/郡', 3: '下辖区' }
+
+function RegionEditor({ region, regions, onClose, onSaved }) {
   const [form, setForm] = useState(region ? regionPayload(region) : {
     code: '', parentCode: null, level: 1, nameZhCn: '', nameKoKr: '', nameEnUs: '', sortOrder: 10, isActive: true,
   })
@@ -714,8 +716,8 @@ function RegionEditor({ region, cities, onClose, onSaved }) {
     <div className="dialog-backdrop" onMouseDown={onClose}>
       <form className="dialog" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <div className="dialog-head"><div><span className="kicker">Region editor</span><h3>{region ? '编辑地区' : '新建地区'}</h3></div><button type="button" aria-label="关闭弹窗" onClick={onClose}>×</button></div>
-        <label>层级<select value={form.level} onChange={(e) => update('level', Number(e.target.value))}><option value={1}>城市/道</option><option value={2}>区/市</option></select></label>
-        {form.level === 2 && <label>所属城市<select required value={form.parentCode ?? ''} onChange={(e) => update('parentCode', e.target.value)}><option value="">请选择</option>{cities.map((city) => <option key={city.code} value={city.code}>{city.name_zh_cn}</option>)}</select></label>}
+        <label>层级<select value={form.level} onChange={(e) => setForm((current) => ({ ...current, level: Number(e.target.value), parentCode: null }))}>{Object.entries(regionLevelLabels).map(([level, label]) => <option key={level} value={level}>{label}</option>)}</select></label>
+        {form.level > 1 && <label>上级地区<select required value={form.parentCode ?? ''} onChange={(e) => update('parentCode', e.target.value)}><option value="">请选择</option>{regions.filter((parent) => parent.level === form.level - 1 && parent.code !== form.code).map((parent) => <option key={parent.code} value={parent.code}>{parent.name_zh_cn}（{parent.code}）</option>)}</select></label>}
         <label>标准代码<input required readOnly={Boolean(region)} value={form.code} onChange={(e) => update('code', e.target.value.toUpperCase())} placeholder="例如 KR-11" /></label>
         <label>中文名称<input required value={form.nameZhCn} onChange={(e) => update('nameZhCn', e.target.value)} /></label>
         <label>한국어<input required value={form.nameKoKr} onChange={(e) => update('nameKoKr', e.target.value)} /></label>
@@ -735,7 +737,6 @@ function Regions() {
   const [editing, setEditing] = useState(undefined)
   const resource = useResource(api.regions, [])
   const rows = resource.data?.data ?? []
-  const cities = rows.filter((row) => row.level === 1)
   const saved = (message) => { setEditing(undefined); setNotice(message); resource.reload() }
   const toggle = async (region) => {
     try {
@@ -750,10 +751,10 @@ function Regions() {
       {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
       <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
         <div className="table-wrap"><table><thead><tr><th>地区</th><th>代码</th><th>层级</th><th>English / 한국어</th><th>活动</th><th>启用</th><th>操作</th></tr></thead><tbody>{rows.map((region) => (
-          <tr key={region.code}><td><strong>{region.name_zh_cn}</strong><small className="block-note">{region.parent_name || '一级地区'}</small></td><td><code>{region.code}</code></td><td>{region.level === 1 ? '城市/道' : '区/市'}</td><td>{region.name_en_us}<small className="block-note">{region.name_ko_kr}</small></td><td>{region.event_count}</td><td><label className="switch"><input type="checkbox" checked={region.is_active} onChange={() => toggle(region)} /><span /></label></td><td><div className="row-actions"><button onClick={() => setEditing(region)}>编辑</button><button className="danger" onClick={async () => { if (!(await dialog.confirm(`确认删除「${region.name_zh_cn}」？`))) return; try { await api.deleteRegion(region.code); setNotice('地区已删除'); resource.reload() } catch (error) { setNotice(error.message) } }}>删除</button></div></td></tr>
+          <tr key={region.code}><td><strong>{region.name_zh_cn}</strong><small className="block-note">{region.parent_name || '一级地区'}</small></td><td><code>{region.code}</code></td><td>{regionLevelLabels[region.level]}</td><td>{region.name_en_us}<small className="block-note">{region.name_ko_kr}</small></td><td>{region.event_count}</td><td><label className="switch"><input type="checkbox" checked={region.is_active} onChange={() => toggle(region)} /><span /></label></td><td><div className="row-actions"><button onClick={() => setEditing(region)}>编辑</button><button className="danger" onClick={async () => { if (!(await dialog.confirm(`确认删除「${region.name_zh_cn}」？`))) return; try { await api.deleteRegion(region.code); setNotice('地区已删除'); resource.reload() } catch (error) { setNotice(error.message) } }}>删除</button></div></td></tr>
         ))}</tbody></table></div>
       </PageState>
-      {editing !== undefined && <RegionEditor region={editing} cities={cities} onClose={() => setEditing(undefined)} onSaved={saved} />}
+      {editing !== undefined && <RegionEditor region={editing} regions={rows} onClose={() => setEditing(undefined)} onSaved={saved} />}
     </section>
   )
 }

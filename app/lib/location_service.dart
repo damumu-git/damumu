@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'event_service.dart';
 import 'external_processing.dart';
 import 'app_permissions.dart';
 import 'l10n.dart';
@@ -36,9 +37,8 @@ class ManualRegionSelection {
 class LocationService {
   LocationService({http.Client? client}) : _client = client ?? http.Client();
 
-  // v3 separates labels by App language and invalidates older locale-agnostic
-  // labels, which could keep showing Traditional Chinese after a language change.
-  static const _cacheVersion = 'v4';
+  // Keep labels separate by App language and invalidate the old GPS-only label.
+  static const _cacheVersion = 'v5';
   static const _cacheLifetime = Duration(minutes: 30);
 
   final http.Client _client;
@@ -120,7 +120,7 @@ class LocationService {
     } on TimeoutException {
       throw const LocationFailure('locationTimedOut');
     }
-    final label = await _reverseGeocode(
+    final label = await _resolveLabel(
       position.latitude,
       position.longitude,
       languageCode,
@@ -130,8 +130,32 @@ class LocationService {
       longitude: position.longitude,
       label: label,
     );
-    await _writeCache(result, languageCode);
+    if (label != appTranslation(languageCode, 'locationFound')) {
+      await _writeCache(result, languageCode);
+    }
     return result;
+  }
+
+  Future<String> _resolveLabel(
+    double latitude,
+    double longitude,
+    String languageCode,
+  ) async {
+    try {
+      final regions = await RegionService.resolve(
+        client: _client,
+        latitude: latitude,
+        longitude: longitude,
+      );
+      if (regions.isNotEmpty) {
+        return regions
+            .map((region) => region.displayName(languageCode))
+            .join(' · ');
+      }
+    } catch (_) {
+      // GPS still works when the catalog is unavailable or an older API is deployed.
+    }
+    return _reverseGeocode(latitude, longitude, languageCode);
   }
 
   Future<String> _reverseGeocode(

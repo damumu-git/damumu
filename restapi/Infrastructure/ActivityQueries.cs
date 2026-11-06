@@ -11,6 +11,7 @@ public static class ActivityQueries
                        CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || COALESCE(cover.thumbnail_storage_key, cover.storage_key) END AS cover_url,
                        e.published_at,
                        c.id AS category_id,
+                       COALESCE(grandparent_category.code, parent_category.code, c.code) AS cover_category_code,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
                        c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
                        city_region.name_zh_cn AS city_name,
@@ -34,6 +35,8 @@ public static class ActivityQueries
                             ELSE NULL END AS distance_meters
                 FROM event e
                 JOIN category c ON c.id=e.category_id
+                LEFT JOIN category parent_category ON parent_category.id=c.parent_id
+                LEFT JOIN category grandparent_category ON grandparent_category.id=parent_category.parent_id
                 LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id

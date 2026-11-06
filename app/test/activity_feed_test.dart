@@ -49,6 +49,39 @@ void main() {
   }
 
   testWidgets(
+    'discovery cover uses category artwork and ignores the uploaded photo',
+    (tester) async {
+      await mount(
+        tester,
+        ({latitude, longitude, city, district, required limit, cursor}) async =>
+            const ActivityPage(
+              items: [
+                {
+                  'id': 'activity',
+                  'title': 'Art class',
+                  'capacity': 10,
+                  'cover_category_code': 'culture',
+                  'cover_url': 'https://example.test/uploaded.jpg',
+                },
+              ],
+              nextCursor: null,
+              hasMore: false,
+            ),
+      );
+      final image = tester.widget<Image>(
+        find.descendant(
+          of: find.byType(EventCard),
+          matching: find.byType(Image),
+        ),
+      );
+      expect(
+        image.image,
+        const AssetImage('assets/activity-covers/culture.webp'),
+      );
+    },
+  );
+
+  testWidgets(
     'append retry keeps cursor and items, deduplicates UUID, stops at end',
     (tester) async {
       final calls = <String?>[];

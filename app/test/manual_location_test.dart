@@ -95,7 +95,7 @@ void main() {
   });
 
   test(
-    'GPS works without external geocoding and a revoked permission blocks cached coordinates',
+    'GPS resolves localized district names without external geocoding and rechecks permissions',
     () async {
       SharedPreferences.setMockInitialValues({
         AppPermissions.key(AppPermission.location): true,
@@ -104,18 +104,54 @@ void main() {
       final platform = _LocationPlatform();
       GeolocatorPlatform.instance = platform;
       addTearDown(() => GeolocatorPlatform.instance = previous);
-      var geocodingRequests = 0;
+      var requests = 0;
       final service = LocationService(
-        client: MockClient((_) async {
-          geocodingRequests++;
-          return http.Response('{}', 500);
+        client: MockClient((request) async {
+          requests++;
+          expect(request.method, 'POST');
+          expect(request.url.path, endsWith('/regions/resolve'));
+          expect(request.url.hasQuery, isFalse);
+          expect(jsonDecode(request.body), {
+            'latitude': 37.56,
+            'longitude': 126.97,
+          });
+          return http.Response(
+            jsonEncode({
+              'data': [
+                {
+                  'code': 'KR-11',
+                  'level': 1,
+                  'name_zh_cn': '首尔',
+                  'name_ko_kr': '서울특별시',
+                  'name_en_us': 'Seoul',
+                },
+                {
+                  'code': 'KR-11140',
+                  'parent_code': 'KR-11',
+                  'level': 2,
+                  'name_zh_cn': '中区',
+                  'name_ko_kr': '중구',
+                  'name_en_us': 'Jung-gu',
+                },
+              ],
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
         }),
       );
 
       final location = await service.locate(languageCode: 'zh');
       expect(location.latitude, 37.56);
-      expect(location.label, '已获取当前位置');
-      expect(geocodingRequests, 0);
+      expect(location.label, '首尔 · 中区');
+      expect(location.isManual, isFalse);
+      expect((await service.locate(languageCode: 'zh')).label, '首尔 · 中区');
+      expect(requests, 1);
+      expect(
+        (await service.locate(languageCode: 'en')).label,
+        'Seoul · Jung-gu',
+      );
+      expect((await service.locate(languageCode: 'ko')).label, '서울특별시 · 중구');
 
       platform.permission = LocationPermission.denied;
       await expectLater(
@@ -129,6 +165,28 @@ void main() {
         allowPermissionPrompt: true,
       );
       expect(platform.permissionRequests, 1);
+    },
+  );
+
+  test(
+    'GPS coordinates still work when the region API is unavailable',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        AppPermissions.key(AppPermission.location): true,
+      });
+      final previous = GeolocatorPlatform.instance;
+      GeolocatorPlatform.instance = _LocationPlatform();
+      addTearDown(() => GeolocatorPlatform.instance = previous);
+      final service = LocationService(
+        client: MockClient((request) async {
+          expect(request.url.path, endsWith('/regions/resolve'));
+          return http.Response('{}', 404);
+        }),
+      );
+      final location = await service.locate(languageCode: 'zh');
+      expect(location.latitude, 37.56);
+      expect(location.longitude, 126.97);
+      expect(location.label, '已定位，地区未知');
     },
   );
 

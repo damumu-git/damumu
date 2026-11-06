@@ -109,10 +109,31 @@ class AdministrativeRegion {
 }
 
 class RegionService {
+  static Future<List<AdministrativeRegion>> resolve({
+    required http.Client client,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final response = await client
+        .post(
+          Uri.parse('$_apiBase/regions/resolve'),
+          headers: const {'Content-Type': 'application/json'},
+          body: jsonEncode({'latitude': latitude, 'longitude': longitude}),
+        )
+        .timeout(const Duration(seconds: 4));
+    return _regionsFromResponse(response);
+  }
+
   static Future<List<AdministrativeRegion>> load() async {
     final response = await http
         .get(Uri.parse('$_apiBase/regions'))
         .timeout(const Duration(seconds: 8));
+    return _regionsFromResponse(response);
+  }
+
+  static List<AdministrativeRegion> _regionsFromResponse(
+    http.Response response,
+  ) {
     final decoded = _decodeResponse(response, '地区暂时无法加载，请稍后再试');
     return (decoded['data'] as List)
         .map(

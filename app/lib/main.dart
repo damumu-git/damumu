@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:geolocator/geolocator.dart';
@@ -275,6 +275,7 @@ class EventItem {
     this.beginnerFriendly = false,
     this.beginnerFriendlyVerified = false,
     this.coverUrl,
+    this.coverCategoryCode,
     this.organizerRiskTag,
     this.emojiUrl,
   });
@@ -306,6 +307,7 @@ class EventItem {
   final bool beginnerFriendly;
   final bool beginnerFriendlyVerified;
   final String? coverUrl;
+  final String? coverCategoryCode;
   final String? organizerRiskTag;
 }
 
@@ -624,6 +626,7 @@ class _AppShellState extends State<AppShell> {
       emoji: '${json['category_icon'] ?? '✨'}',
       emojiUrl: json['category_icon_url'] as String?,
       coverUrl: json['cover_url'] as String?,
+      coverCategoryCode: json['cover_category_code'] as String?,
       organizerRiskTag: json['organizer_risk_tag'] as String?,
       title: '${json['title'] ?? ''}',
       category: '${json['category_name'] ?? ''}',
@@ -1686,6 +1689,20 @@ class EventCard extends StatelessWidget {
   const EventCard({required this.event, required this.onTap, super.key});
   final EventItem event;
   final VoidCallback onTap;
+
+  String get _coverAsset {
+    final category = switch (event.coverCategoryCode) {
+      'food' ||
+      'sports' ||
+      'culture' ||
+      'outdoors' ||
+      'study' ||
+      'social' => event.coverCategoryCode,
+      _ => 'other',
+    };
+    return 'assets/activity-covers/$category.webp';
+  }
+
   @override
   Widget build(BuildContext context) => Card(
     clipBehavior: Clip.antiAlias,
@@ -1696,13 +1713,11 @@ class EventCard extends StatelessWidget {
         children: [
           SizedBox(
             height: 145,
-            child: event.coverUrl == null
-                ? _coverFallback()
-                : Image.network(
-                    absoluteImageUrl(event.coverUrl!),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => _coverFallback(),
-                  ),
+            child: Image.asset(
+              _coverAsset,
+              fit: BoxFit.cover,
+              excludeFromSemantics: true,
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(15),
@@ -1817,17 +1832,6 @@ class EventCard extends StatelessWidget {
         ],
       ),
     ),
-  );
-  Widget _coverFallback() => Container(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [AppPalette.soft, Color(0xFFCEE5F5)],
-      ),
-    ),
-    alignment: Alignment.center,
-    child: EmojiPicture(event.emoji, url: event.emojiUrl, size: 48),
   );
 }
 
@@ -3082,6 +3086,35 @@ class _CreateEventPageState extends State<CreateEventPage> {
       if (await picked.length() > 128 * 1024 * 1024) {
         throw const FormatException('largePhotoProcessingFailed');
       }
+      if (source == ImageSource.camera) {
+        // The iOS picker can return before its native dismissal completes.
+        // Give the user a Flutter preview before presenting the native cropper.
+        final photo = await picked.readAsBytes();
+        if (!mounted) return;
+        final proceed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(context.tr('eventCoverPreview')),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+              ),
+              child: Image.memory(photo, fit: BoxFit.contain),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(context.tr('eventCoverCancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(context.tr('eventCoverCrop')),
+              ),
+            ],
+          ),
+        );
+        if (proceed != true) return;
+      }
       if (!mounted) return;
       final webLayout = webCropperLayout(context);
       final cropped = await ImageCropper().cropImage(
@@ -3248,7 +3281,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                       Expanded(
                         flex: 2,
                         child: FilledButton(
-                          onPressed: _publishing ? null : _next,
+                          onPressed: _publishing || _coverBusy ? null : _next,
                           child: _publishing
                               ? const _ButtonProgress(label: '发布中…')
                               : Text(_step == 2 ? '确认发布' : '下一步'),
@@ -3728,6 +3761,31 @@ class _CreateEventPageState extends State<CreateEventPage> {
       TextField(
         controller: _price,
         keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          TextInputFormatter.withFunction((_, value) {
+            if (!value.composing.isCollapsed) return value;
+            final leadingZeros = RegExp(
+              r'^0+(?=[0-9])',
+            ).stringMatch(value.text);
+            if (leadingZeros == null) return value;
+            final removed = leadingZeros.length;
+            final text = value.text.substring(removed);
+            return TextEditingValue(
+              text: text,
+              selection: TextSelection(
+                baseOffset: (value.selection.baseOffset - removed).clamp(
+                  0,
+                  text.length,
+                ),
+                extentOffset: (value.selection.extentOffset - removed).clamp(
+                  0,
+                  text.length,
+                ),
+              ),
+            );
+          }),
+        ],
         decoration: const InputDecoration(
           prefixText: '₩ ',
           hintText: '0',
@@ -3792,6 +3850,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
   );
 
   Future<void> _next() async {
+    if (_coverBusy || _publishing) return;
     if (_step == 0 && _title.text.trim().isEmpty) {
       ScaffoldMessenger.of(
         context,
