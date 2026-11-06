@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -44,6 +45,29 @@ const _cream = AppPalette.background;
 const _orange = Color(0xFFFF6B57);
 _AppShellState? _activeShell;
 _CreateEventPageState? _activeRouteDraft;
+
+Future<ImageSource?> _chooseImageSource(BuildContext context) =>
+    showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(sheetContext.tr('takePhoto')),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(sheetContext.tr('chooseFromGallery')),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
 
 Future<void> _openPrivacyPolicy(BuildContext context) async {
   final languageCode = Localizations.localeOf(context).languageCode;
@@ -881,12 +905,12 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final LocationService _locationService = LocationService();
   final TextEditingController _searchController = TextEditingController();
-  final Set<String> _selectedFilters = {'附近热门'};
-  String _locationLabel = '正在定位…';
+  final Set<String> _selectedFilters = {};
+  String? _locationLabel;
   bool _locating = true;
-  bool _hasResolvedLocation = false;
   bool _manualLocation = false;
   String? _locationLanguage;
+  int _locationRequest = 0;
 
   @override
   void didChangeDependencies() {
@@ -894,7 +918,7 @@ class _HomePageState extends State<HomePage> {
     final language = Localizations.localeOf(context).languageCode;
     if (_locationLanguage == language) return;
     _locationLanguage = language;
-    _restoreLocation();
+    unawaited(_restoreLocation(++_locationRequest));
   }
 
   @override
@@ -926,17 +950,10 @@ class _HomePageState extends State<HomePage> {
           !event.tags.contains('新手友好')) {
         return false;
       }
-      if (_selectedFilters.contains('附近热门') && !_isNearby(event)) {
-        return false;
-      }
       return true;
     }).toList();
     return events;
   }
-
-  double _distanceKilometers(String value) =>
-      double.tryParse(RegExp(r'[\d.]+').firstMatch(value)?.group(0) ?? '') ??
-      double.infinity;
 
   bool _isToday(EventItem event) {
     final startsAt = event.startsAt;
@@ -956,17 +973,6 @@ class _HomePageState extends State<HomePage> {
         startsAt.weekday == DateTime.sunday;
   }
 
-  bool _isNearby(EventItem event) {
-    if (_locating || !_hasResolvedLocation) return true;
-    final distance = _distanceKilometers(event.distance);
-    if (distance.isFinite) return distance <= 10;
-    final locationParts = _locationLabel
-        .split(' · ')
-        .map((part) => part.trim())
-        .where((part) => part.length >= 2);
-    return locationParts.any(event.area.contains);
-  }
-
   void _toggleFilter(String filter) {
     setState(() {
       if (!_selectedFilters.add(filter)) _selectedFilters.remove(filter);
@@ -978,24 +984,27 @@ class _HomePageState extends State<HomePage> {
     setState(_selectedFilters.clear);
   }
 
-  Future<void> _restoreLocation() async {
-    final saved = await _locationService.readManualRegion();
-    if (!mounted || saved == null) {
-      if (mounted) await _locate(forceRefresh: true, offerManual: true);
-      return;
-    }
+  bool _isCurrentLocationRequest(int request) =>
+      mounted && request == _locationRequest;
+
+  Future<void> _restoreLocation(int request) async {
     try {
-      final regions = await RegionService.load();
-      if (!mounted) return;
-      final location = _manualAppLocation(saved, regions);
-      if (location == null) {
-        await _locationService.clearManualRegion();
-        await _locate(forceRefresh: true, offerManual: true);
+      final saved = await _locationService.readManualRegion();
+      if (!_isCurrentLocationRequest(request)) return;
+      if (saved == null) {
+        await _locate(request);
         return;
       }
-      _applyLocation(location);
+      final regions = await RegionService.load();
+      if (!_isCurrentLocationRequest(request)) return;
+      final location = _manualAppLocation(saved, regions);
+      if (location != null) _applyLocation(location);
     } catch (_) {
-      if (mounted) await _locate(forceRefresh: true, offerManual: true);
+      // Keep the saved region when the catalog is temporarily unavailable.
+    } finally {
+      if (_isCurrentLocationRequest(request) && _locating) {
+        setState(() => _locating = false);
+      }
     }
   }
 
@@ -1007,7 +1016,10 @@ class _HomePageState extends State<HomePage> {
     AdministrativeRegion? district;
     for (final region in regions) {
       if (region.code == selection.cityCode && region.level == 1) city = region;
-      if (region.code == selection.districtCode) district = region;
+      if (region.code == selection.districtCode &&
+          region.parentCode == selection.cityCode) {
+        district = region;
+      }
     }
     if (city == null) return null;
     final language = _locationLanguage ?? 'zh';
@@ -1025,51 +1037,53 @@ class _HomePageState extends State<HomePage> {
   void _applyLocation(AppLocation location) {
     setState(() {
       _locationLabel = location.label;
-      _hasResolvedLocation = true;
       _manualLocation = location.isManual;
       _locating = false;
     });
     widget.onLocationChanged?.call(location);
   }
 
-  Future<void> _locate({
-    bool forceRefresh = false,
-    bool offerManual = false,
-  }) async {
-    setState(() {
-      _locating = true;
-      if (forceRefresh) {
-        _locationLabel = '正在定位…';
-        _hasResolvedLocation = false;
-      }
-    });
+  Future<void> _locate(int request, {bool interactive = false}) async {
+    setState(() => _locating = true);
     try {
       final location = await _locationService.locate(
         languageCode: _locationLanguage ?? 'zh',
-        forceRefresh: forceRefresh,
+        forceRefresh: interactive,
+        allowPermissionPrompt: interactive,
       );
-      if (!mounted) return;
-      await _locationService.clearManualRegion();
-      if (!mounted) return;
+      if (!_isCurrentLocationRequest(request)) return;
+      if (interactive) await _locationService.clearManualRegion();
+      if (!_isCurrentLocationRequest(request)) return;
       _applyLocation(location);
     } on LocationFailure catch (error) {
-      if (!mounted) return;
-      setState(() => _locationLabel = error.message);
-      if (offerManual) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _chooseManualLocation();
-        });
+      if (_isCurrentLocationRequest(request) && interactive) {
+        final settings = error.settings;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr(error.message)),
+            action: settings == null
+                ? null
+                : SnackBarAction(
+                    label: context.tr('permissionOpenSettings'),
+                    onPressed: () => unawaited(
+                      settings == LocationSettingsTarget.app
+                          ? Geolocator.openAppSettings()
+                          : Geolocator.openLocationSettings(),
+                    ),
+                  ),
+          ),
+        );
       }
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _locationLabel = context.tr('locationFailed'));
-      if (offerManual) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _chooseManualLocation();
-        });
+      if (_isCurrentLocationRequest(request) && interactive) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('locationFailed'))));
       }
     } finally {
-      if (mounted) setState(() => _locating = false);
+      if (_isCurrentLocationRequest(request) && _locating) {
+        setState(() => _locating = false);
+      }
     }
   }
 
@@ -1102,7 +1116,7 @@ class _HomePageState extends State<HomePage> {
           !mounted) {
         return;
       }
-      await _locate(forceRefresh: true, offerManual: true);
+      await _locate(++_locationRequest, interactive: true);
     } else if (action == 'manual') {
       await _chooseManualLocation();
     }
@@ -1135,8 +1149,9 @@ class _HomePageState extends State<HomePage> {
     if (!mounted || selection == null) return;
     final location = _manualAppLocation(selection, regions);
     if (location == null) return;
+    final request = ++_locationRequest;
     await _locationService.saveManualRegion(selection);
-    if (!mounted) return;
+    if (!_isCurrentLocationRequest(request)) return;
     _applyLocation(location);
   }
 
@@ -1199,7 +1214,10 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
-                            _locationLabel,
+                            _locating
+                                ? context.tr('locating')
+                                : _locationLabel ??
+                                      context.tr('chooseLocation'),
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 12,
@@ -1277,7 +1295,7 @@ class _HomePageState extends State<HomePage> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: const ['附近热门', '今天', '周末', '新手友好']
+                  children: const ['今天', '周末', '新手友好']
                       .map(
                         (filter) => FilterChipLabel(
                           filter,
@@ -1380,6 +1398,7 @@ class _ManualLocationSheet extends StatefulWidget {
 class _ManualLocationSheetState extends State<_ManualLocationSheet> {
   String? _cityCode;
   String? _districtCode;
+  bool? _choosingCity;
 
   List<AdministrativeRegion> get _cities =>
       widget.regions.where((region) => region.level == 1).toList();
@@ -1400,82 +1419,148 @@ class _ManualLocationSheetState extends State<_ManualLocationSheet> {
     _districtCode =
         districts.any((district) => district.code == initialDistrict)
         ? initialDistrict
-        : (districts.isEmpty ? null : districts.first.code);
+        : null;
   }
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    child: Padding(
-      padding: EdgeInsets.fromLTRB(
-        24,
-        0,
-        24,
-        24 + MediaQuery.viewInsetsOf(context).bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            context.tr('chooseLocationManually'),
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            context.tr('manualLocationHint'),
-            style: TextStyle(color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 20),
-          DropdownButtonFormField<String>(
-            initialValue: _cityCode,
-            decoration: InputDecoration(labelText: context.tr('city')),
-            items: _cities
-                .map(
-                  (city) => DropdownMenuItem(
-                    value: city.code,
-                    child: Text(city.displayName(widget.languageCode)),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) => setState(() {
-              _cityCode = value;
-              final districts = _districts;
-              _districtCode = districts.isEmpty ? null : districts.first.code;
+  Widget build(BuildContext context) {
+    final cities = _cities;
+    final districts = _districts;
+    String? selectedName(List<AdministrativeRegion> options, String? code) =>
+        options
+            .where((region) => region.code == code)
+            .firstOrNull
+            ?.displayName(widget.languageCode);
+
+    Widget selector(bool city, String label, String value) => OutlinedButton(
+      onPressed: !city && _cityCode == null
+          ? null
+          : () => setState(() {
+              _choosingCity = _choosingCity == city ? null : city;
             }),
-          ),
-          const SizedBox(height: 14),
-          DropdownButtonFormField<String>(
-            key: ValueKey(_cityCode),
-            initialValue: _districtCode,
-            decoration: InputDecoration(labelText: context.tr('district')),
-            items: _districts
-                .map(
-                  (district) => DropdownMenuItem(
-                    value: district.code,
-                    child: Text(district.displayName(widget.languageCode)),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) => setState(() => _districtCode = value),
-          ),
-          const SizedBox(height: 22),
-          FilledButton.icon(
-            onPressed: _cityCode == null
-                ? null
-                : () => Navigator.pop(
-                    context,
-                    ManualRegionSelection(
-                      cityCode: _cityCode!,
-                      districtCode: _districtCode,
-                    ),
-                  ),
-            icon: const Icon(Icons.check),
-            label: Text(context.tr('useSelectedLocation')),
-          ),
+      child: Row(
+        children: [
+          Expanded(child: Text('$label · $value')),
+          Icon(_choosingCity == city ? Icons.expand_less : Icons.expand_more),
         ],
       ),
-    ),
-  );
+    );
+
+    final choosingCity = _choosingCity;
+    final options = choosingCity == true ? cities : districts;
+    final selectedCode = choosingCity == true ? _cityCode : _districtCode;
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * .72,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      context.tr('chooseLocationManually'),
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    Text(
+                      context.tr('manualLocationHint'),
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 12),
+                    selector(
+                      true,
+                      context.tr('city'),
+                      selectedName(cities, _cityCode) ??
+                          context.tr('chooseLocation'),
+                    ),
+                    const SizedBox(height: 6),
+                    selector(
+                      false,
+                      context.tr('district'),
+                      selectedName(districts, _districtCode) ??
+                          context.tr('wholeCity'),
+                    ),
+                    if (choosingCity != null)
+                      Card(
+                        color: AppPalette.soft,
+                        margin: const EdgeInsets.only(top: 8),
+                        child: Column(
+                          children: [
+                            if (!choosingCity)
+                              ListTile(
+                                title: Text(context.tr('wholeCity')),
+                                trailing: selectedCode == null
+                                    ? const Icon(Icons.check)
+                                    : null,
+                                onTap: () => setState(() {
+                                  _districtCode = null;
+                                  _choosingCity = null;
+                                }),
+                              ),
+                            for (final region in options)
+                              ListTile(
+                                title: Text(
+                                  region.displayName(widget.languageCode),
+                                ),
+                                trailing: selectedCode == region.code
+                                    ? const Icon(Icons.check)
+                                    : null,
+                                onTap: () => setState(() {
+                                  if (choosingCity) {
+                                    if (_cityCode != region.code)
+                                      _districtCode = null;
+                                    _cityCode = region.code;
+                                  } else {
+                                    _districtCode = region.code;
+                                  }
+                                  _choosingCity = null;
+                                }),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _cityCode == null
+                    ? null
+                    : () => Navigator.pop(
+                        context,
+                        ManualRegionSelection(
+                          cityCode: _cityCode!,
+                          districtCode: _districtCode,
+                        ),
+                      ),
+                icon: const Icon(Icons.check),
+                label: Text(context.tr('useSelectedLocation')),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class FilterChipLabel extends StatelessWidget {
@@ -2980,13 +3065,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
     if (_coverBusy) return;
     setState(() => _coverBusy = true);
     try {
-      if (!await AppPermissions.ensureImage(context, ImageSource.gallery) ||
-          !mounted) {
+      final source = await _chooseImageSource(context);
+      if (source == null || !mounted) return;
+      if (!await AppPermissions.ensureImage(context, source) || !mounted) {
         return;
       }
       final picked = await ImagePicker().pickImage(
         requestFullMetadata: false,
-        source: ImageSource.gallery,
+        source: source,
         maxWidth: 2048,
         maxHeight: 2048,
         imageQuality: 92,
@@ -4955,26 +5041,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _chooseChatImageSource() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: Text(context.tr('takePhoto')),
-              onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: Text(context.tr('chooseFromGallery')),
-              onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
-    );
+    final source = await _chooseImageSource(context);
     if (source != null && mounted) await _pickChatImage(source);
   }
 

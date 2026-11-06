@@ -30,13 +30,12 @@ class AppLocaleScope extends InheritedWidget {
 }
 
 extension AppTranslations on BuildContext {
-  String tr(String key) {
-    final language = Localizations.localeOf(this).languageCode;
-    return (_strings[language] ?? _strings['zh']!)[key] ??
-        _strings['zh']![key] ??
-        key;
-  }
+  String tr(String key) =>
+      appTranslation(Localizations.localeOf(this).languageCode, key);
 }
+
+String appTranslation(String language, String key) =>
+    _strings[language]?[key] ?? _strings['zh']![key] ?? key;
 
 const languageLabels = {'zh': '中文', 'en': 'English', 'ko': '한국어'};
 
@@ -186,7 +185,7 @@ const _strings = <String, Map<String, String>>{
     'privateChat': '私信',
     'eventChatMembers': '{count} 位成员 · 活动群',
     'eventCoverLabel': '活动图片（选填）',
-    'eventCoverRule': '直接选手机照片；应用会按 4:3 裁剪并自动压缩后上传',
+    'eventCoverRule': '拍照或从相册选择，应用会按 4:3 裁剪并自动压缩后上传',
     'eventCoverReady': '已自动处理，上传图片约 {size} KB',
     'largePhotoProcessingFailed': '这张照片无法在设备上处理，请改选普通照片或从相册导出为 JPEG 后重试',
     'eventCoverCrop': '裁剪活动图片',
@@ -322,12 +321,21 @@ const _strings = <String, Map<String, String>>{
     'loadErrorMessage': '暂时没有拿到内容，请稍后再试一次',
     'retry': '再试一次',
     'locationFailed': '定位失败，请手动选择地区',
+    'locating': '正在获取当前位置…',
+    'chooseLocation': '选择位置',
+    'locationFound': '已获取当前位置',
+    'unnamedArea': '未命名地区',
+    'locationServiceOff': '设备定位服务已关闭。请在系统设置中开启，或手动选择地区。',
+    'locationPermissionDenied': '尚未获得定位权限，可以重试或手动选择地区。',
+    'locationPermissionBlocked': '定位权限已关闭。请在系统设置中允许 App 使用位置。',
+    'locationTimedOut': '获取位置超时，请重试或手动选择地区。',
     'useAutomaticLocation': '使用自动定位',
     'chooseLocationManually': '手动选择地区',
     'manualLocationHint': '未开启定位权限时，可选择城市和所在区域来查看附近活动。',
     'regionsLoadFailed': '地区暂时无法加载，请稍后再试',
     'city': '城市',
     'district': '所在区域',
+    'wholeCity': '全市',
     'useSelectedLocation': '使用所选地区',
   },
   'en': {
@@ -494,7 +502,7 @@ const _strings = <String, Map<String, String>>{
     'eventChatMembers': '{count} members · Event chat',
     'eventCoverLabel': 'Activity photo (optional)',
     'eventCoverRule':
-        'Choose a phone photo; the app crops to 4:3 and compresses it before upload',
+        'Take a photo or choose one from your library. The app crops to 4:3 and compresses it before upload.',
     'eventCoverReady': 'Ready to upload: about {size} KB after processing',
     'largePhotoProcessingFailed':
         'This photo could not be processed on this device. Try a standard photo or export it as JPEG.',
@@ -646,6 +654,18 @@ const _strings = <String, Map<String, String>>{
     'loadErrorMessage': 'We could not load this content. Please try again.',
     'retry': 'Try again',
     'locationFailed': 'Location unavailable. Choose an area manually.',
+    'locating': 'Getting your location…',
+    'chooseLocation': 'Choose a location',
+    'locationFound': 'Current location found',
+    'unnamedArea': 'Unnamed area',
+    'locationServiceOff':
+        'Location Services is off. Turn it on in Settings or choose an area manually.',
+    'locationPermissionDenied':
+        'Location permission was denied. Try again or choose an area manually.',
+    'locationPermissionBlocked':
+        'Allow this app to use your location in Settings.',
+    'locationTimedOut':
+        'Getting your location timed out. Try again or choose an area manually.',
     'useAutomaticLocation': 'Use automatic location',
     'chooseLocationManually': 'Choose area manually',
     'manualLocationHint':
@@ -653,6 +673,7 @@ const _strings = <String, Map<String, String>>{
     'regionsLoadFailed': 'Areas are unavailable right now. Please try again.',
     'city': 'City',
     'district': 'District',
+    'wholeCity': 'Entire city',
     'useSelectedLocation': 'Use selected area',
   },
   'ko': {
@@ -806,7 +827,7 @@ const _strings = <String, Map<String, String>>{
     'privateChat': '개인 메시지',
     'eventChatMembers': '{count}명 · 모임 채팅',
     'eventCoverLabel': '활동 사진 (선택)',
-    'eventCoverRule': '휴대폰 사진을 선택하세요. 앱에서 4:3으로 자르고 압축해 업로드합니다',
+    'eventCoverRule': '사진을 찍거나 앨범에서 선택하세요. 앱에서 4:3으로 자르고 압축해 업로드합니다.',
     'eventCoverReady': '처리 완료: 업로드 이미지 약 {size} KB',
     'largePhotoProcessingFailed':
         '이 기기에서 사진을 처리할 수 없습니다. 일반 사진을 선택하거나 JPEG로 내보낸 뒤 다시 시도해 주세요.',
@@ -948,12 +969,21 @@ const _strings = <String, Map<String, String>>{
     'loadErrorMessage': '콘텐츠를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
     'retry': '다시 시도',
     'locationFailed': '위치를 확인할 수 없습니다. 지역을 직접 선택해 주세요.',
+    'locating': '현재 위치 확인 중…',
+    'chooseLocation': '위치 선택',
+    'locationFound': '현재 위치 확인됨',
+    'unnamedArea': '이름 없는 지역',
+    'locationServiceOff': '위치 서비스가 꺼져 있어요. 설정에서 켜거나 지역을 직접 선택해 주세요.',
+    'locationPermissionDenied': '위치 권한이 허용되지 않았어요. 다시 시도하거나 지역을 직접 선택해 주세요.',
+    'locationPermissionBlocked': '시스템 설정에서 이 앱의 위치 권한을 허용해 주세요.',
+    'locationTimedOut': '위치 확인 시간이 초과됐어요. 다시 시도하거나 지역을 직접 선택해 주세요.',
     'useAutomaticLocation': '자동 위치 사용',
     'chooseLocationManually': '지역 직접 선택',
     'manualLocationHint': '위치 권한을 허용하지 않은 경우 시/도와 지역을 선택해 주변 모임을 찾을 수 있습니다.',
     'regionsLoadFailed': '지역을 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.',
     'city': '시/도',
     'district': '지역',
+    'wholeCity': '시·도 전체',
     'useSelectedLocation': '선택한 지역 사용',
   },
 };

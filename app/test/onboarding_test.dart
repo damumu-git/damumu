@@ -198,7 +198,7 @@ void main() {
           isA<LocationFailure>().having(
             (e) => e.message,
             'message',
-            contains('manually'),
+            'chooseLocationManually',
           ),
         ),
       );

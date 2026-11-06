@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' as parser;
 import 'feedback_model.dart';
+import 'l10n.dart';
 
 const _apiBase = String.fromEnvironment(
   'API_BASE_URL',
@@ -80,15 +81,21 @@ class AdministrativeRegion {
   final String nameKoKr;
   final String nameEnUs;
 
-  String displayName(String languageCode) => switch (languageCode) {
-    'ko' when nameKoKr.trim().isNotEmpty => nameKoKr,
-    'en' when nameEnUs.trim().isNotEmpty => nameEnUs,
-    'ko' || 'en' => code,
-    _ =>
-      nameZhCn.trim().isEmpty || RegExp(r'[가-힣]').hasMatch(nameZhCn)
-          ? code
-          : nameZhCn,
-  };
+  String displayName(String languageCode) {
+    final zh = nameZhCn.trim();
+    final candidates = switch (languageCode) {
+      'ko' => [nameKoKr, nameEnUs, zh],
+      'en' => [nameEnUs, nameKoKr, zh],
+      _ => [if (!RegExp(r'[가-힣]').hasMatch(zh)) zh, nameKoKr, nameEnUs, zh],
+    };
+    for (final candidate in candidates) {
+      final name = candidate.trim();
+      if (name.isNotEmpty && name.toUpperCase() != code.toUpperCase()) {
+        return name;
+      }
+    }
+    return appTranslation(languageCode, 'unnamedArea');
+  }
 
   factory AdministrativeRegion.fromJson(Map<String, dynamic> json) =>
       AdministrativeRegion(

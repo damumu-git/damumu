@@ -877,11 +877,21 @@ function EventLogPage() {
           ))}</tbody>
         </table></div>
       </PageState>
-      <div className="event-log-pagination">
-        <button className="button secondary" disabled={!cursor || resource.loading} onClick={() => setCursors(cursors.slice(0, -1))}>上一页</button>
-        <span>第 {cursors.length} 页</span>
-        <button className="button secondary" disabled={!next || resource.loading} onClick={() => setCursors([...cursors, next])}>下一页</button>
-      </div>
+      <nav className="grid-pager" aria-label="事件日志分页">
+        <span className="grid-pager-count" aria-live="polite">{resource.loading ? '正在加载…' : `本页 ${rows.length} 条`}</span>
+        <div className="grid-pager-controls">
+          <button type="button" title="首页" aria-label="首页" disabled={!cursor || resource.loading} onClick={() => setCursors([null])}>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3v10m8-10L7 8l5 5" /></svg>
+          </button>
+          <button type="button" title="上一页" aria-label="上一页" disabled={!cursor || resource.loading} onClick={() => setCursors(cursors.slice(0, -1))}>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5" /></svg>
+          </button>
+          <span className="grid-pager-current" aria-current="page" aria-label={`第 ${cursors.length} 页`}>{cursors.length}</span>
+          <button type="button" title="下一页" aria-label="下一页" disabled={!next || resource.loading} onClick={() => setCursors([...cursors, next])}>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
+          </button>
+        </div>
+      </nav>
     </section>
   )
 }

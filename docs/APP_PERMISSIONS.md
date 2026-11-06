@@ -13,6 +13,11 @@
 | 使用期间定位 | 附近活动、距离 | Geolocator申请前台定位，可接受大致位置 | 自动定位不请求权限、不读缓存坐标，使用手动地区选择 |
 
 不申请后台定位、麦克风、通讯录、电话、短信或整个相册/存储访问。
+
+iOS 使用 Swift Package Manager 构建时，需在构建环境设置 `BYPASS_PERMISSION_LOCATION_ALWAYS=1`。
+Codemagic Workflow Editor 可在 Environment variables 添加此变量。`geolocator_apple` 从 2.3.15 起会读取它，
+并在编译 iOS 插件时排除后台定位授权分支。发布包应保留 `NSLocationWhenInUseUsageDescription`，
+并在 App Store Connect 确认新构建未再报告 `ITMS-90683` 后台定位说明警告。
 Android网络连接属于声明权限，无需制作虚假的系统运行时授权弹窗。
 照片选择统一使用`requestFullMetadata: false`，不为图片元数据额外请求照片库权限。
 保留iOS照片用途说明以满足插件与商店要求，不把用途声明称作已获得授权。

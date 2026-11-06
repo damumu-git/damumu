@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:geolocator/geolocator.dart';
@@ -5,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'external_processing.dart';
 import 'app_permissions.dart';
+import 'l10n.dart';
 
 class AppLocation {
   const AppLocation({
@@ -36,7 +38,7 @@ class LocationService {
 
   // v3 separates labels by App language and invalidates older locale-agnostic
   // labels, which could keep showing Traditional Chinese after a language change.
-  static const _cacheVersion = 'v3';
+  static const _cacheVersion = 'v4';
   static const _cacheLifetime = Duration(minutes: 30);
 
   final http.Client _client;
@@ -76,41 +78,48 @@ class LocationService {
   Future<AppLocation> locate({
     required String languageCode,
     bool forceRefresh = false,
+    bool allowPermissionPrompt = false,
   }) async {
-    if (await AppPermissions.choice(AppPermission.location) == false) {
-      throw LocationFailure(switch (languageCode) {
-        'ko' => '도시 또는 지역을 직접 선택해 주세요',
-        'en' => 'Choose a city or district manually',
-        _ => '请选择城市或地区',
-      });
+    if (await AppPermissions.choice(AppPermission.location) != true) {
+      throw const LocationFailure('chooseLocationManually');
+    }
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (!enabled) {
+      throw const LocationFailure(
+        'locationServiceOff',
+        settings: LocationSettingsTarget.device,
+      );
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (allowPermissionPrompt && permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied) {
+      throw const LocationFailure('locationPermissionDenied');
+    }
+    if (permission == LocationPermission.deniedForever) {
+      throw const LocationFailure(
+        'locationPermissionBlocked',
+        settings: LocationSettingsTarget.app,
+      );
     }
     if (!forceRefresh) {
       final cached = await _readCache(languageCode);
       if (cached != null) return cached;
     }
 
-    final enabled = await Geolocator.isLocationServiceEnabled();
-    if (!enabled) {
-      throw const LocationFailure('请先开启设备定位服务');
+    final Position position;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+    } on TimeoutException {
+      throw const LocationFailure('locationTimedOut');
     }
-
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied) {
-      throw const LocationFailure('未获得定位权限，点击可重试');
-    }
-    if (permission == LocationPermission.deniedForever) {
-      throw const LocationFailure('定位权限已被永久关闭，请在系统设置中开启');
-    }
-
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.medium,
-        timeLimit: Duration(seconds: 12),
-      ),
-    );
     final label = await _reverseGeocode(
       position.latitude,
       position.longitude,
@@ -130,13 +139,8 @@ class LocationService {
     double longitude,
     String languageCode,
   ) async {
-    if (!await externalProcessingAllowed('geocoding')) {
-      return switch (languageCode) {
-        'ko' => '현재 위치',
-        'en' => 'Current location',
-        _ => '当前位置',
-      };
-    }
+    final currentLocation = appTranslation(languageCode, 'locationFound');
+    if (!await externalProcessingAllowed('geocoding')) return currentLocation;
     final acceptedLanguages = switch (languageCode) {
       'ko' => 'ko-KR,ko,en',
       'en' => 'en-US,en',
@@ -157,7 +161,7 @@ class LocationService {
             headers: const {'User-Agent': 'DAMUMU/1.0 (damumuapp@gmail.com)'},
           )
           .timeout(const Duration(seconds: 8));
-      if (response.statusCode != 200) return '当前位置';
+      if (response.statusCode != 200) return currentLocation;
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       final address = json['address'] as Map<String, dynamic>? ?? const {};
       final city = _first(address, const [
@@ -176,9 +180,12 @@ class LocationService {
       if (city != null && district != null && city != district) {
         return '$city · $district';
       }
-      return district ?? city ?? (json['display_name'] as String?) ?? '当前位置';
+      return district ??
+          city ??
+          (json['display_name'] as String?) ??
+          currentLocation;
     } catch (_) {
-      return '当前位置';
+      return currentLocation;
     }
   }
 
@@ -234,8 +241,11 @@ class LocationService {
   }
 }
 
+enum LocationSettingsTarget { app, device }
+
 class LocationFailure implements Exception {
-  const LocationFailure(this.message);
+  const LocationFailure(this.message, {this.settings});
 
   final String message;
+  final LocationSettingsTarget? settings;
 }

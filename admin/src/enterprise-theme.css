@@ -78,6 +78,15 @@ thead th { position: sticky; top: 0; z-index: 1; background: #f4f6f8; padding: 1
 th:first-child, th:last-child { border-radius: 0; }
 td { padding: 11px 12px; border-right: 1px solid #edf0f3; border-bottom: 1px solid #e7ebf0; }
 td:last-child, th:last-child { border-right: 0; }
+.grid-pager { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 8px 12px; border: 1px solid var(--line); background: #f8f9fb; }
+.grid-pager-count { color: var(--muted); font-size: 12px; }
+.grid-pager-controls { display: flex; align-items: center; gap: 4px; }
+.grid-pager-controls > button, .grid-pager-current { display: grid; place-items: center; box-sizing: border-box; min-width: 32px; min-height: 32px; padding: 0 5px; border: 1px solid transparent; border-radius: 4px; font-variant-numeric: tabular-nums; }
+.grid-pager-controls > button { color: #46586d; background: transparent; }
+.grid-pager-controls > button:hover:not(:disabled) { color: var(--primary); border-color: #c4d8ee; background: #edf4fd; }
+.grid-pager-controls > button:disabled { color: #a6b1bf; opacity: 1; cursor: default; }
+.grid-pager-controls svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.grid-pager-current { color: var(--primary); border-color: #c4d8ee; background: var(--mint); font-weight: 600; }
 tbody tr:nth-child(even) { background: #fafbfd; }
 tbody tr:hover { background: #edf4fd; }
 .identity strong, .event-name strong { font-size: 13px; font-weight: 500; }

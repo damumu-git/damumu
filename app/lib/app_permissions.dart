@@ -131,6 +131,20 @@ class AppPermissions {
           ],
         ),
       );
+    } else if (permission == AppPermission.location &&
+        context.mounted &&
+        result != PermissionOutcome.granted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              result == PermissionOutcome.denied
+                  ? 'locationPermissionDenied'
+                  : 'locationFailed',
+            ),
+          ),
+        ),
+      );
     }
     return result == PermissionOutcome.granted ||
         result == PermissionOutcome.selectedOnly;
