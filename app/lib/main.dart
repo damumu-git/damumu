@@ -1056,7 +1056,7 @@ class _HomePageState extends State<HomePage> {
       if (!_isCurrentLocationRequest(request)) return;
       _applyLocation(location);
     } on LocationFailure catch (error) {
-      if (_isCurrentLocationRequest(request) && interactive) {
+      if (mounted && request == _locationRequest && interactive) {
         final settings = error.settings;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1075,7 +1075,7 @@ class _HomePageState extends State<HomePage> {
         );
       }
     } catch (_) {
-      if (_isCurrentLocationRequest(request) && interactive) {
+      if (mounted && request == _locationRequest && interactive) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(context.tr('locationFailed'))));
@@ -1526,8 +1526,9 @@ class _ManualLocationSheetState extends State<_ManualLocationSheet> {
                                     : null,
                                 onTap: () => setState(() {
                                   if (choosingCity) {
-                                    if (_cityCode != region.code)
+                                    if (_cityCode != region.code) {
                                       _districtCode = null;
+                                    }
                                     _cityCode = region.code;
                                   } else {
                                     _districtCode = region.code;
