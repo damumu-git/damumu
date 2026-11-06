@@ -15,6 +15,7 @@ import 'onboarding.dart';
 import 'app_theme.dart';
 import 'external_processing.dart';
 import 'activity_interactions.dart';
+import 'activity_text.dart';
 import 'category_service.dart';
 import 'emoji_picture.dart';
 import 'chat_image.dart';
@@ -26,6 +27,7 @@ import 'build_failure.dart';
 import 'location_service.dart';
 import 'event_cover_image.dart';
 import 'social_service.dart';
+import 'suggestion_page.dart';
 import 'web_cropper_layout.dart';
 import 'realtime_service.dart';
 import 'push_notification_service.dart';
@@ -276,6 +278,9 @@ class EventItem {
     this.beginnerFriendlyVerified = false,
     this.coverUrl,
     this.coverCategoryCode,
+    this.coverSubcategoryCode,
+    this.localizedContent,
+    this.priceAmount,
     this.organizerRiskTag,
     this.emojiUrl,
   });
@@ -304,10 +309,19 @@ class EventItem {
   final DateTime? startsAt;
   final DateTime? endsAt;
   bool get isPast => endsAt != null && !endsAt!.isAfter(DateTime.now());
+  bool get isExpired => expiredActivity(endsAt, DateTime.now());
+  bool get isInProgress {
+    final now = DateTime.now();
+    return startsAt?.isAfter(now) == false && endsAt?.isAfter(now) == true;
+  }
+
   final bool beginnerFriendly;
   final bool beginnerFriendlyVerified;
   final String? coverUrl;
   final String? coverCategoryCode;
+  final String? coverSubcategoryCode;
+  final Map<String, dynamic>? localizedContent;
+  final int? priceAmount;
   final String? organizerRiskTag;
 }
 
@@ -404,10 +418,6 @@ String _localizedRegionName(
           (languageCode == 'en' && RegExp(r'[가-힣]').hasMatch(localized)));
   if (localized != null && localized.isNotEmpty && !wrongScript) {
     return localized;
-  }
-  if (languageCode == 'zh') {
-    final chinese = json['${prefix}_name']?.toString().trim();
-    if (chinese != null && chinese.isNotEmpty) return chinese;
   }
   return json['${prefix}_code']?.toString() ?? '';
 }
@@ -627,6 +637,9 @@ class _AppShellState extends State<AppShell> {
       emojiUrl: json['category_icon_url'] as String?,
       coverUrl: json['cover_url'] as String?,
       coverCategoryCode: json['cover_category_code'] as String?,
+      coverSubcategoryCode: json['cover_subcategory_code'] as String?,
+      localizedContent: json,
+      priceAmount: priceAmount,
       organizerRiskTag: json['organizer_risk_tag'] as String?,
       title: '${json['title'] ?? ''}',
       category: '${json['category_name'] ?? ''}',
@@ -933,11 +946,22 @@ class _HomePageState extends State<HomePage> {
   List<EventItem> get _visibleEvents {
     final query = _searchController.text.trim().toLowerCase();
     final events = widget.events.where((event) {
+      if (event.isExpired) return false;
       final searchable = [
-        event.title,
+        activityText(context, event.localizedContent, 'title', event.title),
         event.area,
-        event.category,
-        event.description,
+        activityText(
+          context,
+          event.localizedContent,
+          'category',
+          event.category,
+        ),
+        activityText(
+          context,
+          event.localizedContent,
+          'description',
+          event.description,
+        ),
         event.host,
         ...event.tags,
       ].join(' ').toLowerCase();
@@ -1703,6 +1727,21 @@ class EventCard extends StatelessWidget {
     return 'assets/activity-covers/$category.webp';
   }
 
+  Widget _cover() {
+    final subcategory = event.coverSubcategoryCode;
+    Widget major() =>
+        Image.asset(_coverAsset, fit: BoxFit.cover, excludeFromSemantics: true);
+    if (subcategory == null || !RegExp(r'^[a-z0-9_]+$').hasMatch(subcategory)) {
+      return major();
+    }
+    return Image.asset(
+      'assets/activity-covers/sub/$subcategory.webp',
+      fit: BoxFit.cover,
+      excludeFromSemantics: true,
+      errorBuilder: (_, _, _) => major(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Card(
     clipBehavior: Clip.antiAlias,
@@ -1711,14 +1750,7 @@ class EventCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            height: 145,
-            child: Image.asset(
-              _coverAsset,
-              fit: BoxFit.cover,
-              excludeFromSemantics: true,
-            ),
-          ),
+          SizedBox(height: 145, child: _cover()),
           Padding(
             padding: const EdgeInsets.all(15),
             child: Column(
@@ -1728,7 +1760,15 @@ class EventCard extends StatelessWidget {
                   spacing: 7,
                   runSpacing: 7,
                   children: [
-                    _Pill(event.category, green: true),
+                    _Pill(
+                      activityText(
+                        context,
+                        event.localizedContent,
+                        'category',
+                        event.category,
+                      ),
+                      green: true,
+                    ),
                     if (event.beginnerFriendly)
                       _Pill(
                         context.tr(
@@ -1738,7 +1778,8 @@ class EventCard extends StatelessWidget {
                         ),
                         green: true,
                       ),
-                    if (event.isPast) _Pill(context.tr('pastActivity')),
+                    if (event.isInProgress)
+                      _Pill(context.tr('activityInProgress'), green: true),
                     if (event.isOwned)
                       _Pill(context.tr('eventOwned'), green: true),
                     if (event.organizerRiskTag != null)
@@ -1755,7 +1796,12 @@ class EventCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        event.title,
+                        activityText(
+                          context,
+                          event.localizedContent,
+                          'title',
+                          event.title,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -1771,12 +1817,16 @@ class EventCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  event.time,
+                  event.startsAt != null
+                      ? activityTime(context, event.startsAt!)
+                      : event.localizedContent != null
+                      ? context.tr('activityTimeUnknown')
+                      : event.time,
                   style: const TextStyle(fontSize: 12, color: AppPalette.muted),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${event.area} · ${event.distance}',
+                  '${event.area} · ${event.distance == '距离待计算' ? context.tr('activityDistanceUnknown') : event.distance}',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 12, color: AppPalette.muted),
@@ -1818,7 +1868,9 @@ class EventCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      event.price,
+                      event.priceAmount == null
+                          ? event.price
+                          : activityPrice(context, event.priceAmount!),
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -1874,8 +1926,15 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final visible = widget.events
         .where(
           (e) =>
+              !e.isExpired &&
               (_category == '全部' || e.category == _category) &&
-              (e.title.contains(_search.text) || e.area.contains(_search.text)),
+              (activityText(
+                    context,
+                    e.localizedContent,
+                    'title',
+                    e.title,
+                  ).contains(_search.text) ||
+                  e.area.contains(_search.text)),
         )
         .toList();
     return Column(
@@ -2173,6 +2232,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
     final e = widget.event;
     final full = e.joined >= e.capacity;
     final cancelled = _detail?['status'] == 'cancelled';
+    final content = _detail ?? e.localizedContent;
+    final coverUrl = _detail == null
+        ? e.coverUrl
+        : _detail!['cover_url'] as String?;
     final originalCoverUrl = _detail?['cover_original_url']?.toString();
     final canOpenOriginal =
         originalCoverUrl != null && originalCoverUrl.isNotEmpty;
@@ -2203,7 +2266,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     colors: [AppPalette.soft, AppPalette.background],
                   ),
                 ),
-                child: e.coverUrl == null
+                child: coverUrl == null
                     ? EmojiPicture(e.emoji, url: e.emojiUrl, size: 64)
                     : GestureDetector(
                         onTap: canOpenOriginal
@@ -2220,7 +2283,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                               )
                             : null,
                         child: Image.network(
-                          absoluteImageUrl(e.coverUrl!),
+                          absoluteImageUrl(coverUrl),
                           fit: BoxFit.cover,
                           width: double.infinity,
                           height: double.infinity,
@@ -2240,9 +2303,13 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   Wrap(
                     spacing: 8,
                     children: [
-                      _Pill(e.category),
+                      _Pill(
+                        activityText(context, content, 'category', e.category),
+                      ),
                       if (cancelled) _Pill(context.tr('eventCancelled')),
-                      if (e.isPast) _Pill(context.tr('pastActivity')),
+                      if (e.isExpired) _Pill(context.tr('pastActivity')),
+                      if (!cancelled && e.isInProgress)
+                        _Pill(context.tr('activityInProgress'), green: true),
                       if (e.isOwned) const _Pill('我发布的', green: true),
                       if (e.approval) const _Pill('需组织者审核'),
                       if (e.isJoined && !e.isOwned)
@@ -2251,7 +2318,12 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    e.title,
+                    activityText(
+                      context,
+                      content,
+                      'title',
+                      _detail?['title'] as String? ?? e.title,
+                    ),
                     style: Theme.of(context).textTheme.headlineLarge,
                   ),
                   if (cancelled)
@@ -2261,18 +2333,26 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   const SizedBox(height: 24),
                   _DetailRow(
                     icon: Icons.schedule,
-                    title: e.time,
-                    subtitle: '活动开始前 1 小时提醒',
+                    title: e.startsAt == null
+                        ? e.time
+                        : activityTime(context, e.startsAt!),
+                    subtitle: context.tr('activityReminder'),
                   ),
                   _DetailRow(
                     icon: Icons.location_on_outlined,
                     title: e.area,
-                    subtitle: '报名通过后显示准确集合点',
+                    subtitle: context.tr('activityLocationAfterApproval'),
                   ),
                   _DetailRow(
                     icon: Icons.payments_outlined,
-                    title: e.price,
-                    subtitle: e.price == '免费' ? '无需支付费用' : '活动现场结算',
+                    title: e.priceAmount == null
+                        ? e.price
+                        : activityPrice(context, e.priceAmount!),
+                    subtitle: context.tr(
+                      (e.priceAmount == 0 || e.price == '免费')
+                          ? 'activityNoPayment'
+                          : 'activityPayAtVenue',
+                    ),
                   ),
                   const Divider(height: 34),
                   ListTile(
@@ -2299,13 +2379,21 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     trailing: const Icon(Icons.chevron_right),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    '活动介绍',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                  Text(
+                    context.tr('activityDescriptionHeading'),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    e.description,
+                    activityText(
+                      context,
+                      content,
+                      'description',
+                      _detail?['description'] as String? ?? e.description,
+                    ),
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
                   const SizedBox(height: 14),
@@ -3902,7 +3990,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
     setState(() => _publishing = true);
     String? uploadedCoverId;
-    String? uploadedCoverUrl;
     String? createdEventId;
     bool createdBeginnerFriendly = _beginnerFriendly;
     bool createdBeginnerFriendlyVerified = false;
@@ -3913,7 +4000,6 @@ class _CreateEventPageState extends State<CreateEventPage> {
       if (_coverBytes != null) {
         final upload = await EventService.uploadCover(token, _coverBytes!);
         uploadedCoverId = upload.id;
-        uploadedCoverUrl = upload.url;
       }
       final created = await EventService.create(
         token: token,
@@ -3955,12 +4041,16 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
     if (!mounted) return;
     _allowLeave = true;
+    if (uploadedCoverId != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('activityCoverPending'))),
+      );
+    }
     widget.onCreated(
       EventItem(
         id: DateTime.now().millisecondsSinceEpoch,
         apiId: createdEventId,
         emoji: '✨',
-        coverUrl: uploadedCoverUrl,
         title: _title.text.trim(),
         category: _otherSelected ? _customSubcategory.text.trim() : _category,
         time: _formatDateTime(_startsAt!),
@@ -3971,6 +4061,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         joined: 1,
         capacity: _capacity,
         price: priceAmount == 0 ? '免费' : '预计 ₩$priceAmount/人',
+        priceAmount: priceAmount,
         approval: _approval,
         isOwned: true,
         startsAt: _startsAt,
@@ -4567,7 +4658,11 @@ class _MessagesPageState extends State<MessagesPage> {
     }
     if (!mounted) return;
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => NotificationDetailPage(item: item)),
+      MaterialPageRoute(
+        builder: (_) => item.type == 'suggestion_replied' && token != null
+            ? SuggestionPage(token: token)
+            : NotificationDetailPage(item: item),
+      ),
     );
     await _load(showProgress: false);
   }
@@ -4638,6 +4733,7 @@ String _relativeTime(DateTime? value) {
 IconData _notificationIcon(String type) {
   if (type == 'announcement') return Icons.campaign_outlined;
   if (type == 'new_message') return Icons.chat_bubble_outline;
+  if (type == 'suggestion_replied') return Icons.rate_review_outlined;
   if (type.contains('approved')) return Icons.check_circle_outline;
   if (type.contains('rejected')) return Icons.cancel_outlined;
   if (type.contains('application')) return Icons.person_add_alt_1;
@@ -5808,6 +5904,19 @@ class ProfilePage extends StatelessWidget {
               ),
               const Divider(height: 1, indent: 58),
               _Menu(
+                icon: Icons.rate_review_outlined,
+                title: context.tr('suggestions'),
+                onTap: () {
+                  final token = auth.token;
+                  if (token == null) return;
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => SuggestionPage(token: token),
+                    ),
+                  );
+                },
+              ),
+              _Menu(
                 icon: Icons.privacy_tip_outlined,
                 title: context.tr('privacyAccount'),
                 subtitle: context.tr('privacySubtitle'),
@@ -6058,7 +6167,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
           final row = rows[index];
           final startsAt = DateTime.tryParse('${row['starts_at']}')?.toLocal();
           final endsAt = DateTime.tryParse('${row['ends_at']}');
-          final isPast = endsAt != null && !endsAt.isAfter(DateTime.now());
+          final isPast = expiredActivity(endsAt, DateTime.now());
           final price = (row['price_amount'] as num?)?.toInt() ?? 0;
           return Card(
             child: ListTile(
@@ -6075,7 +6184,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                     ? '${context.tr('eventCancelled')} · '
                     : isPast
                     ? '${context.tr('pastActivity')} · '
-                    : ''}${row['title'] ?? ''}',
+                    : ''}${activityText(context, row, 'title', '${row['title'] ?? ''}')}',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               subtitle: Text(
@@ -6174,11 +6283,23 @@ class _MyActivityRecordPageState extends State<_MyActivityRecordPage> {
         padding: const EdgeInsets.all(20),
         children: [
           Text(
-            '${activity['title'] ?? ''}',
+            activityText(
+              context,
+              activity,
+              'title',
+              '${activity['title'] ?? ''}',
+            ),
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 18),
-          _InfoBox(text: '${activity['description'] ?? '暂无活动介绍'}'),
+          _InfoBox(
+            text: activityText(
+              context,
+              activity,
+              'description',
+              '${activity['description'] ?? ''}',
+            ),
+          ),
           const SizedBox(height: 18),
           ListTile(
             leading: const Icon(Icons.location_on_outlined),

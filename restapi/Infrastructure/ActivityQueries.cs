@@ -12,6 +12,7 @@ public static class ActivityQueries
                        e.published_at,
                        c.id AS category_id,
                        COALESCE(grandparent_category.code, parent_category.code, c.code) AS cover_category_code,
+                       c.code AS cover_subcategory_code,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
                        c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
                        city_region.name_zh_cn AS city_name,
@@ -38,6 +39,7 @@ public static class ActivityQueries
                 LEFT JOIN category parent_category ON parent_category.id=c.parent_id
                 LEFT JOIN category grandparent_category ON grandparent_category.id=parent_category.parent_id
                 LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
+                    AND cover.status='ready' AND e.cover_review_status='approved'
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id
@@ -67,13 +69,16 @@ public static class ActivityQueries
                     SELECT starts_at, ends_at
                     FROM event_schedule
                     WHERE event_id=e.id AND status='scheduled'
-                    ORDER BY starts_at LIMIT 1
+                    ORDER BY (ends_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Seoul')
+                              AT TIME ZONE 'Asia/Seoul') DESC, starts_at LIMIT 1
                 ) s ON true
                 WHERE e.deleted_at IS NULL
                   AND e.visibility='public'
                   AND (NOT @hasCursor OR e.created_at < @cursorCreatedAt
                        OR (e.created_at = @cursorCreatedAt AND e.id < @cursorActivityId))
-                  AND e.status IN ('published', 'full')
+                  AND e.status IN ('published', 'full', 'completed')
+                  AND (s.ends_at IS NULL OR s.ends_at >=
+                      date_trunc('day', now() AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'Asia/Seoul')
                   AND (@city IS NULL OR e.city_code=@city)
                   AND (@district IS NULL OR e.district_code=@district)
                   AND (@categoryId IS NULL OR e.category_id=@categoryId)

@@ -47,6 +47,7 @@ public static class ActivityEndpoints
                 }, ct);
             var hasMore = rows.Count > take;
             if (hasMore) rows.RemoveAt(rows.Count - 1);
+            await ActivityLocalization.AttachAsync(db, rows, ct);
             var nextCursor = hasMore
                 ? ActivityCursor.Encode((DateTime)rows[^1]["created_at"]!, (Guid)rows[^1]["id"]!)
                 : null;

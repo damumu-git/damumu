@@ -60,6 +60,7 @@ public static class EventEndpoints
                 FROM event e
                 JOIN category c ON c.id=e.category_id
                 LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
+                    AND cover.status='ready' AND e.cover_review_status='approved' AND e.visibility='public'
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id
@@ -125,6 +126,7 @@ public static class EventEndpoints
                     limit = take,
                     offset = skip
                 }, ct);
+            await ActivityLocalization.AttachAsync(db, rows, ct);
             return ApiSupport.Ok(rows, new { limit = take, offset = skip, count = rows.Count });
         });
 
@@ -174,6 +176,8 @@ public static class EventEndpoints
                 FROM event e
                 JOIN category c ON c.id=e.category_id
                 LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
+                    AND cover.status='ready' AND e.cover_review_status='approved' AND e.visibility='public'
+                    AND e.status IN ('published','full','completed','cancelled')
                 LEFT JOIN place p ON p.id=e.place_id
                 LEFT JOIN user_profile up ON up.user_id=e.organizer_user_id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=e.organizer_user_id
@@ -186,6 +190,7 @@ public static class EventEndpoints
                       AND beginner_endorsement.tag_code='newcomer_friendly'
                 ) beginner_feedback ON true
                 WHERE e.id=@id AND e.deleted_at IS NULL
+                  AND (e.status<>'hidden' OR e.organizer_user_id=@viewerId)
                 """, new
                 {
                     id,
@@ -193,6 +198,7 @@ public static class EventEndpoints
                     beginnerFriendlyThreshold = FeedbackPolicy.BeginnerFriendlyVerificationThreshold
                 }, ct);
             if (item is null) throw new ApiException(404, "event_not_found", "活动不存在");
+            await ActivityLocalization.AttachAsync(db, [item], ct);
 
             var schedules = await db.QueryAsync(
                 """

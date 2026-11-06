@@ -66,6 +66,7 @@ public sealed class AccountDeletionService(
             DELETE FROM user_external_identity WHERE user_id=@userId;
             DELETE FROM user_credential WHERE user_id=@userId;
             DELETE FROM notification WHERE user_id=@userId;
+            DELETE FROM user_suggestion WHERE user_id=@userId;
             DELETE FROM conversation_member WHERE user_id=@userId;
             DELETE FROM user_block WHERE blocker_user_id=@userId OR blocked_user_id=@userId;
             DELETE FROM user_interest WHERE user_id=@userId;

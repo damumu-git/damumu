@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:zaihandazi/activity_text.dart';
 import 'package:zaihandazi/auth.dart';
 import 'package:zaihandazi/event_service.dart';
+import 'package:zaihandazi/l10n.dart';
 import 'package:zaihandazi/main.dart';
 
 ActivityPage page(List<String> ids, {String? next}) => ActivityPage(
@@ -49,7 +51,7 @@ void main() {
   }
 
   testWidgets(
-    'discovery cover uses category artwork and ignores the uploaded photo',
+    'discovery uses the small category cover and ignores the uploaded photo',
     (tester) async {
       await mount(
         tester,
@@ -61,6 +63,7 @@ void main() {
                   'title': 'Art class',
                   'capacity': 10,
                   'cover_category_code': 'culture',
+                  'cover_subcategory_code': 'exhibition',
                   'cover_url': 'https://example.test/uploaded.jpg',
                 },
               ],
@@ -76,10 +79,58 @@ void main() {
       );
       expect(
         image.image,
-        const AssetImage('assets/activity-covers/culture.webp'),
+        const AssetImage('assets/activity-covers/sub/exhibition.webp'),
       );
     },
   );
+
+  test(
+    'expiration uses midnight in Korea and retains ended activities today',
+    () {
+      final now = DateTime.utc(2026, 11, 6, 4);
+      expect(expiredActivity(DateTime.utc(2026, 11, 5, 14, 59), now), isTrue);
+      expect(expiredActivity(DateTime.utc(2026, 11, 5, 15), now), isFalse);
+      expect(
+        expiredActivity(now.subtract(const Duration(hours: 1)), now),
+        isFalse,
+      );
+    },
+  );
+
+  testWidgets('activity cards switch to the selected translation', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      ({latitude, longitude, city, district, required limit, cursor}) async =>
+          const ActivityPage(
+            items: [
+              {
+                'id': 'translated-activity',
+                'title': '한강 산책',
+                'description': '한강으로 가요',
+                'category_name': '散步',
+                'category_names': {'zh': '散步', 'en': 'Walking', 'ko': '산책'},
+                'translations': {
+                  'zh': {'title': '汉江散步'},
+                  'en': {'title': 'Han River walk'},
+                },
+              },
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+    );
+    expect(find.text('汉江散步'), findsOneWidget);
+    expect(find.text('한강 산책'), findsNothing);
+    tester
+        .widget<AppLocaleScope>(find.byType(AppLocaleScope))
+        .onChanged(const Locale('en'));
+    await tester.pumpAndSettle();
+    expect(find.text('Han River walk'), findsOneWidget);
+    expect(find.text('Walking'), findsOneWidget);
+    expect(find.text('汉江散步'), findsNothing);
+  });
 
   testWidgets(
     'append retry keeps cursor and items, deduplicates UUID, stops at end',

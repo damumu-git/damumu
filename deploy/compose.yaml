@@ -19,6 +19,9 @@ services:
       Media__RootPath: /var/lib/damumu/uploads
       Media__PublicBaseUrl: ${MEDIA_PUBLIC_BASE_URL:-https://api.damumu.com/uploads}
       Privacy__ExternalPushApproved: "false"
+      ActivityTranslation__Enabled: ${ACTIVITY_TRANSLATION_ENABLED:-false}
+      ActivityTranslation__Endpoint: ${ACTIVITY_TRANSLATION_ENDPOINT:-}
+      ActivityTranslation__ApiKey: ${ACTIVITY_TRANSLATION_API_KEY:-}
     ports:
       - 127.0.0.1:8080:8080
     extra_hosts:

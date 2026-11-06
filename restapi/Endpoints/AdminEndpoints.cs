@@ -113,7 +113,7 @@ public static class AdminEndpoints
                   AND (@q IS NULL OR p.nickname ILIKE '%'||@q||'%' OR u.id::text ILIKE @q||'%')
                   AND (@status IS NULL OR u.status=@status)
                   AND (@role IS NULL OR u.role=@role)
-                ORDER BY u.created_at DESC
+                ORDER BY u.created_at DESC, u.id DESC
                 LIMIT @limit OFFSET @offset
                 """, new { q, status, role, limit = take, offset = skip }, ct);
             var total = await db.ScalarAsync<long>(
@@ -183,7 +183,7 @@ public static class AdminEndpoints
         });
 
         admin.MapGet("/events", async (
-            Db db, string? q, string? status, string? city, int? limit, int? offset, CancellationToken ct) =>
+            Db db, string? q, string? status, string? city, string? coverReview, int? limit, int? offset, CancellationToken ct) =>
         {
             var take = Math.Clamp(limit ?? 30, 1, 100);
             var skip = Math.Max(offset ?? 0, 0);
@@ -191,7 +191,7 @@ public static class AdminEndpoints
                 """
                 SELECT e.id, e.title, e.status, e.visibility, e.city_code, e.district_code,
                        e.capacity, e.approved_count, e.waitlist_count, e.price_amount,
-                       e.created_at, e.published_at, e.row_version,
+                       e.created_at, e.published_at, e.row_version, e.cover_media_id, e.cover_review_status,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
                        c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
                        p.name AS place_name, up.nickname AS organizer_name,
@@ -209,9 +209,10 @@ public static class AdminEndpoints
                   AND (@q IS NULL OR e.title ILIKE '%'||@q||'%')
                   AND (@status IS NULL OR e.status=@status)
                   AND (@city IS NULL OR e.city_code=@city)
-                ORDER BY e.created_at DESC
+                  AND (@coverReview IS NULL OR (e.cover_media_id IS NOT NULL AND e.cover_review_status=@coverReview))
+                ORDER BY e.created_at DESC, e.id DESC
                 LIMIT @limit OFFSET @offset
-                """, new { q, status, city, limit = take, offset = skip }, ct);
+                """, new { q, status, city, coverReview, limit = take, offset = skip }, ct);
             var total = await db.ScalarAsync<long>(
                 """
                 SELECT count(*) FROM event e
@@ -219,7 +220,8 @@ public static class AdminEndpoints
                   AND (@q IS NULL OR e.title ILIKE '%'||@q||'%')
                   AND (@status IS NULL OR e.status=@status)
                   AND (@city IS NULL OR e.city_code=@city)
-                """, new { q, status, city }, ct);
+                  AND (@coverReview IS NULL OR (e.cover_media_id IS NOT NULL AND e.cover_review_status=@coverReview))
+                """, new { q, status, city, coverReview }, ct);
             return ApiSupport.Ok(rows, new { total, limit = take, offset = skip });
         });
 
@@ -232,7 +234,6 @@ public static class AdminEndpoints
                        p.address_public, up.nickname AS organizer_name,
                        up.avatar_url AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_trust_score,
-                       CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || COALESCE(cover.thumbnail_storage_key, cover.storage_key) END AS cover_url,
                        (SELECT count(*) FROM report r
                         WHERE r.target_type IN ('event','activity') AND r.target_id=e.id) AS report_count
                 FROM event e
@@ -240,7 +241,6 @@ public static class AdminEndpoints
                 LEFT JOIN place p ON p.id=e.place_id
                 LEFT JOIN user_profile up ON up.user_id=e.organizer_user_id
                 LEFT JOIN trust_snapshot ts ON ts.user_id=e.organizer_user_id
-                LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
                 WHERE e.id=@id AND e.deleted_at IS NULL
                 """, new { id }, ct);
             if (item is null) throw new ApiException(404, "event_not_found", "活动不存在");
@@ -281,6 +281,78 @@ public static class AdminEndpoints
             return ApiSupport.Ok(new { item, schedules, members, reports, actions });
         });
 
+        admin.MapGet("/event-cover-review/count", async (Db db, CancellationToken ct) =>
+            ApiSupport.Ok(await db.ScalarAsync<long>(
+                """
+                SELECT count(*) FROM event
+                WHERE cover_media_id IS NOT NULL AND deleted_at IS NULL AND cover_review_status='pending'
+                """, cancellationToken: ct)));
+
+        admin.MapGet("/events/{id:guid}/cover", async (
+            Guid id, HttpContext context, Db db, MediaStorage media, CancellationToken ct) =>
+        {
+            var key = await db.ScalarAsync<string>(
+                """
+                SELECT ma.storage_key FROM event e JOIN media_asset ma ON ma.id=e.cover_media_id
+                WHERE e.id=@id AND e.deleted_at IS NULL AND ma.status='ready' AND ma.deleted_at IS NULL
+                """, new { id }, ct);
+            var path = key is null ? null : media.GetPath(key);
+            if (path is null || !File.Exists(path))
+                throw new ApiException(404, "media_not_found", "活动图片不存在");
+            context.Response.Headers.CacheControl = "private,no-store";
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            return Results.File(path, "image/jpeg");
+        });
+
+        admin.MapPatch("/events/{id:guid}/cover-review", async (
+            Guid id, AdminCoverReviewRequest request, Db db, CancellationToken ct) =>
+        {
+            var reason = request.Reason?.Trim();
+            if (request.Status is not ("approved" or "rejected") ||
+                reason?.Length > 500 || (request.Status == "rejected" && string.IsNullOrEmpty(reason)))
+                throw new ApiException(400, "invalid_cover_review", "审核状态无效或缺少驳回原因");
+            var rows = await db.ExecuteAsync(
+                """
+                WITH changed AS (
+                    UPDATE event SET cover_review_status=@status
+                    WHERE id=@id AND cover_media_id=@coverMediaId AND deleted_at IS NULL
+                      AND cover_review_status=@expectedStatus AND cover_review_status<>@status
+                    RETURNING id
+                )
+                INSERT INTO audit_log(actor_role, action, target_type, target_id, metadata)
+                SELECT 'admin', 'admin.event.cover_reviewed', 'event', id,
+                       jsonb_build_object('status', @status, 'reason', @reason)
+                FROM changed
+                """, new { id, request.CoverMediaId, request.Status, request.ExpectedStatus, reason }, ct);
+            if (rows == 0) throw new ApiException(409, "cover_changed", "活动或图片已变更，请刷新");
+            return ApiSupport.Ok(new { request.Status });
+        });
+
+        admin.MapPost("/events/bulk-moderation", async (
+            AdminBulkEventRequest request, Db db, CancellationToken ct) =>
+        {
+            var reason = request.Reason?.Trim();
+            if (request.Ids is not { Length: > 0 and <= 100 } ||
+                request.Action is not ("hide" or "delete") || string.IsNullOrEmpty(reason) || reason.Length > 500)
+                throw new ApiException(400, "invalid_bulk_moderation", "请选择 1–100 场活动并填写处置原因");
+            var ids = request.Ids.Distinct().ToArray();
+            var updated = await db.ExecuteAsync(
+                """
+                WITH changed AS (
+                    UPDATE event SET status='hidden',
+                        deleted_at=CASE WHEN @action='delete' THEN now() ELSE deleted_at END
+                    WHERE id=ANY(@ids) AND deleted_at IS NULL
+                      AND (@action='delete' OR status<>'hidden')
+                    RETURNING id
+                )
+                INSERT INTO audit_log(actor_role, action, target_type, target_id, metadata)
+                SELECT 'admin', 'admin.event.' || @action, 'event', id,
+                       jsonb_build_object('reason', @reason)
+                FROM changed
+                """, new { ids, request.Action, reason }, ct);
+            return ApiSupport.Ok(new { updated, skipped = ids.Length - updated });
+        });
+
         admin.MapPost("/events/{id:guid}/members/{memberUserId:guid}/approve", async (
             Guid id,
             Guid memberUserId,
@@ -308,7 +380,6 @@ public static class AdminEndpoints
                 """
                 UPDATE event
                 SET status=@status,
-                    visibility=CASE WHEN @status='hidden' THEN 'unlisted' ELSE visibility END,
                     cancellation_reason=CASE WHEN @status='cancelled' THEN @reason ELSE cancellation_reason END,
                     cancelled_at=CASE WHEN @status='cancelled' THEN now() ELSE cancelled_at END
                 WHERE id=@id AND deleted_at IS NULL
@@ -362,7 +433,7 @@ public static class AdminEndpoints
                 WHERE (@status IS NULL OR r.status=@status)
                   AND (@priority IS NULL OR r.priority=@priority)
                   AND (@targetType IS NULL OR r.target_type=@targetType)
-                ORDER BY r.priority, r.created_at
+                ORDER BY r.priority, r.created_at, r.id
                 LIMIT @limit OFFSET @offset
                 """, new { status, priority, targetType, limit = take, offset = skip }, ct);
             var total = await db.ScalarAsync<long>(
@@ -428,8 +499,11 @@ public static class AdminEndpoints
         });
 
         admin.MapGet("/safety-alerts", async (
-            Db db, string? status, CancellationToken ct) =>
-            ApiSupport.Ok(await db.QueryAsync(
+            Db db, string? status, int? limit, int? offset, CancellationToken ct) =>
+        {
+            var take = Math.Clamp(limit ?? 30, 1, 100);
+            var skip = Math.Max(offset ?? 0, 0);
+            var rows = await db.QueryAsync(
                 """
                 SELECT sa.id, sa.alert_type, sa.status, sa.contact_notified_at,
                        sa.resolved_at, sa.created_at, ss.user_id, ss.event_id,
@@ -440,8 +514,14 @@ public static class AdminEndpoints
                 LEFT JOIN event e ON e.id=ss.event_id
                 WHERE (@status IS NULL OR sa.status=@status)
                 ORDER BY CASE sa.status WHEN 'open' THEN 0 WHEN 'contacted' THEN 1 ELSE 2 END,
-                         sa.created_at
-                """, new { status }, ct)));
+                         sa.created_at, sa.id
+                LIMIT @take OFFSET @skip
+                """, new { status, take, skip }, ct);
+            var total = await db.ScalarAsync<long>(
+                "SELECT count(*) FROM safety_alert WHERE (@status IS NULL OR status=@status)",
+                new { status }, ct);
+            return ApiSupport.Ok(rows, new { total, limit = take, offset = skip });
+        });
 
         admin.MapPatch("/safety-alerts/{id:guid}", async (
             Guid id, AdminSafetyAlertRequest request, Db db, CancellationToken ct) =>
@@ -801,7 +881,7 @@ public static class AdminEndpoints
         {
             var take = Math.Clamp(limit ?? 50, 1, 200);
             var skip = Math.Max(offset ?? 0, 0);
-            return ApiSupport.Ok(await db.QueryAsync(
+            var rows = await db.QueryAsync(
                 """
                 SELECT al.id, al.actor_user_id, al.actor_role, al.action, al.target_type,
                        al.target_id, al.trace_id, al.metadata, al.created_at,
@@ -810,9 +890,16 @@ public static class AdminEndpoints
                 LEFT JOIN user_profile up ON up.user_id=al.actor_user_id
                 WHERE (@action IS NULL OR al.action=@action)
                   AND (@targetType IS NULL OR al.target_type=@targetType)
-                ORDER BY al.created_at DESC
+                ORDER BY al.created_at DESC, al.id DESC
                 LIMIT @limit OFFSET @offset
-                """, new { action, targetType, limit = take, offset = skip }, ct));
+                """, new { action, targetType, limit = take, offset = skip }, ct);
+            var total = await db.ScalarAsync<long>(
+                """
+                SELECT count(*) FROM audit_log
+                WHERE (@action IS NULL OR action=@action)
+                  AND (@targetType IS NULL OR target_type=@targetType)
+                """, new { action, targetType }, ct);
+            return ApiSupport.Ok(rows, new { total, limit = take, offset = skip });
         });
 
         admin.MapPost("/announcements", async (
@@ -906,6 +993,8 @@ public sealed record AdminUserStatusRequest(
     string Status, string? Reason, Guid? ActorUserId);
 public sealed record AdminEventModerationRequest(
     string Status, string? ReasonCode, string? Reason, Guid? ActorUserId);
+public sealed record AdminBulkEventRequest(Guid[]? Ids, string Action, string? Reason);
+public sealed record AdminCoverReviewRequest(Guid CoverMediaId, string Status, string ExpectedStatus, string? Reason);
 public sealed record AdminReportActionRequest(
     string Status, string? ResolutionCode, string? Note, long RowVersion, Guid? ActorUserId);
 public sealed record AdminSafetyAlertRequest(

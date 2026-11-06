@@ -6,6 +6,9 @@ public sealed class PrivacyRetentionService(
     public async Task RunOnceAsync(CancellationToken ct)
     {
         await db.ExecuteAsync("SELECT muda_purge_expired_personal_data()", cancellationToken: ct);
+        await db.ExecuteAsync(
+            "DELETE FROM user_suggestion WHERE COALESCE(replied_at, created_at) <= now()-interval '3 months'",
+            cancellationToken: ct);
         // A durable queue survives process crashes and filesystem failures.
         var files = await db.QueryAsync(
             "SELECT storage_key,is_directory FROM media_deletion_queue ORDER BY queued_at LIMIT 500", cancellationToken: ct);

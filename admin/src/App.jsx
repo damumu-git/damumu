@@ -4,6 +4,7 @@ import { useAdminDialog } from './admin-dialog-context'
 import { EmojiIcon, EmojiAssetManager, EmojiAssetSelect } from './EmojiAssets.jsx'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { API_BASE, api, mediaUrl } from './api'
+import { ListPager, PagedItems } from './ListPager.jsx'
 import './App.css'
 import './preview-theme.css'
 
@@ -13,6 +14,7 @@ const navigation = [
   { id: 'events', label: '活动管理' },
   { id: 'reports', label: '举报治理' },
   { id: 'safety', label: '安全警报' },
+  { id: 'suggestions', label: '用户建议' },
   { id: 'categories', label: '分类配置' },
   { id: 'regions', label: '地区管理' },
   { id: 'emoji-assets', label: '图标素材' },
@@ -90,6 +92,21 @@ function useResource(loader, dependencies = []) {
 
 function Status({ value }) {
   return <span className={`status status-${value}`}>{statusText[value] ?? value ?? '未知'}</span>
+}
+
+function usePagedResource(loader, filters) {
+  const size = 25
+  const key = JSON.stringify(filters)
+  const [position, setPosition] = useState({ key, page: 1 })
+  const page = position.key === key ? position.page : 1
+  const resource = useResource(() => loader({ ...filters, limit: size, offset: (page - 1) * size }), [loader, key, page])
+  return {
+    resource,
+    pager: {
+      page, size, total: Number(resource.data?.meta?.total ?? 0), loading: resource.loading,
+      onPage: (next) => setPosition({ key, page: next }),
+    },
+  }
 }
 
 function PageState({ loading, error, empty, onRetry, children }) {
@@ -315,7 +332,7 @@ function Users() {
   const [role, setRole] = useState('')
   const [selectedId, setSelectedId] = useState(null)
   const [notice, setNotice] = useState('')
-  const resource = useResource(() => api.users({ q: search, status, role, limit: 50 }), [search, status, role])
+  const { resource, pager } = usePagedResource(api.users, { q: search, status, role })
   const rows = resource.data?.data ?? []
 
   if (selectedId) return <UserDetail id={selectedId} onBack={() => { setSelectedId(null); resource.reload() }} />
@@ -359,8 +376,57 @@ function Users() {
           </table>
         </div>
       </PageState>
+      <ListPager {...pager} />
     </section>
   )
+}
+
+const coverReviewLabels = { pending: '待审核', approved: '已通过', rejected: '已驳回' }
+
+function EventCoverReview({ item, onReviewed }) {
+  const dialog = useAdminDialog()
+  const [attempt, setAttempt] = useState(0)
+  const [photo, setPhoto] = useState(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const id = item.id
+  useEffect(() => {
+    if (!attempt) return
+    const controller = new AbortController()
+    let url
+    api.eventCover(id, controller.signal).then((blob) => {
+      if (controller.signal.aborted) return
+      url = URL.createObjectURL(blob)
+      setPhoto(url)
+    }).catch((failure) => {
+      if (!controller.signal.aborted) setError(failure.message)
+    })
+    return () => { controller.abort(); if (url) URL.revokeObjectURL(url) }
+  }, [id, attempt])
+
+  const review = async (status) => {
+    const reason = status === 'rejected' ? await dialog.prompt('请输入图片驳回原因') : null
+    if (status === 'rejected' && !reason?.trim()) return
+    setBusy(true)
+    setError('')
+    try {
+      await api.reviewEventCover(id, { status, reason, coverMediaId: item.cover_media_id, expectedStatus: item.cover_review_status })
+      window.dispatchEvent(new Event('pending-event-covers-changed'))
+      onReviewed()
+    } catch (failure) { setError(failure.message) }
+    finally { setBusy(false) }
+  }
+  return <section className="panel detail-section">
+    <div className="section-heading"><h3>活动图片</h3><span>{coverReviewLabels[item.cover_review_status]}</span></div>
+    {error && <p role="alert">{error}</p>}
+    {photo ? <img className="review-cover-image" src={photo} alt="发布者上传的活动照片" /> :
+      <button className="button secondary" disabled={attempt > 0 && !error}
+        onClick={() => { setError(''); setAttempt(attempt + 1) }}>{attempt > 0 && !error ? '读取中…' : '查看图片'}</button>}
+    <div className="card-actions">
+      <button className="button primary" disabled={!photo || busy || item.cover_review_status === 'approved'} onClick={() => review('approved')}>通过</button>
+      <button className="button danger-button" disabled={!photo || busy || item.cover_review_status === 'rejected'} onClick={() => review('rejected')}>驳回</button>
+    </div>
+  </section>
 }
 
 function EventDetail({ id, onBack }) {
@@ -381,6 +447,16 @@ function EventDetail({ id, onBack }) {
     } catch (error) { setNotice(error.message) }
   }
 
+  const remove = async () => {
+    const reason = await dialog.prompt(`确认删除「${item.title}」，请输入原因`)
+    if (!reason?.trim()) return
+    try {
+      await api.bulkModerateEvents({ action: 'delete', ids: [item.id], reason })
+      window.dispatchEvent(new Event('pending-event-covers-changed'))
+      onBack()
+    } catch (error) { setNotice(error.message) }
+  }
+
   const approveMember = async (member) => {
     setApprovingUserId(member.user_id)
     try {
@@ -398,8 +474,9 @@ function EventDetail({ id, onBack }) {
     <PageState {...resource} onRetry={resource.reload}>
       {item && <div className="detail-page">
         <DetailHeader kicker="Event operations" title={item.title} subtitle={`活动 ID · ${item.id}`} status={item.status} onBack={onBack}
-          actions={<>{item.status === 'hidden' ? <button className="button secondary" onClick={() => moderate('published')}>恢复展示</button> : <button className="button ghost" onClick={() => moderate('hidden')}>隐藏活动</button>}{item.status !== 'cancelled' && <button className="button danger-button" onClick={() => moderate('cancelled')}>取消活动</button>}</>} />
+          actions={<>{item.status === 'hidden' ? <button className="button secondary" onClick={() => moderate('published')}>恢复展示</button> : <button className="button ghost" onClick={() => moderate('hidden')}>隐藏活动</button>}{item.status !== 'cancelled' && <button className="button ghost" onClick={() => moderate('cancelled')}>取消活动</button>}<button className="button danger-button" onClick={remove}>删除活动</button></>} />
         {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
+        {item.cover_media_id && <EventCoverReview key={item.cover_media_id} item={item} onReviewed={resource.reload} />}
         <div className="detail-metrics">
           <MetricCard label="已通过" value={`${item.approved_count}/${item.capacity}`} note={`候补 ${item.waitlist_count ?? 0} 人`} />
           <MetricCard label="预计费用" value={Number(item.price_amount ?? 0) ? `₩${Number(item.price_amount).toLocaleString()}` : '免费'} note={item.price_currency ?? 'KRW'} tone="blue" />
@@ -428,11 +505,13 @@ function EventDetail({ id, onBack }) {
         </div>
         <section className="panel detail-section">
           <div className="section-heading"><div><span className="kicker">Participants</span><h3>成员与申请</h3></div><span>{payload.members?.length ?? 0} 人</span></div>
-          <div className="table-wrap"><table><thead><tr><th>用户</th><th>角色</th><th>状态</th><th>人数</th><th>信誉</th><th>申请备注</th><th>加入时间</th><th>操作</th></tr></thead><tbody>{payload.members?.map((member) => <tr key={member.user_id}>
+          <PagedItems items={payload.members ?? []}>{(pageMembers) => (
+          <div className="table-wrap"><table><thead><tr><th>用户</th><th>角色</th><th>状态</th><th>人数</th><th>信誉</th><th>申请备注</th><th>加入时间</th><th>操作</th></tr></thead><tbody>{pageMembers.map((member) => <tr key={member.user_id}>
             <td><div className="identity"><span className="avatar">{(member.nickname ?? '慕').slice(0, 1)}</span><div><strong>{member.nickname ?? '未设置昵称'}</strong><small>{member.user_id}</small></div></div></td>
             <td>{member.member_role === 'organizer' ? '组织者' : '参与者'}</td><td><Status value={member.status} /></td><td>{member.party_size}</td><td>{Number(member.trust_score ?? 0).toFixed(1)}</td><td className="text-cell">{member.application_note || member.rejection_reason || '—'}</td><td>{formatDate(member.created_at)}</td>
             <td>{member.status === 'applied' ? <button className="button approve-button" disabled={approvingUserId !== null} onClick={() => approveMember(member)}>{approvingUserId === member.user_id ? '处理中…' : '通过申请'}</button> : <span className="muted-action">—</span>}</td>
           </tr>)}</tbody></table></div>
+          )}</PagedItems>
         </section>
         <section className="panel detail-section"><div className="section-heading"><div><span className="kicker">Reports</span><h3>举报与风险反馈</h3></div><span>{payload.reports?.length ?? 0} 条</span></div><div className="report-grid compact-reports">{payload.reports?.map((report) => <article className="report-card" key={report.id}><div className="report-top"><span className={`priority priority-${report.priority}`}>P{report.priority}</span><Status value={report.status} /><time>{formatDate(report.created_at)}</time></div><h4>{report.category_code}</h4><p>{report.description || '举报人未提供补充说明。'}</p><small>举报人：{report.reporter_name ?? report.reporter_user_id}</small></article>)}{!payload.reports?.length && <p className="inline-empty">该活动没有举报记录</p>}</div></section>
       </div>}
@@ -440,14 +519,35 @@ function EventDetail({ id, onBack }) {
   )
 }
 
-function Events() {
+function Events({ pendingCovers }) {
   const dialog = useAdminDialog()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
+  const [coverReview, setCoverReview] = useState('')
   const [selectedId, setSelectedId] = useState(null)
   const [notice, setNotice] = useState('')
-  const resource = useResource(() => api.events({ q: search, status, limit: 50 }), [search, status])
+  const [selection, setSelection] = useState({ scope: '', ids: [] })
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const { resource, pager } = usePagedResource(api.events, { q: search, status, coverReview })
   const rows = resource.data?.data ?? []
+  const scope = JSON.stringify([search, status, coverReview, pager.page])
+  const selected = selection.scope === scope ? selection.ids.filter((id) => rows.some((row) => row.id === id)) : []
+
+  const bulk = async (action, ids) => {
+    const label = action === 'delete' ? '删除' : '隐藏'
+    const reason = await dialog.prompt(`确认${label} ${ids.length} 场活动，请输入原因`)
+    if (!reason?.trim()) return
+    setBulkBusy(true)
+    try {
+      const result = await api.bulkModerateEvents({ action, ids, reason })
+      setSelection({ scope, ids: [] })
+      setNotice(`已${label} ${result.data.updated} 场，跳过 ${result.data.skipped} 场`)
+      window.dispatchEvent(new Event('pending-event-covers-changed'))
+      if (pager.page > 1) pager.onPage(1)
+      else resource.reload()
+    } catch (error) { setNotice(error.message) }
+    finally { setBulkBusy(false) }
+  }
 
   if (selectedId) return <EventDetail id={selectedId} onBack={() => { setSelectedId(null); resource.reload() }} />
 
@@ -467,20 +567,28 @@ function Events() {
       {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
       <FilterBar search={search} setSearch={setSearch} placeholder="搜索活动标题">
         <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">全部状态</option><option value="draft">草稿</option><option value="published">已发布</option><option value="full">已满员</option><option value="hidden">已隐藏</option><option value="cancelled">已取消</option><option value="completed">已完成</option></select>
+        <select aria-label="图片审核状态" value={coverReview} onChange={(event) => setCoverReview(event.target.value)}><option value="">全部图片状态</option>{Object.entries(coverReviewLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+        <button className="button secondary" onClick={() => { setSearch(''); setStatus(''); setCoverReview('pending') }}>待审图片 {pendingCovers}</button>
       </FilterBar>
+      {selected.length > 0 && <div className="filter-bar"><span>已选 {selected.length} 场</span>
+        <button className="button secondary" disabled={bulkBusy || resource.loading} onClick={() => bulk('hide', selected)}>批量隐藏</button>
+        <button className="button danger-button" disabled={bulkBusy || resource.loading} onClick={() => bulk('delete', selected)}>批量删除</button>
+      </div>}
       <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
-        <div className="table-wrap management-table"><table><thead><tr><th>活动</th><th>组织者</th><th>时间 / 地点</th><th>参与情况</th><th>治理信号</th><th>状态</th><th>操作</th></tr></thead><tbody>{rows.map((event) => (
+        <div className="table-wrap management-table"><table><thead><tr><th><input type="checkbox" aria-label="全选本页活动" checked={rows.length > 0 && selected.length === rows.length} onChange={(e) => setSelection({ scope, ids: e.target.checked ? rows.map((row) => row.id) : [] })} /></th><th>活动</th><th>组织者</th><th>时间 / 地点</th><th>参与情况</th><th>治理信号</th><th>状态</th><th>操作</th></tr></thead><tbody>{rows.map((event) => (
           <tr key={event.id} className="clickable-row" onDoubleClick={() => setSelectedId(event.id)}>
+            <td><input type="checkbox" aria-label={`选择 ${event.title}`} checked={selected.includes(event.id)} onChange={(e) => setSelection({ scope, ids: e.target.checked ? [...selected, event.id] : selected.filter((id) => id !== event.id) })} /></td>
             <td><div className="event-name"><span><EmojiIcon emoji={event.category_icon} url={event.category_icon_url} /></span><div><strong>{event.title}</strong><small>{event.category_name} · {event.id}</small></div></div></td>
             <td><strong>{event.organizer_name ?? '未设置'}</strong><small className="block-note">{event.city_code || '地区未设置'}</small></td>
             <td><strong>{formatDate(event.starts_at)}</strong><small className="block-note">{event.place_name ?? event.district_code ?? event.city_code ?? '地点未设置'}</small></td>
             <td><strong>{event.approved_count}/{event.capacity}</strong><small className="block-note">候补 {event.waitlist_count}</small></td>
             <td><span className={Number(event.report_count) ? 'signal-count danger-text' : 'signal-count'}>{event.report_count}</span><small className="cell-note"> 条举报</small></td>
-            <td><Status value={event.status} /></td>
+            <td><Status value={event.status} />{event.cover_media_id && <small className="block-note">{coverReviewLabels[event.cover_review_status]}</small>}</td>
             <td><div className="row-actions"><button className="view-button" onClick={() => setSelectedId(event.id)}>查看详情</button>{event.status === 'hidden' ? <button onClick={() => moderate(event, 'published')}>恢复</button> : <button onClick={() => moderate(event, 'hidden')}>隐藏</button>}</div></td>
           </tr>
         ))}</tbody></table></div>
       </PageState>
+      <ListPager {...pager} />
     </section>
   )
 }
@@ -489,7 +597,7 @@ function Reports() {
   const dialog = useAdminDialog()
   const [status, setStatus] = useState('submitted')
   const [notice, setNotice] = useState('')
-  const resource = useResource(() => api.reports({ status, limit: 50 }), [status])
+  const { resource, pager } = usePagedResource(api.reports, { status })
   const rows = resource.data?.data ?? []
 
   const update = async (report, nextStatus) => {
@@ -535,6 +643,7 @@ function Reports() {
           ))}
         </div>
       </PageState>
+      <ListPager {...pager} />
     </section>
   )
 }
@@ -543,7 +652,7 @@ function Safety() {
   const dialog = useAdminDialog()
   const [status, setStatus] = useState('')
   const [notice, setNotice] = useState('')
-  const resource = useResource(() => api.safetyAlerts({ status }), [status])
+  const { resource, pager } = usePagedResource(api.safetyAlerts, { status })
   const rows = resource.data?.data ?? []
   const update = async (alert, nextStatus) => {
     const note = await dialog.prompt('记录本次响应情况：')
@@ -571,6 +680,7 @@ function Safety() {
           </article>
         ))}</div>
       </PageState>
+      <ListPager {...pager} />
     </section>
   )
 }
@@ -669,13 +779,15 @@ function Categories() {
       </div>
       <FilterBar search={search} setSearch={setSearch} placeholder="搜索分类路径、代码或多语言名称" />
       <PageState {...resource} empty={!visible.length} onRetry={resource.reload}>
-        <div className="category-grid">{visible.map((category) => (
+        <PagedItems items={visible} key={level + ':' + search}>{(pageItems) => (
+        <div className="category-grid">{pageItems.map((category) => (
           <article className={`category-card level-${category.level} ${category.is_active ? '' : 'disabled'}`} key={category.id} style={{ '--category-color': category.color || '#1F7A55' }}>
             <span className="category-icon"><EmojiIcon emoji={category.icon} url={category.icon_url} /></span>
             <div className="category-copy"><span className="category-level">{category.level === 1 ? '大分类' : '小分类'}</span><h4>{category.name_zh_cn}</h4><p className="category-path">{category.full_path}</p><p>{category.name_en_us || '未设置英文'} · {category.name_ko_kr || '未设置韩文'}</p><p>{category.description_zh_cn || '暂无分类说明'}</p><small>{category.child_count} 个子类 · {category.event_count} 场活动 · 排序 {category.sort_order}</small><code>{category.code}</code></div>
             <div className="category-actions"><button onClick={() => setEditing(category)}>编辑</button><button className="danger" onClick={async () => { if (!(await dialog.confirm(`确认删除「${category.name_zh_cn}」？`))) return; try { await api.deleteCategory(category.id); setNotice('分类已删除'); resource.reload() } catch (error) { setNotice(error.message) } }}>删除</button><label className="switch"><input type="checkbox" checked={category.is_active} onChange={() => toggle(category)} /><span /></label></div>
           </article>
         ))}</div>
+        )}</PagedItems>
       </PageState>
       {editing !== undefined && <CategoryEditor category={editing} rows={rows} onClose={() => setEditing(undefined)} onSaved={saved} />}
     </section>
@@ -750,9 +862,11 @@ function Regions() {
       <div className="panel-heading"><div><span className="kicker">Administrative regions</span><h3>行政地区</h3><p>标准代码保持稳定，名称、排序和 App 可见状态可由运营维护</p></div><button className="button primary" onClick={() => setEditing(null)}>＋ 新建地区</button></div>
       {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
       <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
-        <div className="table-wrap"><table><thead><tr><th>地区</th><th>代码</th><th>层级</th><th>English / 한국어</th><th>活动</th><th>启用</th><th>操作</th></tr></thead><tbody>{rows.map((region) => (
+        <PagedItems items={rows}>{(pageItems) => (
+        <div className="table-wrap"><table><thead><tr><th>地区</th><th>代码</th><th>层级</th><th>English / 한국어</th><th>活动</th><th>启用</th><th>操作</th></tr></thead><tbody>{pageItems.map((region) => (
           <tr key={region.code}><td><strong>{region.name_zh_cn}</strong><small className="block-note">{region.parent_name || '一级地区'}</small></td><td><code>{region.code}</code></td><td>{regionLevelLabels[region.level]}</td><td>{region.name_en_us}<small className="block-note">{region.name_ko_kr}</small></td><td>{region.event_count}</td><td><label className="switch"><input type="checkbox" checked={region.is_active} onChange={() => toggle(region)} /><span /></label></td><td><div className="row-actions"><button onClick={() => setEditing(region)}>编辑</button><button className="danger" onClick={async () => { if (!(await dialog.confirm(`确认删除「${region.name_zh_cn}」？`))) return; try { await api.deleteRegion(region.code); setNotice('地区已删除'); resource.reload() } catch (error) { setNotice(error.message) } }}>删除</button></div></td></tr>
         ))}</tbody></table></div>
+        )}</PagedItems>
       </PageState>
       {editing !== undefined && <RegionEditor region={editing} regions={rows} onClose={() => setEditing(undefined)} onSaved={saved} />}
     </section>
@@ -801,13 +915,15 @@ function SystemAvatars() {
         <button className="button primary">上传头像</button>
       </form>
       <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
-        <div className="avatar-grid">{rows.map((avatar) => (
+        <PagedItems items={rows}>{(pageItems) => (
+        <div className="avatar-grid">{pageItems.map((avatar) => (
           <article className={`avatar-card ${avatar.is_active ? '' : 'disabled'}`} key={avatar.id}>
             <img src={mediaUrl(avatar.image_url)} alt={avatar.name_zh_cn} />
             <div><h4>{avatar.name_zh_cn}</h4><p>{avatar.name_en_us} · {avatar.name_ko_kr}</p><small>{avatar.code} · {avatar.byte_size} bytes</small></div>
             <label className="switch"><input type="checkbox" checked={avatar.is_active} onChange={() => toggle(avatar)} /><span /></label>
           </article>
         ))}</div>
+        )}</PagedItems>
       </PageState>
     </section>
   )
@@ -815,7 +931,7 @@ function SystemAvatars() {
 
 function Audit() {
   const [search, setSearch] = useState('')
-  const resource = useResource(() => api.audit({ action: search, limit: 100 }), [search])
+  const { resource, pager } = usePagedResource(api.audit, { action: search })
   const rows = resource.data?.data ?? []
   return (
     <section className="panel full-panel">
@@ -826,6 +942,7 @@ function Audit() {
           <div className="timeline-item" key={row.id}><i /><time>{formatDate(row.created_at)}</time><div><strong>{row.action}</strong><p>{row.actor_name ?? '系统管理员'} · {row.target_type ?? 'system'} {row.target_id ? row.target_id.slice(0, 8) : ''}</p></div><code>{row.trace_id?.slice(0, 18) ?? '—'}</code></div>
         ))}</div>
       </PageState>
+      <ListPager {...pager} />
     </section>
   )
 }
@@ -897,6 +1014,43 @@ function EventLogPage() {
   )
 }
 
+function Suggestions() {
+  const dialog = useAdminDialog()
+  const [unanswered, setUnanswered] = useState(false)
+  const [busy, setBusy] = useState(null)
+  const [notice, setNotice] = useState('')
+  const { resource, pager } = usePagedResource(api.suggestions, { unanswered })
+  const rows = resource.data?.data ?? []
+  const reply = async (id) => {
+    const text = await dialog.prompt('每条建议可回复一次，请确认内容后发送')
+    if (!text?.trim()) return
+    setBusy(id)
+    try {
+      await api.replyToSuggestion(id, text)
+      setNotice('回复已发送，用户会收到站内通知')
+      if (unanswered && rows.length === 1 && pager.page > 1) pager.onPage(pager.page - 1)
+      else resource.reload()
+    } catch (error) { setNotice(error.message) }
+    finally { setBusy(null) }
+  }
+  return <section className="panel full-panel">
+    <div className="panel-heading"><div><h3>用户建议</h3><p>查看改进建议，每条建议可回复一次。</p></div></div>
+    {notice && <div className="notice" role="status">{notice}</div>}
+    <div className="filter-bar"><label><input type="checkbox" checked={unanswered} onChange={(e) => setUnanswered(e.target.checked)} /> 仅待回复</label></div>
+    <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
+      <div className="table-wrap"><table>
+        <thead><tr><th>用户</th><th>建议</th><th>回复</th><th>提交时间</th><th>操作</th></tr></thead>
+        <tbody>{rows.map((row) => <tr key={row.id}>
+          <td>{row.nickname ?? row.user_id}</td><td className="suggestion-text">{row.body}</td>
+          <td className="suggestion-text">{row.reply ?? '待回复'}</td><td>{formatDate(row.created_at)}</td>
+          <td>{row.reply ? formatDate(row.replied_at) : <button className="button secondary" disabled={busy !== null} onClick={() => reply(row.id)}>回复一次</button>}</td>
+        </tr>)}</tbody>
+      </table></div>
+    </PageState>
+    <ListPager {...pager} />
+  </section>
+}
+
 function Settings() {
   const [notice, setNotice] = useState('')
   const resource = useResource(api.featureFlags, [])
@@ -913,15 +1067,17 @@ function Settings() {
       <div className="panel-heading"><div><span className="kicker">Feature control</span><h3>功能开关</h3><p>不发版控制灰度能力；不得在配置中保存密钥</p></div></div>
       {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
       <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
-        <div className="settings-list">{rows.map((flag) => (
+        <PagedItems items={rows}>{(pageItems) => (
+        <div className="settings-list">{pageItems.map((flag) => (
           <div className="setting-row" key={flag.key}><div className="setting-code">{flag.key.slice(0, 2).toUpperCase()}</div><div><strong>{flag.key}</strong><p>{flag.description || '暂无说明'}</p><small>版本 {flag.version} · {formatDate(flag.updated_at)}</small></div><label className="switch"><input type="checkbox" checked={flag.enabled} onChange={() => toggle(flag)} /><span /></label></div>
         ))}</div>
+        )}</PagedItems>
       </PageState>
     </section>
   )
 }
 
-const pages = { 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, reports: Reports, safety: Safety, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
+const pages = { 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, reports: Reports, safety: Safety, suggestions: Suggestions, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
 
 function AnnouncementDialog({ onClose }) {
   const [title, setTitle] = useState('')
@@ -953,6 +1109,28 @@ function App() {
   const [active, setActive] = useState('dashboard')
   const [mobileNav, setMobileNav] = useState(false)
   const [announcement, setAnnouncement] = useState(false)
+  const [pendingCovers, setPendingCovers] = useState(0)
+  useEffect(() => {
+    let live = true
+    let latest = 0
+    const load = async () => {
+      const request = ++latest
+      try {
+        const result = await api.pendingEventCovers()
+        if (live && request === latest) setPendingCovers(Number(result.data))
+      } catch { /* Keep the last known count until the next refresh. */ }
+    }
+    load()
+    const timer = window.setInterval(load, 60000)
+    window.addEventListener('focus', load)
+    window.addEventListener('pending-event-covers-changed', load)
+    return () => {
+      live = false
+      window.clearInterval(timer)
+      window.removeEventListener('focus', load)
+      window.removeEventListener('pending-event-covers-changed', load)
+    }
+  }, [])
   const ActivePage = pages[active]
   const current = useMemo(() => navigation.find((item) => item.id === active), [active])
 
@@ -965,7 +1143,8 @@ function App() {
           {item.id === 'users' && <div className="nav-section-label">业务管理</div>}
           {item.id === 'categories' && <div className="nav-section-label">系统配置</div>}
           <button aria-current={active === item.id ? 'page' : undefined} className={active === item.id ? 'active' : ''} onClick={() => { setActive(item.id); setMobileNav(false) }}>
-            <AdminNavIcon name={item.id} /><span>{item.label}</span>
+            <AdminNavIcon name={item.id === 'suggestions' ? 'reports' : item.id} /><span>{item.label}</span>
+            {item.id === 'events' && pendingCovers > 0 && <span className="cover-review-count" aria-label={`${pendingCovers} 张图片待审`}>{pendingCovers}</span>}
           </button>
           </Fragment>
         ))}</nav>
@@ -977,7 +1156,7 @@ function App() {
           <div className="title-row"><button className="menu-button" aria-label="切换菜单" aria-expanded={mobileNav} onClick={() => setMobileNav(!mobileNav)}><AdminNavIcon name="menu" /></button><div><span className="breadcrumb">搭慕 / 运营管理</span><h1>{current.label}</h1></div></div>
           <div className="top-actions"><span className="today">{new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date())}</span><button className="announcement-button" onClick={() => setAnnouncement(true)}>发布公告</button><div className="admin-avatar">管</div></div>
         </header>
-        <div className="page-content"><ActivePage /></div>
+        <div className="page-content"><ActivePage pendingCovers={pendingCovers} /></div>
       </main>
       {announcement && <AnnouncementDialog onClose={() => setAnnouncement(false)} />}
     </div>

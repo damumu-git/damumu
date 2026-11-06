@@ -92,27 +92,27 @@ class _ExternalProcessingSettingsState
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      if (!externalProcessingDisclosureApproved)
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(context.tr('externalProcessingUnavailable')),
+  Widget build(BuildContext context) {
+    if (!externalProcessingDisclosureApproved) {
+      return ListTile(
+        leading: const Icon(Icons.shield_outlined),
+        title: Text(context.tr('externalProcessingTitle')),
+        subtitle: Text(context.tr('externalProcessingUnavailable')),
+      );
+    }
+    return Column(
+      children: [
+        SwitchListTile(
+          title: Text(context.tr('optionalSystemPush')),
+          value: _push,
+          onChanged: (value) => _set('push', value),
         ),
-      SwitchListTile(
-        title: Text(context.tr('optionalSystemPush')),
-        value: _push,
-        onChanged: externalProcessingDisclosureApproved
-            ? (value) => _set('push', value)
-            : null,
-      ),
-      SwitchListTile(
-        title: Text(context.tr('optionalGeocoding')),
-        value: _geocoding,
-        onChanged: externalProcessingDisclosureApproved
-            ? (value) => _set('geocoding', value)
-            : null,
-      ),
-    ],
-  );
+        SwitchListTile(
+          title: Text(context.tr('optionalGeocoding')),
+          value: _geocoding,
+          onChanged: (value) => _set('geocoding', value),
+        ),
+      ],
+    );
+  }
 }

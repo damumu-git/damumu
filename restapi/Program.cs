@@ -33,6 +33,9 @@ builder.Services.AddSingleton<PushNotificationService>();
 builder.Services.AddHostedService<RealtimeRelayService>();
 builder.Services.AddHostedService<ConversationLifecycleService>();
 builder.Services.AddHostedService<PrivacyRetentionService>();
+builder.Services.AddHttpClient(nameof(ActivityTranslationWorker), client => client.Timeout = TimeSpan.FromSeconds(12))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHostedService<ActivityTranslationWorker>();
 builder.Services.AddOpenApi();
 builder.Services.AddCors(options =>
 {
@@ -138,7 +141,8 @@ app.UseStaticFiles(new StaticFileOptions
     OnPrepareResponse = context =>
     {
         context.Context.Response.Headers.CacheControl = context.Context.Request.Path.StartsWithSegments(
-            "/uploads/messages", StringComparison.OrdinalIgnoreCase)
+            "/uploads/messages", StringComparison.OrdinalIgnoreCase) ||
+            context.Context.Request.Path.StartsWithSegments("/uploads/events", StringComparison.OrdinalIgnoreCase)
             ? "private,no-store" : "public,max-age=31536000,immutable";
         context.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     }
@@ -163,6 +167,7 @@ api.MapSafetyEndpoints();
 api.MapGovernanceEndpoints();
 api.MapFeedbackEndpoints();
 api.MapAdminEndpoints();
+api.MapSuggestionEndpoints();
 api.MapRealtimeEndpoints();
 
 app.Run();

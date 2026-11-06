@@ -48,6 +48,21 @@ export const api = {
     request(`/admin/users/${id}/status`, { method: 'PATCH', body: JSON.stringify(body) }),
   events: (filters = {}) => request(`/admin/events${params(filters)}`),
   event: (id) => request(`/admin/events/${id}`),
+  pendingEventCovers: () => request('/admin/event-cover-review/count'),
+  eventCover: async (id, signal) => {
+    const response = await fetch(`${API_BASE}/admin/events/${id}/cover`, {
+      headers: { 'X-Admin-Key': ADMIN_KEY }, signal,
+    })
+    if (!response.ok) throw new Error('活动图片暂时无法读取')
+    return response.blob()
+  },
+  reviewEventCover: (id, body) =>
+    request(`/admin/events/${id}/cover-review`, { method: 'PATCH', body: JSON.stringify(body) }),
+  bulkModerateEvents: (body) =>
+    request('/admin/events/bulk-moderation', { method: 'POST', body: JSON.stringify(body) }),
+  suggestions: (filters = {}) => request(`/admin/suggestions${params(filters)}`),
+  replyToSuggestion: (id, text) =>
+    request(`/admin/suggestions/${id}/reply`, { method: 'POST', body: JSON.stringify({ text }) }),
   approveEventMember: (eventId, memberUserId, body) =>
     request(`/admin/events/${eventId}/members/${memberUserId}/approve`, {
       method: 'POST',

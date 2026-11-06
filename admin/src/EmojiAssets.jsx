@@ -1,5 +1,6 @@
 import { FilePicker } from './AdminControls.jsx'
 import { createContext, useContext, useEffect, useState } from 'react'
+import { PagedItems } from './ListPager.jsx'
 import { api, mediaUrl } from './api'
 import './emoji-assets.css'
 
@@ -78,7 +79,8 @@ export function EmojiAssetManager() {
     {error && <p role="alert">{error} <button className="button secondary" onClick={load}>重新读取</button></p>}
     {loading && <p>正在读取图标…</p>}
     <label className="emoji-search">搜索图标<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="名称、资源键或Emoji" /></label>
-    <div className="emoji-library">{rows.filter((row) => `${row.name} ${row.key} ${row.emoji}`.includes(search)).map((row) =>
+    <PagedItems key={search} items={rows.filter((row) => `${row.name} ${row.key} ${row.emoji}`.includes(search))}>{(pageItems) =>
+    <div className="emoji-library">{pageItems.map((row) =>
       <article className="emoji-tile" key={row.key}>
         <EmojiIcon emoji={row.emoji} url={row.image_url} size={64} />
         <div><strong>{row.name}</strong><small>{row.key} · {(row.byte_size / 1024).toFixed(1)}KB</small>
@@ -86,6 +88,7 @@ export function EmojiAssetManager() {
         <button disabled={busy} onClick={() => setEditing(row)}>替换图片 / 名称</button>
         <button disabled={busy} onClick={() => toggle(row)}>{row.is_active ? '停用' : '启用'}</button>
       </article>)}</div>
+    }</PagedItems>
     {!loading && !rows.length && !error && <p>暂无图标，请上传。</p>}
     {editing && <div className="dialog-backdrop"><form className="dialog" onSubmit={save}>
       <div className="dialog-head"><h3>{editing.key ? '替换图标' : '上传新图标'}</h3><button type="button" aria-label="关闭弹窗" disabled={busy} onClick={() => setEditing(null)}>×</button></div>

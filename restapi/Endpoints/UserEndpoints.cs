@@ -304,7 +304,7 @@ public static class UserEndpoints
         api.MapGet("/me/activities", async (HttpContext context, Db db, string? status, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
-            return ApiSupport.Ok(await db.QueryAsync(
+            var rows = await db.QueryAsync(
                 """
                 SELECT e.id, e.organizer_user_id, e.title, e.description,
                        e.status AS event_status, e.cancellation_reason,
@@ -332,7 +332,9 @@ public static class UserEndpoints
                   AND (@status IS NULL OR em.status=@status)
                   AND e.deleted_at IS NULL
                 ORDER BY s.starts_at DESC NULLS LAST
-                """, new { userId, status }, ct));
+                """, new { userId, status }, ct);
+            await ActivityLocalization.AttachAsync(db, rows, ct);
+            return ApiSupport.Ok(rows);
         });
 
         api.MapGet("/me/notifications", async (
