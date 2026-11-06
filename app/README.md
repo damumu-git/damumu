@@ -4,7 +4,7 @@
 
 ## 界面主题
 
-正式Logo采用用户选定的蓝底暖白“环抱”方案，已用于登录、注册、Android/iOS 安装图标、Android 启动图及 Web 加载页。iOS 原生启动画面使用与引导页一致的浅蓝底色。母版与尺寸导出见根目录 `branding/README.md`；原生界面和安装图标需要重新构建安装包。
+正式Logo采用用户选定的蓝底暖白“环抱”方案，已用于登录、注册、Android/iOS 安装图标、Android 启动图及 Web 加载页。iOS 原生启动画面使用晴空蓝底和纯白环抱标志，可打开根目录下的 `preview/app/ios-launch.html` 离线查看。母版与尺寸导出见根目录 `branding/README.md`；原生界面和安装图标需要重新构建安装包。
 
 2026-11-02 无衬线字体：中文、英文及数字使用 Noto Sans SC，韩文使用 Noto Sans KR，
 保留 Emoji 与系统缺字回退。字体本地打包，替代原文楷/Ysabeau方案；
