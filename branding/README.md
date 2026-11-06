@@ -15,7 +15,7 @@
 运行 `python branding/export-logo.py`（需要 Pillow）从母版重新导出：
 
 - Flutter登录/注册页本地图片、Android各密度桌面图标与启动图、自适应图标及安全留白。
-- iOS AppIcon完整尺寸和LaunchImage的1x/2x/3x图片，商店1024px图片为不透明RGB。
+- iOS AppIcon完整尺寸，商店1024px图片为不透明RGB。iOS 原生启动画面使用与 Flutter 首屏一致的浅蓝底色。
 - Flutter Web图标、加载Logo及maskable图标；Admin品牌与标签图标。
 - 产品网站页头/页脚、标签和Apple触摸图标；App/Admin离线预览。
 

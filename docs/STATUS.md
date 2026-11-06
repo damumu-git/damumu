@@ -2,6 +2,8 @@
 
 - 2026-11-06 移动端键盘：点击输入区域以外时统一取消输入焦点，登录、注册和第三方授权开始前收起键盘，切换底部页面也清除焦点。登录页和首页支持滚动时收起。通过 iOS 平台行为的 Flutter 测试核对点外收起、搜索键和切换标签，真机登录后过渡待 TestFlight 验收。
 
+- 2026-11-06 iOS 启动过渡：TestFlight `1.0.0 (6)` 所用的 `main` 尚未包含启动页修复。现已合入，iOS 原生启动页和 Flutter 容器使用与引导页一致的浅蓝 `#F3F8FC`，移除原生启动图。已核对 storyboard 与主题配色、入口和资源引用；下一步用更新的 `main` 重新构建并通过 TestFlight 验收冷启动。
+
 - 2026-11-05 iOS TestFlight 构建：Codemagic 已通过签名设置，Xcode 归档因 Firebase Core 和 Messaging 要求 iOS 15.0、工程仍设为 13.0 而失败。已将 Debug、Profile 和 Release 的最低部署版本统一设为 iOS 15.0；下一步在 Codemagic 使用修复提交重新归档并上传，Windows 无法验证 iOS 归档。
 
 - 2026-11-05 登录排查与事件日志：生产健康检查正常，Google 占位令牌请求返回 `503 social_login_unavailable`，需核对 AWS 的 Google 启用开关、Web Client ID、迁移 024 和授权。邮箱注册在隔离库正常，线上失败仍待对应请求的追踪编号或容器日志。迁移 025 新增按 UTC 月分区的 `event_log`，Admin 可筛选并按游标分页，App 认证失败显示追踪编号。隔离 PostgreSQL 已验证迁移重复执行、清理过期分区、低权限写入、注册、重复邮箱、模拟数据库异常、管理员鉴权和分页。下一步合并并备份、执行迁移 025、部署 API/Admin，重新测试真机。
