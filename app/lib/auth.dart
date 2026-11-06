@@ -605,6 +605,7 @@ class _AuthPageState extends State<AuthPage> {
     body: SafeArea(
       child: Center(
         child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
@@ -933,6 +934,7 @@ class _AuthPageState extends State<AuthPage> {
 
   Future<void> _social(SocialProvider provider) async {
     if (_busy) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _busy = true);
     try {
       final credential =
@@ -969,13 +971,14 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_busy || !(_formKey.currentState?.validate() ?? false)) return;
     if (_register && (!_ageConfirmed || !_privacyAcknowledged)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.tr('registrationConfirmationRequired'))),
       );
       return;
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _busy = true);
     try {
       final auth = AuthScope.of(context);

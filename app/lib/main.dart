@@ -177,7 +177,18 @@ class _DaziAppState extends State<DaziApp> with WidgetsBindingObserver {
               );
               ErrorWidget.builder = _installedErrorBuilder!;
             }
-            return child!;
+            return Actions(
+              actions: {
+                EditableTextTapOutsideIntent:
+                    CallbackAction<EditableTextTapOutsideIntent>(
+                      onInvoke: (intent) {
+                        intent.focusNode.unfocus();
+                        return null;
+                      },
+                    ),
+              },
+              child: child!,
+            );
           },
           title: '搭慕',
           locale: _locale,
@@ -417,6 +428,7 @@ class _AppShellState extends State<AppShell> {
       return false;
     }
     if (mounted) {
+      FocusManager.instance.primaryFocus?.unfocus();
       setState(() {
         if (_index == 2) _createKey = GlobalKey<_CreateEventPageState>();
         _index = 0;
@@ -433,6 +445,7 @@ class _AppShellState extends State<AppShell> {
       return;
     }
     if (mounted) {
+      FocusManager.instance.primaryFocus?.unfocus();
       setState(() {
         if (_index == 2 && value != 2) {
           _createKey = GlobalKey<_CreateEventPageState>();
@@ -1131,6 +1144,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final list = CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       slivers: [
         SliverToBoxAdapter(
           child: PagePadding(

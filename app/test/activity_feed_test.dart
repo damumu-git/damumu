@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zaihandazi/auth.dart';
@@ -81,6 +82,39 @@ void main() {
       expect(find.text('已加载全部活动'), findsOneWidget);
       expect(find.text('加载更多'), findsNothing);
     },
+  );
+
+  testWidgets(
+    'home search dismisses the keyboard on outside tap, search action, and tab switch',
+    (tester) async {
+      await mount(
+        tester,
+        ({latitude, longitude, city, district, required limit, cursor}) async =>
+            page([]),
+      );
+      await tester.tap(find.byKey(const Key('main-nav-0')));
+      await tester.pumpAndSettle();
+
+      final search = find.byKey(const Key('home-search-field'));
+      await tester.tap(search);
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isTrue);
+      await tester.tap(find.text('A LITTLE COMPANY'));
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isFalse);
+
+      await tester.showKeyboard(search);
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isFalse);
+
+      await tester.showKeyboard(search);
+      expect(tester.testTextInput.isVisible, isTrue);
+      await tester.tap(find.byKey(const Key('main-nav-1')));
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isFalse);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
   );
 
   testWidgets('refresh supersedes an in-flight next page', (tester) async {

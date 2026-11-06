@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -174,6 +175,7 @@ void main() {
     tester,
   ) async {
     final auth = AuthController();
+    final pendingLogin = Completer<http.Response>();
     await http.runWithClient(() async {
       await tester.pumpWidget(
         DaziApp(
@@ -195,7 +197,13 @@ void main() {
         await tester.pumpAndSettle();
       }
       await tester.ensureVisible(find.widgetWithText(FilledButton, '登录'));
+      await tester.showKeyboard(find.byType(TextFormField).at(1));
+      expect(tester.testTextInput.isVisible, isTrue);
       await tester.tap(find.widgetWithText(FilledButton, '登录'));
+      await tester.pump();
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(auth.user, isNull);
+      pendingLogin.complete(loginResponse());
       await tester.pumpAndSettle();
       expect(auth.user?.id, 'u1');
       final prefs = await SharedPreferences.getInstance();
@@ -204,7 +212,7 @@ void main() {
         prefs.getString(LoginPreferences.emailKey),
         'test@example.invalid',
       );
-    }, () => MockClient((_) async => loginResponse()));
+    }, () => MockClient((_) => pendingLogin.future));
     auth.dispose();
   });
 
