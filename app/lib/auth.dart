@@ -118,6 +118,16 @@ class AuthApi {
   static Future<AuthUser> me(String token) async =>
       AuthUser.fromJson(await _json('/me', token: token));
 
+  static Future<String> updateNickname(String token, String nickname) async {
+    final result = await _json(
+      '/me',
+      method: 'PATCH',
+      token: token,
+      body: {'nickname': nickname.trim()},
+    );
+    return result['nickname'] as String;
+  }
+
   static Future<void> requestAccountDeletion(
     String token,
     String confirmationEmail,
@@ -237,6 +247,12 @@ class AuthController extends ChangeNotifier {
   Future<void> updateAvatar(Uint8List bytes) async {
     final url = await AuthApi.uploadAvatar(token!, bytes);
     user = user!.copyWith(avatarUrl: url, avatarImageUrl: url);
+    notifyListeners();
+  }
+
+  Future<void> updateNickname(String nickname) async {
+    final updatedNickname = await AuthApi.updateNickname(token!, nickname);
+    user = user!.copyWith(nickname: updatedNickname);
     notifyListeners();
   }
 
