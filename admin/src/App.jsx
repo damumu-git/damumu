@@ -382,6 +382,11 @@ function Users() {
 }
 
 const coverReviewLabels = { pending: '待审核', approved: '已通过', rejected: '已驳回' }
+const coverReviewDescriptions = {
+  pending: '请查看原图后完成一次审核',
+  approved: '审核已完成，图片可以在活动详情中展示',
+  rejected: '审核已完成，活动详情将继续使用分类图片',
+}
 
 function EventCoverReview({ item, onReviewed }) {
   const dialog = useAdminDialog()
@@ -416,16 +421,22 @@ function EventCoverReview({ item, onReviewed }) {
     } catch (failure) { setError(failure.message) }
     finally { setBusy(false) }
   }
+  const reviewStatus = item.cover_review_status ?? 'pending'
+  const pending = reviewStatus === 'pending'
   return <section className="panel detail-section">
-    <div className="section-heading"><h3>活动图片</h3><span>{coverReviewLabels[item.cover_review_status]}</span></div>
+    <div className="section-heading"><div><span className="kicker">Cover moderation</span><h3>活动图片</h3></div></div>
+    <div className={`cover-review-state cover-review-state-${reviewStatus}`} role="status">
+      <span className="cover-review-state-icon" aria-hidden="true">{pending ? '○' : reviewStatus === 'approved' ? '✓' : '×'}</span>
+      <div><strong>{coverReviewLabels[reviewStatus] ?? '状态未知'}</strong><small>{coverReviewDescriptions[reviewStatus] ?? '请刷新页面确认审核状态'}</small></div>
+    </div>
     {error && <p role="alert">{error}</p>}
     {photo ? <img className="review-cover-image" src={photo} alt="发布者上传的活动照片" /> :
       <button className="button secondary" disabled={attempt > 0 && !error}
         onClick={() => { setError(''); setAttempt(attempt + 1) }}>{attempt > 0 && !error ? '读取中…' : '查看图片'}</button>}
-    <div className="card-actions">
-      <button className="button primary" disabled={!photo || busy || item.cover_review_status === 'approved'} onClick={() => review('approved')}>通过</button>
-      <button className="button danger-button" disabled={!photo || busy || item.cover_review_status === 'rejected'} onClick={() => review('rejected')}>驳回</button>
-    </div>
+    {pending ? <div className="cover-review-actions">
+      <button className="button cover-approve-button" disabled={!photo || busy} onClick={() => review('approved')}><span aria-hidden="true">✓</span>{busy ? '处理中…' : '通过图片'}</button>
+      <button className="button cover-reject-button" disabled={!photo || busy} onClick={() => review('rejected')}><span aria-hidden="true">×</span>{busy ? '处理中…' : '驳回图片'}</button>
+    </div> : <p className="cover-review-locked">审核结果已锁定。如用户更换图片，新图片会重新进入待审核队列。</p>}
   </section>
 }
 

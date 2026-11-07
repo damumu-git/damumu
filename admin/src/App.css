@@ -241,7 +241,27 @@ td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: m
   object-fit: contain;
   object-position: left center;
   border-radius: 8px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  background: #f7f9f8;
 }
+
+.cover-review-state { display: flex; align-items: center; gap: 10px; width: min(100%,720px); padding: 11px 13px; border: 1px solid #d9dfdc; border-radius: 10px; background: #f7f9f8; }
+.cover-review-state-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; background: #e9eeeb; font-size: 17px; font-weight: 900; }
+.cover-review-state strong,.cover-review-state small { display: block; }
+.cover-review-state strong { font-size: 12px; }
+.cover-review-state small { margin-top: 2px; color: var(--muted); font-size: 10px; }
+.cover-review-state-approved { border-color: #b9ddca; background: #f0faf5; color: #17663e; }
+.cover-review-state-approved .cover-review-state-icon { background: #d8f1e4; }
+.cover-review-state-rejected { border-color: #efc8c4; background: #fff5f4; color: #a43d34; }
+.cover-review-state-rejected .cover-review-state-icon { background: #f9ddd9; }
+.cover-review-actions { display: flex; gap: 10px; margin-top: 14px; }
+.cover-review-actions .button { min-width: 112px; padding: 9px 14px; }
+.cover-review-actions .button span { margin-right: 6px; font-size: 13px; }
+.cover-approve-button { background: #17663e; color: #fff; }
+.cover-reject-button { border: 1px solid #e4b7b2; background: #fff; color: #a43d34; }
+.cover-review-actions .button:disabled { cursor: not-allowed; opacity: .45; }
+.cover-review-locked { margin: 10px 0 0; color: var(--muted); font-size: 10px; }
 
 .sidebar .cover-review-count {
   margin-inline-start: auto;

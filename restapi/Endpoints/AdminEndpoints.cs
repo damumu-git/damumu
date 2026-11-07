@@ -311,20 +311,23 @@ public static class AdminEndpoints
             if (request.Status is not ("approved" or "rejected") ||
                 reason?.Length > 500 || (request.Status == "rejected" && string.IsNullOrEmpty(reason)))
                 throw new ApiException(400, "invalid_cover_review", "审核状态无效或缺少驳回原因");
+            if (request.ExpectedStatus != "pending")
+                throw new ApiException(409, "cover_already_reviewed", "该图片已完成审核，不能重复修改结果");
             var rows = await db.ExecuteAsync(
                 """
                 WITH changed AS (
                     UPDATE event SET cover_review_status=@status
                     WHERE id=@id AND cover_media_id=@coverMediaId AND deleted_at IS NULL
-                      AND cover_review_status=@expectedStatus AND cover_review_status<>@status
+                      AND cover_review_status='pending'
                     RETURNING id
                 )
                 INSERT INTO audit_log(actor_role, action, target_type, target_id, metadata)
                 SELECT 'admin', 'admin.event.cover_reviewed', 'event', id,
                        jsonb_build_object('status', @status, 'reason', @reason)
                 FROM changed
-                """, new { id, request.CoverMediaId, request.Status, request.ExpectedStatus, reason }, ct);
-            if (rows == 0) throw new ApiException(409, "cover_changed", "活动或图片已变更，请刷新");
+                """, new { id, request.CoverMediaId, request.Status, reason }, ct);
+            if (rows == 0)
+                throw new ApiException(409, "cover_already_reviewed", "活动图片已变更或已完成审核，请刷新");
             return ApiSupport.Ok(new { request.Status });
         });
 
