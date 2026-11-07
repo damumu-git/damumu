@@ -63,7 +63,7 @@ html, body, .admin-shell { background: var(--canvas); }
 .pulse-number { font-size: 48px; font-weight: 500; }
 .pulse-row { padding: 12px 0; }
 .chart { height: 170px; }
-.event-symbol, .event-name > span { border-radius: 4px; background: #edf3fa; }
+.event-symbol, .event-name > span:first-child { border-radius: 4px; background: #edf3fa; }
 .filter-bar { gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 4px; background: #f8f9fb; margin-bottom: 14px; }
 .filter-bar .search-box { flex: 1 1 320px; min-width: 240px; }
 .filter-bar > select { flex: 0 0 160px; width: 160px; min-width: 140px; }

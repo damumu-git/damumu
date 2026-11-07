@@ -364,7 +364,7 @@ function Users() {
             <thead><tr><th>用户</th><th>地区 / 身份</th><th>信誉</th><th>活动记录</th><th>安全信号</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>{rows.map((user) => (
               <tr key={user.id} className="clickable-row" onDoubleClick={() => setSelectedId(user.id)}>
-                <td><div className="identity"><span className="avatar">{(user.nickname ?? '慕').slice(0, 1)}</span><div><strong>{user.nickname ?? '未设置昵称'}</strong><small>{user.id}</small></div></div></td>
+                <td><button type="button" className="detail-name-link identity" onClick={() => setSelectedId(user.id)} aria-label={`查看用户 ${user.nickname ?? user.id} 的详情`}><span className="avatar">{(user.nickname ?? '慕').slice(0, 1)}</span><span><strong>{user.nickname ?? '未设置昵称'}</strong><small>{user.id}</small></span></button></td>
                 <td><strong>{user.city_code || '地区未设置'}{user.district_code ? ` · ${user.district_code}` : ''}</strong><small className="block-note">{user.role === 'organizer' ? '组织者' : user.role === 'admin' ? '管理员' : '普通用户'}</small></td>
                 <td><strong>{Number(user.trust_score).toFixed(1)}</strong><small className="cell-note"> / 5.0</small></td>
                 <td><strong>{user.attended_count}</strong><small className="block-note">参加 · {user.no_show_count} 爽约</small></td>
@@ -590,7 +590,7 @@ function Events({ pendingCovers }) {
         <div className="table-wrap management-table"><table><thead><tr><th><input type="checkbox" aria-label="全选本页活动" checked={rows.length > 0 && selected.length === rows.length} onChange={(e) => setSelection({ scope, ids: e.target.checked ? rows.map((row) => row.id) : [] })} /></th><th>活动</th><th>组织者</th><th>时间 / 地点</th><th>参与情况</th><th>治理信号</th><th>状态</th><th>操作</th></tr></thead><tbody>{rows.map((event) => (
           <tr key={event.id} className="clickable-row" onDoubleClick={() => setSelectedId(event.id)}>
             <td><input type="checkbox" aria-label={`选择 ${event.title}`} checked={selected.includes(event.id)} onChange={(e) => setSelection({ scope, ids: e.target.checked ? [...selected, event.id] : selected.filter((id) => id !== event.id) })} /></td>
-            <td><div className="event-name"><span><EmojiIcon emoji={event.category_icon} url={event.category_icon_url} /></span><div><strong>{event.title}</strong><small>{event.category_name} · {event.id}</small></div></div></td>
+            <td><button type="button" className="detail-name-link event-name" onClick={() => setSelectedId(event.id)} aria-label={`查看活动 ${event.title} 的详情`}><span><EmojiIcon emoji={event.category_icon} url={event.category_icon_url} /></span><span><strong>{event.title}</strong><small>{event.category_name} · {event.id}</small></span></button></td>
             <td><strong>{event.organizer_name ?? '未设置'}</strong><small className="block-note">{event.city_code || '地区未设置'}</small></td>
             <td><strong>{formatDate(event.starts_at)}</strong><small className="block-note">{event.place_name ?? event.district_code ?? event.city_code ?? '地点未设置'}</small></td>
             <td><strong>{event.approved_count}/{event.capacity}</strong><small className="block-note">候补 {event.waitlist_count}</small></td>

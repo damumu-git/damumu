@@ -92,9 +92,13 @@ th { padding: 10px 12px; color: var(--muted); background: #f7f9f6; font-size: 10
 th:first-child { border-radius: 10px 0 0 10px; } th:last-child { border-radius: 0 10px 10px 0; }
 td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .identity,.event-name { display: flex; align-items: center; gap: 10px; min-width: 150px; }.identity strong,.identity small,.event-name strong,.event-name small { display: block; }
+.detail-name-link { width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.detail-name-link strong { color: var(--ink); text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; transition: color .15s ease,text-decoration-color .15s ease; }
+.detail-name-link:hover strong,.detail-name-link:focus-visible strong { color: var(--green); text-decoration-color: currentColor; }
+.detail-name-link:focus-visible { outline: 2px solid color-mix(in srgb,var(--green) 45%,transparent); outline-offset: 4px; border-radius: 6px; }
 .identity small,.event-name small,.cell-note,.block-note { color: var(--muted); font-size: 9px; }.block-note { display: block; margin-top: 3px; }
 .avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--mint); color: var(--green); font-weight: 800; }
-.event-name > span { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; background: var(--amber-soft); font-size: 18px; }
+.event-name > span:first-child { width: 36px; height: 36px; display: grid; place-items: center; flex: 0 0 36px; border-radius: 11px; background: var(--amber-soft); font-size: 18px; }
 .status { display: inline-block; padding: 5px 8px; border-radius: 999px; background: #eef1ef; color: #5d6a63; font-size: 9px; font-weight: 700; white-space: nowrap; }
 .status-active,.status-published,.status-resolved,.status-completed { background: var(--mint); color: var(--green); }
 .status-submitted,.status-open,.status-banned,.status-cancelled { background: var(--red-soft); color: var(--red); }
