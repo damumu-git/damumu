@@ -109,10 +109,10 @@ class _HomeAction extends StatelessWidget {
   const _HomeAction();
 
   @override
-  Widget build(BuildContext context) => IconButton(
+  Widget build(BuildContext context) => IconButton.filledTonal(
     tooltip: context.tr('returnHome'),
     onPressed: () => _goHome(context),
-    icon: const Icon(Icons.home_outlined),
+    icon: const Icon(Icons.cottage_rounded),
   );
 }
 
@@ -802,7 +802,7 @@ class _FloatingDock extends StatelessWidget {
   final List<String> labels;
   final ValueChanged<int> onSelected;
   static const _icons = [
-    Icons.home_outlined,
+    Icons.cottage_outlined,
     Icons.explore_outlined,
     Icons.add,
     Icons.chat_bubble_outline,
@@ -2237,12 +2237,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
     final full = e.joined >= e.capacity;
     final cancelled = _detail?['status'] == 'cancelled';
     final content = _detail ?? e.localizedContent;
-    final coverUrl = _detail == null
-        ? e.coverUrl
-        : _detail!['cover_url'] as String?;
     final originalCoverUrl = _detail?['cover_original_url']?.toString();
     final canOpenOriginal =
         originalCoverUrl != null && originalCoverUrl.isNotEmpty;
+    final detailCoverUrl = canOpenOriginal ? originalCoverUrl : e.coverUrl;
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -2270,7 +2268,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     colors: [AppPalette.soft, AppPalette.background],
                   ),
                 ),
-                child: coverUrl == null
+                child: detailCoverUrl == null
                     ? EmojiPicture(e.emoji, url: e.emojiUrl, size: 64)
                     : GestureDetector(
                         onTap: canOpenOriginal
@@ -2287,7 +2285,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                               )
                             : null,
                         child: Image.network(
-                          absoluteImageUrl(coverUrl),
+                          absoluteImageUrl(detailCoverUrl),
                           fit: BoxFit.cover,
                           width: double.infinity,
                           height: double.infinity,
@@ -5784,7 +5782,8 @@ class ProfilePage extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      onPressed: () => showAvatarEditor(context),
+                      tooltip: context.tr('editNickname'),
+                      onPressed: () => _showNicknameEditor(context, auth),
                       icon: const Icon(Icons.edit_outlined),
                     ),
                   ],
@@ -6055,6 +6054,69 @@ class ProfilePage extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _showNicknameEditor(
+  BuildContext context,
+  AuthController auth,
+) async {
+  final controller = TextEditingController(text: auth.user?.nickname ?? '');
+  final formKey = GlobalKey<FormState>();
+  var saving = false;
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(context.tr('editNickname')),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 30,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(labelText: context.tr('nickname')),
+            validator: (value) {
+              final length = value?.trim().length ?? 0;
+              return length < 2 || length > 30
+                  ? context.tr('nicknameLengthError')
+                  : null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: saving ? null : () => Navigator.pop(dialogContext),
+            child: Text(context.tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: saving
+                ? null
+                : () async {
+                    if (formKey.currentState?.validate() != true) return;
+                    setDialogState(() => saving = true);
+                    try {
+                      await auth.updateNickname(controller.text);
+                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                    } catch (error) {
+                      if (dialogContext.mounted) {
+                        setDialogState(() => saving = false);
+                        _showMessageError(dialogContext, '$error');
+                      }
+                    }
+                  },
+            child: saving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(context.tr('save')),
+          ),
+        ],
+      ),
+    ),
+  );
+  controller.dispose();
 }
 
 Future<void> _openSimilarEvent(BuildContext context, String eventId) async {

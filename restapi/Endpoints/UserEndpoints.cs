@@ -206,6 +206,9 @@ public static class UserEndpoints
         api.MapPatch("/me", async (HttpContext context, UpdateProfileRequest request, Db db, MediaStorage media, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
+            var nickname = EmptyToNull(request.Nickname);
+            if (nickname is not null && nickname.Length is < 2 or > 30)
+                throw new ApiException(400, "nickname_invalid", "昵称长度需要为 2–30 个字符");
             var profile = await db.QueryOneAsync(
                 """
                 UPDATE user_profile
@@ -226,7 +229,7 @@ public static class UserEndpoints
                 """, new
                 {
                     userId,
-                    nickname = EmptyToNull(request.Nickname),
+                    nickname,
                     avatarUrl = media.ToStoredReference(EmptyToNull(request.AvatarUrl)),
                     bio = EmptyToNull(request.Bio),
                     cityCode = EmptyToNull(request.CityCode),

@@ -47,7 +47,10 @@ public static class EventEndpoints
                        NULL::text AS place_name, NULL::text AS address_public,
                        s.starts_at, s.ends_at,
                        u.id AS organizer_user_id, up.nickname AS organizer_name,
-                       up.avatar_url AS organizer_avatar,
+                       COALESCE(organizer_avatar.image_url, CASE
+                           WHEN up.avatar_url LIKE '/uploads/%' THEN up.avatar_url
+                           ELSE NULL
+                       END) AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_score,
                        organizer_risk.category_code AS organizer_risk_tag,
                        e.beginner_friendly_claimed,
@@ -63,6 +66,8 @@ public static class EventEndpoints
                     AND cover.status='ready' AND e.cover_review_status='approved' AND e.visibility='public'
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id
+                LEFT JOIN system_avatar organizer_avatar
+                  ON up.avatar_url='system:'||organizer_avatar.id::text
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id
                 LEFT JOIN LATERAL (
                     SELECT count(DISTINCT beginner_endorsement.from_user_id)
@@ -161,7 +166,11 @@ public static class EventEndpoints
                            WHERE viewer_member.event_id=e.id AND viewer_member.user_id=@viewerId
                              AND viewer_member.status IN ('approved','attended')
                        ) THEN ST_X(p.public_geo::geometry) END AS public_longitude,
-                       up.nickname AS organizer_name, up.avatar_url AS organizer_avatar,
+                       up.nickname AS organizer_name,
+                       COALESCE(organizer_avatar.image_url, CASE
+                           WHEN up.avatar_url LIKE '/uploads/%' THEN up.avatar_url
+                           ELSE NULL
+                       END) AS organizer_avatar,
                        COALESCE(ts.score, 0) AS organizer_score,
                        COALESCE(ts.review_count, 0) AS organizer_review_count,
                        beginner_feedback.verified AS beginner_friendly_verified,
@@ -180,6 +189,8 @@ public static class EventEndpoints
                     AND e.status IN ('published','full','completed','cancelled')
                 LEFT JOIN place p ON p.id=e.place_id
                 LEFT JOIN user_profile up ON up.user_id=e.organizer_user_id
+                LEFT JOIN system_avatar organizer_avatar
+                  ON up.avatar_url='system:'||organizer_avatar.id::text
                 LEFT JOIN trust_snapshot ts ON ts.user_id=e.organizer_user_id
                 LEFT JOIN LATERAL (
                     SELECT count(DISTINCT beginner_endorsement.from_user_id)
