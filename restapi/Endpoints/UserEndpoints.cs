@@ -318,6 +318,7 @@ public static class UserEndpoints
                 """
                 SELECT e.id, e.organizer_user_id, e.title, e.description,
                        e.status AS event_status, e.cancellation_reason,
+                       e.cover_media_id, e.cover_review_status, e.cover_review_reason,
                        e.city_code, e.district_code, e.approval_mode,
                        e.capacity, e.approved_count, e.price_amount, e.price_currency,
                        em.status AS membership_status, em.member_role, em.checked_in_at,

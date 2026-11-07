@@ -278,7 +278,14 @@ public static class AdminEndpoints
                 WHERE target_type IN ('event','activity') AND target_id=@id
                 ORDER BY created_at DESC LIMIT 30
                 """, new { id }, ct);
-            return ApiSupport.Ok(new { item, schedules, members, reports, actions });
+            var coverReviews = await db.QueryAsync(
+                """
+                SELECT media_asset_id, status, reason, submitted_at, reviewed_at
+                FROM event_cover_review
+                WHERE event_id=@id
+                ORDER BY submitted_at DESC
+                """, new { id }, ct);
+            return ApiSupport.Ok(new { item, schedules, members, reports, actions, coverReviews });
         });
 
         admin.MapGet("/event-cover-review/count", async (Db db, CancellationToken ct) =>
@@ -305,7 +312,9 @@ public static class AdminEndpoints
         });
 
         admin.MapPatch("/events/{id:guid}/cover-review", async (
-            Guid id, AdminCoverReviewRequest request, Db db, CancellationToken ct) =>
+            Guid id, AdminCoverReviewRequest request, Db db,
+            RealtimeConnectionManager realtime, PushNotificationService push,
+            CancellationToken ct) =>
         {
             var reason = request.Reason?.Trim();
             if (request.Status is not ("approved" or "rejected") ||
@@ -313,22 +322,71 @@ public static class AdminEndpoints
                 throw new ApiException(400, "invalid_cover_review", "审核状态无效或缺少驳回原因");
             if (request.ExpectedStatus != "pending")
                 throw new ApiException(409, "cover_already_reviewed", "该图片已完成审核，不能重复修改结果");
-            var rows = await db.ExecuteAsync(
+            var item = await db.QueryOneAsync(
                 """
                 WITH changed AS (
-                    UPDATE event SET cover_review_status=@status
+                    UPDATE event SET cover_review_status=@status,
+                        cover_review_reason=@reason
                     WHERE id=@id AND cover_media_id=@coverMediaId AND deleted_at IS NULL
                       AND cover_review_status='pending'
+                    RETURNING id, organizer_user_id, title, cover_media_id,
+                              cover_review_status, cover_review_reason
+                ), reviewed AS (
+                    UPDATE event_cover_review review
+                    SET status=changed.cover_review_status,
+                        reason=changed.cover_review_reason,
+                        reviewed_at=now()
+                    FROM changed
+                    WHERE review.media_asset_id=changed.cover_media_id
+                      AND review.status='pending'
+                    RETURNING review.media_asset_id
+                ), logged AS (
+                    INSERT INTO audit_log(actor_role, action, target_type, target_id, metadata)
+                    SELECT 'admin', 'admin.event.cover_reviewed', 'event', id,
+                           jsonb_build_object('status', @status, 'reason', @reason,
+                                              'coverMediaId', cover_media_id)
+                    FROM changed
                     RETURNING id
+                ), notified AS (
+                    INSERT INTO notification (user_id, notification_type, title, body, data)
+                    SELECT organizer_user_id, 'event_cover_reviewed',
+                           CASE WHEN @status='approved' THEN '活动图片已通过审核'
+                                ELSE '活动图片需要更换' END,
+                           CASE WHEN @status='approved'
+                                THEN '你发布的「' || title || '」图片已通过审核'
+                                ELSE '你发布的「' || title || '」图片未通过审核：' || @reason END,
+                           jsonb_build_object('eventId', id, 'status', @status)
+                    FROM changed
                 )
-                INSERT INTO audit_log(actor_role, action, target_type, target_id, metadata)
-                SELECT 'admin', 'admin.event.cover_reviewed', 'event', id,
-                       jsonb_build_object('status', @status, 'reason', @reason)
-                FROM changed
+                SELECT id, organizer_user_id, title, cover_review_status,
+                       cover_review_reason FROM changed
                 """, new { id, request.CoverMediaId, request.Status, reason }, ct);
-            if (rows == 0)
+            if (item is null)
                 throw new ApiException(409, "cover_already_reviewed", "活动图片已变更或已完成审核，请刷新");
-            return ApiSupport.Ok(new { request.Status });
+            var organizerId = (Guid)item["organizer_user_id"]!;
+            var approved = request.Status == "approved";
+            await realtime.PublishAsync([organizerId], "notification.created", new
+            {
+                notificationType = "event_cover_reviewed",
+                eventId = id,
+                status = request.Status
+            }, ct);
+            await push.SendToUsersAsync(db, [organizerId],
+                approved ? "活动图片已通过审核" : "活动图片需要更换",
+                approved
+                    ? $"你发布的「{item["title"]}」图片已通过审核"
+                    : $"你发布的「{item["title"]}」图片未通过审核：{reason}",
+                new Dictionary<string, string>
+                {
+                    ["type"] = "notification.created",
+                    ["notificationType"] = "event_cover_reviewed",
+                    ["eventId"] = id.ToString()
+                }, ct);
+            return ApiSupport.Ok(new
+            {
+                status = item["cover_review_status"],
+                reason = item["cover_review_reason"]
+            });
         });
 
         admin.MapPost("/events/bulk-moderation", async (

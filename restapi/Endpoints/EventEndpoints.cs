@@ -428,6 +428,10 @@ public static class EventEndpoints
                 ), inserted_schedule AS (
                     INSERT INTO event_schedule (event_id, starts_at, ends_at)
                     SELECT id, @startsAt, @endsAt FROM inserted_event
+                ), inserted_cover_review AS (
+                    INSERT INTO event_cover_review (event_id, media_asset_id)
+                    SELECT id, @coverMediaId FROM inserted_event
+                    WHERE @coverMediaId IS NOT NULL
                 )
                 INSERT INTO event_member (event_id, user_id, member_role, status, joined_at)
                 VALUES (@eventId, @userId, 'organizer', 'approved', now())
@@ -543,6 +547,43 @@ public static class EventEndpoints
                 }, ct);
             if (item is null)
                 throw new ApiException(409, "version_conflict", "活动不存在、无权限或已被其他人更新");
+            return ApiSupport.Ok(item);
+        });
+
+        api.MapPut("/events/{id:guid}/cover", async (
+            Guid id, HttpContext context, ReplaceEventCoverRequest request, Db db,
+            CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var item = await db.QueryOneAsync(
+                """
+                WITH replacement AS (
+                    UPDATE event e
+                    SET cover_media_id=@coverMediaId,
+                        cover_review_status='pending',
+                        cover_review_reason=NULL,
+                        row_version=row_version+1
+                    WHERE e.id=@id AND e.organizer_user_id=@userId AND e.deleted_at IS NULL
+                      AND e.cover_media_id IS DISTINCT FROM @coverMediaId
+                      AND (e.cover_media_id IS NULL OR e.cover_review_status='rejected')
+                      AND EXISTS (
+                          SELECT 1 FROM media_asset ma
+                          WHERE ma.id=@coverMediaId AND ma.owner_user_id=@userId
+                            AND ma.mime_type='image/jpeg' AND ma.status='ready'
+                            AND ma.deleted_at IS NULL
+                      )
+                    RETURNING e.id, e.cover_media_id, e.cover_review_status,
+                              e.cover_review_reason, e.row_version
+                ), submitted AS (
+                    INSERT INTO event_cover_review (event_id, media_asset_id)
+                    SELECT id, cover_media_id FROM replacement
+                    ON CONFLICT (media_asset_id) DO NOTHING
+                )
+                SELECT * FROM replacement
+                """, new { id, userId, request.CoverMediaId }, ct);
+            if (item is null)
+                throw new ApiException(409, "cover_replace_failed",
+                    "图片不存在、无权使用，或活动图片已经变更");
             return ApiSupport.Ok(item);
         });
 
@@ -819,6 +860,7 @@ public sealed record UpdateEventRequest(
     string? Visibility,
     long RowVersion,
     string? CustomSubcategory);
+public sealed record ReplaceEventCoverRequest(Guid CoverMediaId);
 public sealed record CancelEventRequest(string Reason);
 public sealed record JoinEventRequest(short PartySize, string? Note, bool ShareContact);
 public sealed record RejectApplicationRequest(string? Reason);

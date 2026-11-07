@@ -6343,6 +6343,19 @@ class _MyActivityRecordPageState extends State<_MyActivityRecordPage> {
               reason: '${activity['cancellation_reason'] ?? ''}',
             ),
           if (isOrganizer) ...[
+            _EventCoverReviewCard(
+              token: token,
+              eventId: '${activity['id']}',
+              coverMediaId: activity['cover_media_id']?.toString(),
+              status: activity['cover_review_status']?.toString(),
+              reason: activity['cover_review_reason']?.toString(),
+              onSubmitted: (coverMediaId) => setState(() {
+                activity['cover_media_id'] = coverMediaId;
+                activity['cover_review_status'] = 'pending';
+                activity['cover_review_reason'] = null;
+              }),
+            ),
+            const SizedBox(height: 18),
             Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -6377,6 +6390,225 @@ class _MyActivityRecordPageState extends State<_MyActivityRecordPage> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _EventCoverReviewCard extends StatefulWidget {
+  const _EventCoverReviewCard({
+    required this.token,
+    required this.eventId,
+    required this.onSubmitted,
+    this.coverMediaId,
+    this.status,
+    this.reason,
+  });
+  final String token;
+  final String eventId;
+  final String? coverMediaId;
+  final String? status;
+  final String? reason;
+  final ValueChanged<String> onSubmitted;
+  @override
+  State<_EventCoverReviewCard> createState() => _EventCoverReviewCardState();
+}
+
+class _EventCoverReviewCardState extends State<_EventCoverReviewCard> {
+  Uint8List? _bytes;
+  bool _busy = false;
+
+  Future<void> _choose() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final source = await _chooseImageSource(context);
+      if (source == null || !mounted) return;
+      if (!await AppPermissions.ensureImage(context, source) || !mounted) {
+        return;
+      }
+      final picked = await ImagePicker().pickImage(
+        requestFullMetadata: false,
+        source: source,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 92,
+      );
+      if (picked == null || !mounted) return;
+      if (await picked.length() > 128 * 1024 * 1024) {
+        throw const FormatException('largePhotoProcessingFailed');
+      }
+      if (!mounted) return;
+      final webLayout = webCropperLayout(context);
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        aspectRatio: const CropAspectRatio(ratioX: 4, ratioY: 3),
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 90,
+        maxWidth: 1600,
+        maxHeight: 1200,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: context.tr('eventCoverCrop'),
+            toolbarColor: _green,
+            toolbarWidgetColor: Colors.white,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: context.tr('eventCoverCrop'),
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+          ),
+          WebUiSettings(
+            context: context,
+            presentStyle: webLayout.presentStyle,
+            viewwMode: WebViewMode.mode_1,
+            guides: true,
+            rotatable: true,
+            size: webLayout.size,
+          ),
+        ],
+      );
+      if (cropped == null || !mounted) return;
+      final prepared = prepareEventCover(await cropped.readAsBytes());
+      if (mounted) setState(() => _bytes = prepared);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is FormatException
+                  ? context.tr(error.message)
+                  : context.tr('largePhotoProcessingFailed'),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _submit() async {
+    final bytes = _bytes;
+    if (bytes == null || _busy) return;
+    setState(() => _busy = true);
+    String? uploadedId;
+    try {
+      final uploaded = await EventService.uploadCover(widget.token, bytes);
+      uploadedId = uploaded.id;
+      await EventService.replaceCover(
+        widget.token,
+        widget.eventId,
+        uploaded.id,
+      );
+      if (!mounted) return;
+      widget.onSubmitted(uploaded.id);
+      setState(() => _bytes = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('eventCoverResubmitted'))),
+      );
+    } catch (error) {
+      if (uploadedId != null) {
+        try {
+          await EventService.deleteCover(widget.token, uploadedId);
+        } catch (_) {}
+      }
+      if (mounted) _showMessageError(context, '$error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = widget.coverMediaId == null
+        ? 'none'
+        : widget.status ?? 'pending';
+    final rejected = status == 'rejected';
+    final icon = rejected
+        ? Icons.error_outline_rounded
+        : status == 'approved'
+        ? Icons.check_circle_outline_rounded
+        : status == 'pending'
+        ? Icons.schedule_rounded
+        : Icons.add_photo_alternate_outlined;
+    final titleKey = switch (status) {
+      'approved' => 'eventCoverApproved',
+      'rejected' => 'eventCoverRejected',
+      'pending' => 'eventCoverPending',
+      _ => 'eventCoverMissing',
+    };
+    return Card(
+      color: rejected
+          ? Theme.of(context).colorScheme.errorContainer
+          : status == 'approved'
+          ? _mint
+          : _cream,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    context.tr(titleKey),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+            if (rejected && (widget.reason?.trim().isNotEmpty ?? false)) ...[
+              const SizedBox(height: 8),
+              Text('${context.tr('eventCoverRejectReason')}：${widget.reason}'),
+            ],
+            if (_bytes != null) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: Image.memory(_bytes!, fit: BoxFit.cover),
+                ),
+              ),
+            ],
+            if (rejected || status == 'none' || _bytes != null) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _choose,
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: Text(
+                      context.tr(
+                        _bytes == null
+                            ? 'eventCoverUploadReplacement'
+                            : 'eventCoverReplace',
+                      ),
+                    ),
+                  ),
+                  if (_bytes != null)
+                    FilledButton.icon(
+                      onPressed: _busy ? null : _submit,
+                      icon: _busy
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.upload_rounded),
+                      label: Text(context.tr('eventCoverSubmitReview')),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -427,7 +427,7 @@ function EventCoverReview({ item, onReviewed }) {
     <div className="section-heading"><div><span className="kicker">Cover moderation</span><h3>活动图片</h3></div></div>
     <div className={`cover-review-state cover-review-state-${reviewStatus}`} role="status">
       <span className="cover-review-state-icon" aria-hidden="true">{pending ? '○' : reviewStatus === 'approved' ? '✓' : '×'}</span>
-      <div><strong>{coverReviewLabels[reviewStatus] ?? '状态未知'}</strong><small>{coverReviewDescriptions[reviewStatus] ?? '请刷新页面确认审核状态'}</small></div>
+      <div><strong>{coverReviewLabels[reviewStatus] ?? '状态未知'}</strong><small>{reviewStatus === 'rejected' && item.cover_review_reason ? `驳回原因：${item.cover_review_reason}` : coverReviewDescriptions[reviewStatus] ?? '请刷新页面确认审核状态'}</small></div>
     </div>
     {error && <p role="alert">{error}</p>}
     {photo ? <img className="review-cover-image" src={photo} alt="发布者上传的活动照片" /> :
@@ -488,6 +488,7 @@ function EventDetail({ id, onBack }) {
           actions={<>{item.status === 'hidden' ? <button className="button secondary" onClick={() => moderate('published')}>恢复展示</button> : <button className="button ghost" onClick={() => moderate('hidden')}>隐藏活动</button>}{item.status !== 'cancelled' && <button className="button ghost" onClick={() => moderate('cancelled')}>取消活动</button>}<button className="button danger-button" onClick={remove}>删除活动</button></>} />
         {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
         {item.cover_media_id && <EventCoverReview key={item.cover_media_id} item={item} onReviewed={resource.reload} />}
+        {!!payload.coverReviews?.length && <section className="panel detail-section"><div className="section-heading"><div><span className="kicker">Cover history</span><h3>图片审核记录</h3></div><span>{payload.coverReviews.length} 次</span></div><div className="detail-list">{payload.coverReviews.map((review) => <div className="detail-list-row" key={review.media_asset_id}><div><strong>{coverReviewLabels[review.status] ?? review.status}</strong><small>{review.reason || '无补充原因'} · 提交 {formatDate(review.submitted_at)}{review.reviewed_at ? ` · 审核 ${formatDate(review.reviewed_at)}` : ''}</small></div><Status value={review.status} /></div>)}</div></section>}
         <div className="detail-metrics">
           <MetricCard label="已通过" value={`${item.approved_count}/${item.capacity}`} note={`候补 ${item.waitlist_count ?? 0} 人`} />
           <MetricCard label="预计费用" value={Number(item.price_amount ?? 0) ? `₩${Number(item.price_amount).toLocaleString()}` : '免费'} note={item.price_currency ?? 'KRW'} tone="blue" />

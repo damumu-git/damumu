@@ -217,6 +217,25 @@ class EventService {
         .timeout(const Duration(seconds: 10));
   }
 
+  static Future<Map<String, dynamic>> replaceCover(
+    String token,
+    String eventId,
+    String coverMediaId,
+  ) async {
+    final response = await http
+        .put(
+          Uri.parse('$_apiBase/events/$eventId/cover'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'coverMediaId': coverMediaId}),
+        )
+        .timeout(const Duration(seconds: 10));
+    final data = _decodeResponse(response, '图片提交失败，请稍后再试')['data'];
+    return (data as Map).cast<String, dynamic>();
+  }
+
   static Future<Map<String, dynamic>> detail(
     String token,
     String eventId,
