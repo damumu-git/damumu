@@ -666,7 +666,7 @@ function MessageMedia({ messageId, mimeType }) {
   return <a className="button secondary" href={url} download>下载消息附件</a>
 }
 
-function MessageDetail({ id, onBack }) {
+function MessageDetail({ id, onBack, onOpenConversation }) {
   const dialog = useAdminDialog()
   const [notice, setNotice] = useState('')
   const resource = useResource(() => api.message(id), [id])
@@ -687,9 +687,9 @@ function MessageDetail({ id, onBack }) {
     <PageState {...resource} empty={!item} onRetry={resource.reload}>
       {item && <div className="detail-page message-detail-page">
         <DetailHeader kicker="Message governance" title={item.sender_name ?? '系统消息'} subtitle={`${item.conversation_type === 'event' ? '活动群聊' : '私信'} · ${item.conversation_id}`} status={state} onBack={onBack}
-          actions={item.deleted_at
+          actions={<><button className="button secondary" onClick={() => onOpenConversation(item)}>查看完整会话</button>{item.deleted_at
             ? <button className="button secondary" onClick={() => moderate('restore')}>恢复显示</button>
-            : <button className="button danger-button" onClick={() => moderate('hide')}>隐藏消息</button>} />
+            : <button className="button danger-button" onClick={() => moderate('hide')}>隐藏消息</button>}</>} />
         {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
         <div className="detail-layout">
           <section className="panel detail-main-card">
@@ -729,9 +729,10 @@ function Messages({ messageEventFilter, onClearMessageEventFilter }) {
   const [days, setDays] = useState('30')
   const [reportedOnly, setReportedOnly] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
+  const [conversationFilter, setConversationFilter] = useState(null)
   const [cursors, setCursors] = useState([null])
   const cursor = cursors.at(-1)
-  const resource = useResource(() => api.messages({ q: query, eventId: messageEventFilter?.id, conversationType, messageType, status, days, reportedOnly, ...cursor }), [query, messageEventFilter?.id, conversationType, messageType, status, days, reportedOnly, cursor])
+  const resource = useResource(() => api.messages({ q: query, eventId: messageEventFilter?.id, conversationId: conversationFilter?.id, conversationType, messageType, status, days, reportedOnly, ...cursor }), [query, messageEventFilter?.id, conversationFilter?.id, conversationType, messageType, status, days, reportedOnly, cursor])
   const rows = resource.data?.data ?? []
   const next = resource.data?.meta?.next
   const resetPage = (setter, value) => { setter(value); setCursors([null]) }
@@ -741,11 +742,24 @@ function Messages({ messageEventFilter, onClearMessageEventFilter }) {
     if (value === query && !cursor) resource.reload()
     else resetPage(setQuery, value)
   }
-  if (selectedId) return <MessageDetail id={selectedId} onBack={() => { setSelectedId(null); resource.reload() }} />
+  const openConversation = (item) => {
+    setConversationFilter({ id: item.conversation_id, title: item.event_title ?? item.conversation_title ?? item.conversation_id })
+    setSelectedId(null)
+    setQueryInput('')
+    setQuery('')
+    setConversationType('')
+    setMessageType('')
+    setStatus('')
+    setDays('93')
+    setReportedOnly(false)
+    setCursors([null])
+  }
+  if (selectedId) return <MessageDetail id={selectedId} onBack={() => { setSelectedId(null); resource.reload() }} onOpenConversation={openConversation} />
   return (
     <section className="panel full-panel management-panel">
       <div className="panel-heading management-heading"><div><span className="kicker">Message governance</span><h3>消息管理</h3><p>按时间游标分页查看消息、举报与处置历史；详情访问及管理操作均写入审计。</p></div><span className="count-badge">本页 {rows.length} 条</span></div>
       {messageEventFilter && <div className="active-message-filter" role="status"><div><strong>当前活动：{messageEventFilter.title}</strong><small>{messageEventFilter.id}</small></div><button className="button secondary" onClick={onClearMessageEventFilter}>查看全部消息</button></div>}
+      {conversationFilter && <div className="active-message-filter conversation-message-filter" role="status"><div><strong>完整会话：{conversationFilter.title}</strong><small>{conversationFilter.id} · 按保留期分页展示</small></div><button className="button secondary" onClick={() => { setConversationFilter(null); setCursors([null]) }}>{messageEventFilter ? '返回活动消息' : '查看全部消息'}</button></div>}
       <form className="filter-bar message-filters" onSubmit={submit}>
         <label className="search-box"><input aria-label="消息搜索" placeholder="正文关键词、发送者、活动或 UUID" value={queryInput} onChange={(event) => setQueryInput(event.target.value)} maxLength={100} /></label>
         <button className="button secondary" type="submit">搜索</button>
