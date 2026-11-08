@@ -55,6 +55,19 @@ const statusText = {
   waitlisted: '候补中',
 }
 
+function UserAvatar({ user, large = false }) {
+  const [failedUrl, setFailedUrl] = useState('')
+  const imageUrl = user.avatarImageUrl ? mediaUrl(user.avatarImageUrl) : ''
+
+  return (
+    <span className={`avatar${large ? ' avatar-large' : ''}`}>
+      {imageUrl && failedUrl !== imageUrl
+        ? <img src={imageUrl} alt="" onError={() => setFailedUrl(imageUrl)} />
+        : (user.nickname ?? '慕').slice(0, 1)}
+    </span>
+  )
+}
+
 const formatDate = (value, withTime = true) => {
   if (!value) return '—'
   const date = new Date(value)
@@ -295,7 +308,7 @@ function UserDetail({ id, onBack }) {
         <div className="detail-layout">
           <section className="panel detail-main-card">
             <div className="profile-hero">
-              <span className="avatar avatar-large">{(user.nickname ?? '慕').slice(0, 1)}</span>
+              <UserAvatar user={user} large />
               <div><span className="eyebrow">账号资料</span><h3>{user.nickname ?? '未设置昵称'}</h3><p>{user.bio || '该用户暂未填写个人简介。'}</p></div>
             </div>
             <dl className="detail-fields">
@@ -364,7 +377,7 @@ function Users() {
             <thead><tr><th>用户</th><th>地区 / 身份</th><th>信誉</th><th>活动记录</th><th>安全信号</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>{rows.map((user) => (
               <tr key={user.id} className="clickable-row" onDoubleClick={() => setSelectedId(user.id)}>
-                <td><button type="button" className="detail-name-link identity" onClick={() => setSelectedId(user.id)} aria-label={`查看用户 ${user.nickname ?? user.id} 的详情`}><span className="avatar">{(user.nickname ?? '慕').slice(0, 1)}</span><span><strong>{user.nickname ?? '未设置昵称'}</strong><small>{user.id}</small></span></button></td>
+                <td><button type="button" className="detail-name-link identity" onClick={() => setSelectedId(user.id)} aria-label={`查看用户 ${user.nickname ?? user.id} 的详情`}><UserAvatar user={user} /><span><strong>{user.nickname ?? '未设置昵称'}</strong><small>{user.id}</small></span></button></td>
                 <td><strong>{user.city_code || '地区未设置'}{user.district_code ? ` · ${user.district_code}` : ''}</strong><small className="block-note">{user.role === 'organizer' ? '组织者' : user.role === 'admin' ? '管理员' : '普通用户'}</small></td>
                 <td><strong>{Number(user.trust_score).toFixed(1)}</strong><small className="cell-note"> / 5.0</small></td>
                 <td><strong>{user.attended_count}</strong><small className="block-note">参加 · {user.no_show_count} 爽约</small></td>

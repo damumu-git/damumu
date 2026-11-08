@@ -102,12 +102,17 @@ public static class AdminEndpoints
                 """
                 SELECT u.id, u.status, u.role, u.locale, u.last_login_at, u.created_at,
                        p.nickname, p.avatar_url, p.city_code, p.district_code,
+                       COALESCE(sa.image_url, CASE
+                           WHEN p.avatar_url LIKE '/uploads/%' THEN p.avatar_url
+                           ELSE NULL
+                       END) AS "avatarImageUrl",
                        COALESCE(ts.score, 0) AS trust_score,
                        COALESCE(ts.attended_count, 0) AS attended_count,
                        COALESCE(ts.no_show_count, 0) AS no_show_count,
                        (SELECT count(*) FROM report r WHERE r.reported_user_id=u.id) AS report_count
                 FROM app_user u
                 LEFT JOIN user_profile p ON p.user_id=u.id
+                LEFT JOIN system_avatar sa ON p.avatar_url='system:'||sa.id::text
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id
                 WHERE u.deleted_at IS NULL
                   AND (@q IS NULL OR p.nickname ILIKE '%'||@q||'%' OR u.id::text ILIKE @q||'%')
@@ -133,12 +138,17 @@ public static class AdminEndpoints
             var user = await db.QueryOneAsync(
                 """
                 SELECT u.*, p.nickname, p.avatar_url, p.bio, p.city_code, p.district_code,
+                       COALESCE(sa.image_url, CASE
+                           WHEN p.avatar_url LIKE '/uploads/%' THEN p.avatar_url
+                           ELSE NULL
+                       END) AS "avatarImageUrl",
                        p.languages, p.gender, p.occupation, p.arrival_year,
                        ts.score AS trust_score, ts.review_count, ts.attended_count,
                        ts.no_show_count, ts.organized_count, ts.tag_counts,
                        (SELECT count(*) FROM endorsement en WHERE en.target_user_id=u.id) AS like_count
                 FROM app_user u
                 LEFT JOIN user_profile p ON p.user_id=u.id
+                LEFT JOIN system_avatar sa ON p.avatar_url='system:'||sa.id::text
                 LEFT JOIN trust_snapshot ts ON ts.user_id=u.id
                 WHERE u.id=@id
                 """, new { id }, ct);
