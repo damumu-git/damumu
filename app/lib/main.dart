@@ -112,7 +112,7 @@ class _HomeAction extends StatelessWidget {
   Widget build(BuildContext context) => IconButton.filledTonal(
     tooltip: context.tr('returnHome'),
     onPressed: () => _goHome(context),
-    icon: const Icon(Icons.cottage_rounded),
+    icon: const Icon(Icons.home_rounded),
   );
 }
 
@@ -802,7 +802,7 @@ class _FloatingDock extends StatelessWidget {
   final List<String> labels;
   final ValueChanged<int> onSelected;
   static const _icons = [
-    Icons.cottage_outlined,
+    Icons.home_outlined,
     Icons.explore_outlined,
     Icons.add,
     Icons.chat_bubble_outline,
@@ -1714,12 +1714,12 @@ class SectionTitle extends StatelessWidget {
   );
 }
 
-class EventCard extends StatelessWidget {
-  const EventCard({required this.event, required this.onTap, super.key});
-  final EventItem event;
-  final VoidCallback onTap;
+class _ActivityCategoryCover extends StatelessWidget {
+  const _ActivityCategoryCover({required this.event});
 
-  String get _coverAsset {
+  final EventItem event;
+
+  String get _majorAsset {
     final category = switch (event.coverCategoryCode) {
       'food' ||
       'sports' ||
@@ -1732,10 +1732,11 @@ class EventCard extends StatelessWidget {
     return 'assets/activity-covers/$category.webp';
   }
 
-  Widget _cover() {
+  @override
+  Widget build(BuildContext context) {
     final subcategory = event.coverSubcategoryCode;
     Widget major() =>
-        Image.asset(_coverAsset, fit: BoxFit.cover, excludeFromSemantics: true);
+        Image.asset(_majorAsset, fit: BoxFit.cover, excludeFromSemantics: true);
     if (subcategory == null || !RegExp(r'^[a-z0-9_]+$').hasMatch(subcategory)) {
       return major();
     }
@@ -1746,6 +1747,12 @@ class EventCard extends StatelessWidget {
       errorBuilder: (_, _, _) => major(),
     );
   }
+}
+
+class EventCard extends StatelessWidget {
+  const EventCard({required this.event, required this.onTap, super.key});
+  final EventItem event;
+  final VoidCallback onTap;
 
   String? _organizerAvatar(BuildContext context) {
     final currentUser = AuthScope.of(context).user;
@@ -1762,7 +1769,7 @@ class EventCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(height: 145, child: _cover()),
+          SizedBox(height: 145, child: _ActivityCategoryCover(event: event)),
           Padding(
             padding: const EdgeInsets.all(15),
             child: Column(
@@ -2248,10 +2255,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
     final full = e.joined >= e.capacity;
     final cancelled = _detail?['status'] == 'cancelled';
     final content = _detail ?? e.localizedContent;
-    final originalCoverUrl = _detail?['cover_original_url']?.toString();
-    final canOpenOriginal =
-        originalCoverUrl != null && originalCoverUrl.isNotEmpty;
-    final detailCoverUrl = canOpenOriginal ? originalCoverUrl : e.coverUrl;
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -2272,39 +2275,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
               icon: const Icon(Icons.arrow_back),
             ),
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppPalette.soft, AppPalette.background],
-                  ),
-                ),
-                child: detailCoverUrl == null
-                    ? EmojiPicture(e.emoji, url: e.emojiUrl, size: 64)
-                    : GestureDetector(
-                        onTap: canOpenOriginal
-                            ? () => Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => ChatImagePreviewPage(
-                                    imageUrl: absoluteImageUrl(
-                                      originalCoverUrl,
-                                    ),
-                                    titleKey: 'eventCoverPreview',
-                                    heroTag: 'event-cover-$originalCoverUrl',
-                                  ),
-                                ),
-                              )
-                            : null,
-                        child: Image.network(
-                          absoluteImageUrl(detailCoverUrl),
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          errorBuilder: (_, _, _) =>
-                              EmojiPicture(e.emoji, url: e.emojiUrl, size: 64),
-                        ),
-                      ),
-              ),
+              background: _ActivityCategoryCover(event: e),
             ),
           ),
           SliverToBoxAdapter(

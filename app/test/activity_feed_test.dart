@@ -84,6 +84,48 @@ void main() {
     },
   );
 
+  testWidgets('activity detail reuses the category cover and home icons', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      ({latitude, longitude, city, district, required limit, cursor}) async =>
+          const ActivityPage(
+            items: [
+              {
+                'id': 'activity-detail-cover',
+                'title': 'Art class detail',
+                'capacity': 10,
+                'cover_category_code': 'culture',
+                'cover_subcategory_code': 'exhibition',
+                'cover_url': 'https://example.test/uploaded.jpg',
+              },
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+    );
+
+    expect(find.byIcon(Icons.home_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.cottage_outlined), findsNothing);
+
+    await tester.tap(find.text('Art class detail'));
+    await tester.pumpAndSettle();
+
+    final image = tester.widget<Image>(
+      find.descendant(
+        of: find.byType(FlexibleSpaceBar),
+        matching: find.byType(Image),
+      ),
+    );
+    expect(
+      image.image,
+      const AssetImage('assets/activity-covers/sub/exhibition.webp'),
+    );
+    expect(find.byIcon(Icons.home_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.cottage_rounded), findsNothing);
+  });
+
   testWidgets('own activity card follows the latest signed-in avatar', (
     tester,
   ) async {
