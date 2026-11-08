@@ -408,6 +408,7 @@ function EventCoverReview({ item, onReviewed }) {
   const dialog = useAdminDialog()
   const [attempt, setAttempt] = useState(0)
   const [photo, setPhoto] = useState(null)
+  const [expanded, setExpanded] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const id = item.id
@@ -439,6 +440,23 @@ function EventCoverReview({ item, onReviewed }) {
   }
   const reviewStatus = item.cover_review_status ?? 'pending'
   const pending = reviewStatus === 'pending'
+  const togglePhoto = () => {
+    if (error) {
+      setError('')
+      setExpanded(true)
+      setAttempt((value) => value + 1)
+      return
+    }
+    if (expanded) {
+      setExpanded(false)
+      return
+    }
+    setExpanded(true)
+    if (!photo) {
+      setError('')
+      setAttempt((value) => value + 1)
+    }
+  }
   return <section className="panel detail-section">
     <div className="section-heading"><div><span className="kicker">Cover moderation</span><h3>活动图片</h3></div></div>
     <div className={`cover-review-state cover-review-state-${reviewStatus}`} role="status">
@@ -446,9 +464,13 @@ function EventCoverReview({ item, onReviewed }) {
       <div><strong>{coverReviewLabels[reviewStatus] ?? '状态未知'}</strong><small>{reviewStatus === 'rejected' && item.cover_review_reason ? `驳回原因：${item.cover_review_reason}` : coverReviewDescriptions[reviewStatus] ?? '请刷新页面确认审核状态'}</small></div>
     </div>
     {error && <p role="alert">{error}</p>}
-    {photo ? <img className="review-cover-image" src={photo} alt="发布者上传的活动照片" /> :
-      <button className="button secondary" disabled={attempt > 0 && !error}
-        onClick={() => { setError(''); setAttempt(attempt + 1) }}>{attempt > 0 && !error ? '读取中…' : '查看图片'}</button>}
+    <div className="cover-preview-controls">
+      <button className="button secondary" disabled={expanded && attempt > 0 && !photo && !error}
+        aria-expanded={expanded} onClick={togglePhoto}>
+        {error ? '重新加载图片' : expanded ? '收起图片' : photo ? '查看图片' : attempt > 0 ? '读取中…' : '查看图片'}
+      </button>
+    </div>
+    {expanded && photo && <img className="review-cover-image" src={photo} alt="发布者上传的活动照片" />}
     {pending ? <div className="cover-review-actions">
       <button className="button cover-approve-button" disabled={!photo || busy} onClick={() => review('approved')}><span aria-hidden="true">✓</span>{busy ? '处理中…' : '通过图片'}</button>
       <button className="button cover-reject-button" disabled={!photo || busy} onClick={() => review('rejected')}><span aria-hidden="true">×</span>{busy ? '处理中…' : '驳回图片'}</button>
@@ -456,7 +478,7 @@ function EventCoverReview({ item, onReviewed }) {
   </section>
 }
 
-function EventDetail({ id, onBack }) {
+function EventDetail({ id, onBack, onOpenMessages }) {
   const dialog = useAdminDialog()
   const [notice, setNotice] = useState('')
   const [approvingUserId, setApprovingUserId] = useState(null)
@@ -501,7 +523,7 @@ function EventDetail({ id, onBack }) {
     <PageState {...resource} onRetry={resource.reload}>
       {item && <div className="detail-page">
         <DetailHeader kicker="Event operations" title={item.title} subtitle={`活动 ID · ${item.id}`} status={item.status} onBack={onBack}
-          actions={<>{item.status === 'hidden' ? <button className="button secondary" onClick={() => moderate('published')}>恢复展示</button> : <button className="button ghost" onClick={() => moderate('hidden')}>隐藏活动</button>}{item.status !== 'cancelled' && <button className="button ghost" onClick={() => moderate('cancelled')}>取消活动</button>}<button className="button danger-button" onClick={remove}>删除活动</button></>} />
+          actions={<><button className="button secondary" onClick={() => onOpenMessages(item)}>查看活动消息</button>{item.status === 'hidden' ? <button className="button secondary" onClick={() => moderate('published')}>恢复展示</button> : <button className="button ghost" onClick={() => moderate('hidden')}>隐藏活动</button>}{item.status !== 'cancelled' && <button className="button ghost" onClick={() => moderate('cancelled')}>取消活动</button>}<button className="button danger-button" onClick={remove}>删除活动</button></>} />
         {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
         {item.cover_media_id && <EventCoverReview key={item.cover_media_id} item={item} onReviewed={resource.reload} />}
         {!!payload.coverReviews?.length && <section className="panel detail-section"><div className="section-heading"><div><span className="kicker">Cover history</span><h3>图片审核记录</h3></div><span>{payload.coverReviews.length} 次</span></div><div className="detail-list">{payload.coverReviews.map((review) => <div className="detail-list-row" key={review.media_asset_id}><div><strong>{coverReviewLabels[review.status] ?? review.status}</strong><small>{review.reason || '无补充原因'} · 提交 {formatDate(review.submitted_at)}{review.reviewed_at ? ` · 审核 ${formatDate(review.reviewed_at)}` : ''}</small></div><Status value={review.status} /></div>)}</div></section>}
@@ -547,7 +569,7 @@ function EventDetail({ id, onBack }) {
   )
 }
 
-function Events({ pendingCovers }) {
+function Events({ pendingCovers, onOpenMessages }) {
   const dialog = useAdminDialog()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
@@ -577,7 +599,7 @@ function Events({ pendingCovers }) {
     finally { setBulkBusy(false) }
   }
 
-  if (selectedId) return <EventDetail id={selectedId} onBack={() => { setSelectedId(null); resource.reload() }} />
+  if (selectedId) return <EventDetail id={selectedId} onBack={() => { setSelectedId(null); resource.reload() }} onOpenMessages={onOpenMessages} />
 
   const moderate = async (event, nextStatus) => {
     const reason = await dialog.prompt(`处置活动「${event.title}」，请输入理由：`)
@@ -612,7 +634,7 @@ function Events({ pendingCovers }) {
             <td><strong>{event.approved_count}/{event.capacity}</strong><small className="block-note">候补 {event.waitlist_count}</small></td>
             <td><span className={Number(event.report_count) ? 'signal-count danger-text' : 'signal-count'}>{event.report_count}</span><small className="cell-note"> 条举报</small></td>
             <td><Status value={event.status} />{event.cover_media_id && <small className="block-note">{coverReviewLabels[event.cover_review_status]}</small>}</td>
-            <td><div className="row-actions"><button className="view-button" onClick={() => setSelectedId(event.id)}>查看详情</button>{event.status === 'hidden' ? <button onClick={() => moderate(event, 'published')}>恢复</button> : <button onClick={() => moderate(event, 'hidden')}>隐藏</button>}</div></td>
+            <td><div className="row-actions"><button className="view-button" onClick={() => setSelectedId(event.id)}>查看详情</button><button onClick={() => onOpenMessages(event)}>消息</button>{event.status === 'hidden' ? <button onClick={() => moderate(event, 'published')}>恢复</button> : <button onClick={() => moderate(event, 'hidden')}>隐藏</button>}</div></td>
           </tr>
         ))}</tbody></table></div>
       </PageState>
@@ -698,7 +720,7 @@ function MessageDetail({ id, onBack }) {
   )
 }
 
-function Messages() {
+function Messages({ messageEventFilter, onClearMessageEventFilter }) {
   const [queryInput, setQueryInput] = useState('')
   const [query, setQuery] = useState('')
   const [conversationType, setConversationType] = useState('')
@@ -709,7 +731,7 @@ function Messages() {
   const [selectedId, setSelectedId] = useState(null)
   const [cursors, setCursors] = useState([null])
   const cursor = cursors.at(-1)
-  const resource = useResource(() => api.messages({ q: query, conversationType, messageType, status, days, reportedOnly, ...cursor }), [query, conversationType, messageType, status, days, reportedOnly, cursor])
+  const resource = useResource(() => api.messages({ q: query, eventId: messageEventFilter?.id, conversationType, messageType, status, days, reportedOnly, ...cursor }), [query, messageEventFilter?.id, conversationType, messageType, status, days, reportedOnly, cursor])
   const rows = resource.data?.data ?? []
   const next = resource.data?.meta?.next
   const resetPage = (setter, value) => { setter(value); setCursors([null]) }
@@ -723,6 +745,7 @@ function Messages() {
   return (
     <section className="panel full-panel management-panel">
       <div className="panel-heading management-heading"><div><span className="kicker">Message governance</span><h3>消息管理</h3><p>按时间游标分页查看消息、举报与处置历史；详情访问及管理操作均写入审计。</p></div><span className="count-badge">本页 {rows.length} 条</span></div>
+      {messageEventFilter && <div className="active-message-filter" role="status"><div><strong>当前活动：{messageEventFilter.title}</strong><small>{messageEventFilter.id}</small></div><button className="button secondary" onClick={onClearMessageEventFilter}>查看全部消息</button></div>}
       <form className="filter-bar message-filters" onSubmit={submit}>
         <label className="search-box"><input aria-label="消息搜索" placeholder="正文关键词、发送者、活动或 UUID" value={queryInput} onChange={(event) => setQueryInput(event.target.value)} maxLength={100} /></label>
         <button className="button secondary" type="submit">搜索</button>
@@ -1272,6 +1295,7 @@ function App() {
   const [mobileNav, setMobileNav] = useState(false)
   const [announcement, setAnnouncement] = useState(false)
   const [pendingCovers, setPendingCovers] = useState(0)
+  const [messageEventFilter, setMessageEventFilter] = useState(null)
   useEffect(() => {
     let live = true
     let latest = 0
@@ -1295,6 +1319,11 @@ function App() {
   }, [])
   const ActivePage = pages[active]
   const current = useMemo(() => navigation.find((item) => item.id === active), [active])
+  const openEventMessages = (event) => {
+    setMessageEventFilter({ id: event.id, title: event.title })
+    setActive('messages')
+    setMobileNav(false)
+  }
 
   return (
     <div className="admin-shell">
@@ -1304,7 +1333,7 @@ function App() {
           <Fragment key={item.id}>
           {item.id === 'users' && <div className="nav-section-label">业务管理</div>}
           {item.id === 'categories' && <div className="nav-section-label">系统配置</div>}
-          <button aria-current={active === item.id ? 'page' : undefined} className={active === item.id ? 'active' : ''} onClick={() => { setActive(item.id); setMobileNav(false) }}>
+          <button aria-current={active === item.id ? 'page' : undefined} className={active === item.id ? 'active' : ''} onClick={() => { if (item.id === 'messages') setMessageEventFilter(null); setActive(item.id); setMobileNav(false) }}>
             <AdminNavIcon name={item.id === 'suggestions' ? 'reports' : item.id} /><span>{item.label}</span>
             {item.id === 'events' && pendingCovers > 0 && <span className="cover-review-count" aria-label={`${pendingCovers} 张图片待审`}>{pendingCovers}</span>}
           </button>
@@ -1318,7 +1347,7 @@ function App() {
           <div className="title-row"><button className="menu-button" aria-label="切换菜单" aria-expanded={mobileNav} onClick={() => setMobileNav(!mobileNav)}><AdminNavIcon name="menu" /></button><div><span className="breadcrumb">搭慕 / 运营管理</span><h1>{current.label}</h1></div></div>
           <div className="top-actions"><span className="today">{new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date())}</span><button className="announcement-button" onClick={() => setAnnouncement(true)}>发布公告</button><div className="admin-avatar">管</div></div>
         </header>
-        <div className="page-content"><ActivePage pendingCovers={pendingCovers} /></div>
+        <div className="page-content"><ActivePage pendingCovers={pendingCovers} onOpenMessages={openEventMessages} messageEventFilter={messageEventFilter} onClearMessageEventFilter={() => setMessageEventFilter(null)} /></div>
       </main>
       {announcement && <AnnouncementDialog onClose={() => setAnnouncement(false)} />}
     </div>

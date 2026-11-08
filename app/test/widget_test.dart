@@ -84,6 +84,38 @@ void main() {
     expect(openedMyActivities, isTrue);
   });
 
+  testWidgets('活动详情显示审核通过的发布者活动图片', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    final event = EventItem(
+      id: 100,
+      emoji: '🌿',
+      coverUrl: 'https://example.invalid/approved-event-cover.jpg',
+      title: '带图片的活动',
+      category: '户外',
+      time: '今天 18:30',
+      area: '首尔',
+      distance: '1.0 km',
+      host: '林夏',
+      hostScore: 4.8,
+      joined: 1,
+      capacity: 8,
+      approval: true,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDetailPage(
+          event: event,
+          onChanged: () {},
+          onOpenMyActivities: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('event-uploaded-cover')), findsOneWidget);
+  });
+
   testWidgets('五个一级入口均可访问', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpWidget(authenticatedApp());

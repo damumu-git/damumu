@@ -949,7 +949,7 @@ public static class AdminEndpoints
 
         admin.MapGet("/messages", async (
             HttpContext context, Db db, string? q, string? conversationType,
-            string? messageType, string? status, bool? reportedOnly, int? days,
+            string? messageType, string? status, bool? reportedOnly, Guid? eventId, int? days,
             DateTimeOffset? before, Guid? beforeId, CancellationToken ct) =>
         {
             q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
@@ -976,6 +976,7 @@ public static class AdminEndpoints
                 LEFT JOIN event e ON e.id=c.event_id
                 LEFT JOIN user_profile sender ON sender.user_id=m.sender_user_id
                 WHERE m.created_at>=@since
+                  AND (@eventId IS NULL OR c.event_id=@eventId)
                   AND (@conversationType IS NULL OR c.conversation_type=@conversationType)
                   AND (@messageType IS NULL OR m.message_type=@messageType)
                   AND (@status IS NULL OR
@@ -993,7 +994,7 @@ public static class AdminEndpoints
                 LIMIT @take
                 """, new
                 {
-                    since, q, conversationType, messageType, status,
+                    since, q, eventId, conversationType, messageType, status,
                     reportedOnly = reportedOnly == true,
                     before = before?.UtcDateTime, beforeId, take = pageSize + 1
                 }, ct);

@@ -2255,6 +2255,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
     final full = e.joined >= e.capacity;
     final cancelled = _detail?['status'] == 'cancelled';
     final content = _detail ?? e.localizedContent;
+    final uploadedCover =
+        _detail?['cover_original_url'] as String? ??
+        _detail?['cover_url'] as String? ??
+        e.coverUrl;
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -2313,6 +2317,14 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   if (cancelled)
                     EventCancellationNotice(
                       reason: '${_detail?['cancellation_reason'] ?? ''}',
+                    ),
+                  if (uploadedCover != null && uploadedCover.trim().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 20),
+                      child: _EventUploadedCover(
+                        imageUrl: uploadedCover,
+                        eventId: e.apiId ?? '${e.id}',
+                      ),
                     ),
                   const SizedBox(height: 24),
                   _DetailRow(
@@ -2702,6 +2714,60 @@ class _EventDetailPageState extends State<EventDetailPage> {
         _showMessageError(context, '$error');
       }
     }
+  }
+}
+
+class _EventUploadedCover extends StatelessWidget {
+  const _EventUploadedCover({required this.imageUrl, required this.eventId});
+
+  final String imageUrl;
+  final String eventId;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = absoluteImageUrl(imageUrl);
+    final heroTag = 'event-uploaded-cover-$eventId';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.tr('eventCoverApproved'),
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        GestureDetector(
+          key: const ValueKey('event-uploaded-cover'),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ChatImagePreviewPage(
+                imageUrl: resolved,
+                titleKey: 'eventCoverPreview',
+                heroTag: heroTag,
+              ),
+            ),
+          ),
+          child: Hero(
+            tag: heroTag,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: Image.network(
+                  resolved,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const ColoredBox(
+                    color: _mint,
+                    child: Center(
+                      child: Icon(Icons.broken_image_outlined, size: 44),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
