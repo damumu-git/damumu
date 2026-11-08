@@ -84,6 +84,49 @@ void main() {
     },
   );
 
+  testWidgets('own activity card follows the latest signed-in avatar', (
+    tester,
+  ) async {
+    final auth = AuthController()
+      ..user = const AuthUser(
+        id: 'current-user',
+        nickname: 'Current user',
+        email: 'current@example.com',
+        avatarImageUrl: '/uploads/avatars/current-user/latest.jpg',
+      );
+    final event = EventItem(
+      id: 1,
+      apiId: 'activity-id',
+      emoji: '🎉',
+      title: 'Activity',
+      category: 'Social',
+      time: 'Today',
+      area: 'Seoul',
+      distance: '1 km',
+      price: 'Free',
+      joined: 1,
+      capacity: 4,
+      host: 'Current user',
+      hostScore: 5,
+      organizerUserId: 'current-user',
+      organizerAvatar: null,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AuthScope(
+          controller: auth,
+          child: Scaffold(
+            body: EventCard(event: event, onTap: () {}),
+          ),
+        ),
+      ),
+    );
+
+    final avatar = tester.widget<UserAvatarImage>(find.byType(UserAvatarImage));
+    expect(avatar.avatarUrl, '/uploads/avatars/current-user/latest.jpg');
+  });
+
   test(
     'expiration uses midnight in Korea and retains ended activities today',
     () {

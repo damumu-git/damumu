@@ -1746,6 +1746,13 @@ class EventCard extends StatelessWidget {
     );
   }
 
+  String? _organizerAvatar(BuildContext context) {
+    final currentUser = AuthScope.of(context).user;
+    return event.organizerUserId == currentUser?.id
+        ? currentUser?.avatarImageUrl
+        : event.organizerAvatar;
+  }
+
   @override
   Widget build(BuildContext context) => Card(
     clipBehavior: Clip.antiAlias,
@@ -1847,7 +1854,7 @@ class EventCard extends StatelessWidget {
                       children: [
                         UserAvatarImage(
                           nickname: event.host,
-                          avatarUrl: event.organizerAvatar,
+                          avatarUrl: _organizerAvatar(context),
                           radius: 13,
                         ),
                         const SizedBox(width: 7),
