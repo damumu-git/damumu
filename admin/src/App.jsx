@@ -12,6 +12,7 @@ const navigation = [
   { id: 'dashboard', label: '运营概览' },
   { id: 'users', label: '用户管理' },
   { id: 'events', label: '活动管理' },
+  { id: 'messages', label: '消息管理' },
   { id: 'reports', label: '举报治理' },
   { id: 'safety', label: '安全警报' },
   { id: 'suggestions', label: '用户建议' },
@@ -53,6 +54,8 @@ const statusText = {
   rejected: '已拒绝',
   withdrawn: '已退出',
   waitlisted: '候补中',
+  visible: '正常',
+  recalled: '已撤回',
 }
 
 function UserAvatar({ user, large = false }) {
@@ -618,6 +621,140 @@ function Events({ pendingCovers }) {
   )
 }
 
+function MessageMedia({ messageId, mimeType }) {
+  const [url, setUrl] = useState('')
+  const [error, setError] = useState('')
+  useEffect(() => {
+    const controller = new AbortController()
+    let objectUrl = ''
+    api.messageMedia(messageId, controller.signal).then((blob) => {
+      objectUrl = URL.createObjectURL(blob)
+      setUrl(objectUrl)
+    }).catch((reason) => {
+      if (reason.name !== 'AbortError') setError(reason.message)
+    })
+    return () => {
+      controller.abort()
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [messageId])
+  if (error) return <p className="inline-empty">{error}</p>
+  if (!url) return <div className="message-media-loading">正在读取附件…</div>
+  if (mimeType?.startsWith('image/')) return <img className="message-media-preview" src={url} alt="消息附件" />
+  return <a className="button secondary" href={url} download>下载消息附件</a>
+}
+
+function MessageDetail({ id, onBack }) {
+  const dialog = useAdminDialog()
+  const [notice, setNotice] = useState('')
+  const resource = useResource(() => api.message(id), [id])
+  const payload = resource.data?.data
+  const item = payload?.item
+  const state = item?.deleted_at ? 'hidden' : item?.recalled_at ? 'recalled' : 'visible'
+  const moderate = async (action) => {
+    const label = action === 'hide' ? '隐藏' : '恢复'
+    const reason = await dialog.prompt(`${label}该消息，请填写处置原因（将写入审计记录）：`)
+    if (!reason?.trim()) return
+    try {
+      await api.moderateMessage(id, { action, reason, actorUserId: null })
+      setNotice(`消息已${label}`)
+      resource.reload()
+    } catch (error) { setNotice(error.message) }
+  }
+  return (
+    <PageState {...resource} empty={!item} onRetry={resource.reload}>
+      {item && <div className="detail-page message-detail-page">
+        <DetailHeader kicker="Message governance" title={item.sender_name ?? '系统消息'} subtitle={`${item.conversation_type === 'event' ? '活动群聊' : '私信'} · ${item.conversation_id}`} status={state} onBack={onBack}
+          actions={item.deleted_at
+            ? <button className="button secondary" onClick={() => moderate('restore')}>恢复显示</button>
+            : <button className="button danger-button" onClick={() => moderate('hide')}>隐藏消息</button>} />
+        {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
+        <div className="detail-layout">
+          <section className="panel detail-main-card">
+            <div className="section-heading"><div><span className="kicker">Content</span><h3>消息内容</h3></div><Status value={state} /></div>
+            <div className="message-full-body">{item.recalled_at ? '该消息已由发送者撤回' : item.body || (item.media_asset_id ? '附件消息' : '无文本内容')}</div>
+            {item.media_asset_id && <MessageMedia messageId={item.id} mimeType={item.media_mime_type} />}
+            <dl className="detail-fields message-fields">
+              <Field label="消息编号" value={item.id} wide /><Field label="发送者" value={`${item.sender_name ?? '已注销用户'} · ${item.sender_user_id ?? '—'}`} wide />
+              <Field label="消息类型" value={item.message_type} /><Field label="发送时间" value={formatDate(item.created_at)} />
+              <Field label="编辑时间" value={formatDate(item.edited_at)} /><Field label="撤回时间" value={formatDate(item.recalled_at)} />
+              <Field label="隐藏时间" value={formatDate(item.deleted_at)} /><Field label="关联活动" value={item.event_title ?? item.event_id} />
+            </dl>
+          </section>
+          <aside className="detail-side-stack">
+            <section className="panel"><div className="section-heading"><div><span className="kicker">Reports</span><h3>举报记录</h3></div><span>{payload.reports?.length ?? 0}</span></div>
+              <div className="detail-list">{payload.reports?.map((report) => <div className="detail-list-row report-row" key={report.id}><div><strong>{report.category_code}</strong><small>{report.description || '无补充说明'} · {formatDate(report.created_at)}</small></div><Status value={report.status} /></div>)}{!payload.reports?.length && <p className="inline-empty">没有举报记录</p>}</div>
+            </section>
+            <section className="panel"><div className="section-heading"><div><span className="kicker">Audit trail</span><h3>处置记录</h3></div><span>{payload.actions?.length ?? 0}</span></div>
+              <div className="detail-list">{payload.actions?.map((action) => <div className="detail-list-row" key={action.id}><div><strong>{action.action_type}</strong><small>{action.reason_note || action.reason_code || '无说明'} · {formatDate(action.created_at)}</small></div></div>)}{!payload.actions?.length && <p className="inline-empty">尚无管理处置</p>}</div>
+            </section>
+          </aside>
+        </div>
+        <section className="panel detail-section"><div className="section-heading"><div><span className="kicker">Conversation context</span><h3>会话上下文</h3><p>目标消息附近最多 11 条，仅用于治理判断。</p></div></div>
+          <div className="message-context">{payload.context?.map((message) => <article className={`context-message ${message.id === item.id ? 'target' : ''} ${message.deleted_at ? 'hidden' : ''}`} key={message.id}><header><strong>{message.sender_name ?? '已注销用户'}</strong><time>{formatDate(message.created_at)}</time></header><p>{message.recalled_at ? '已撤回' : message.body || `[${message.message_type}]`}</p><small>{message.id}</small></article>)}</div>
+        </section>
+      </div>}
+    </PageState>
+  )
+}
+
+function Messages() {
+  const [queryInput, setQueryInput] = useState('')
+  const [query, setQuery] = useState('')
+  const [conversationType, setConversationType] = useState('')
+  const [messageType, setMessageType] = useState('')
+  const [status, setStatus] = useState('')
+  const [days, setDays] = useState('30')
+  const [reportedOnly, setReportedOnly] = useState(false)
+  const [selectedId, setSelectedId] = useState(null)
+  const [cursors, setCursors] = useState([null])
+  const cursor = cursors.at(-1)
+  const resource = useResource(() => api.messages({ q: query, conversationType, messageType, status, days, reportedOnly, ...cursor }), [query, conversationType, messageType, status, days, reportedOnly, cursor])
+  const rows = resource.data?.data ?? []
+  const next = resource.data?.meta?.next
+  const resetPage = (setter, value) => { setter(value); setCursors([null]) }
+  const submit = (event) => {
+    event.preventDefault()
+    const value = queryInput.trim()
+    if (value === query && !cursor) resource.reload()
+    else resetPage(setQuery, value)
+  }
+  if (selectedId) return <MessageDetail id={selectedId} onBack={() => { setSelectedId(null); resource.reload() }} />
+  return (
+    <section className="panel full-panel management-panel">
+      <div className="panel-heading management-heading"><div><span className="kicker">Message governance</span><h3>消息管理</h3><p>按时间游标分页查看消息、举报与处置历史；详情访问及管理操作均写入审计。</p></div><span className="count-badge">本页 {rows.length} 条</span></div>
+      <form className="filter-bar message-filters" onSubmit={submit}>
+        <label className="search-box"><input aria-label="消息搜索" placeholder="正文关键词、发送者、活动或 UUID" value={queryInput} onChange={(event) => setQueryInput(event.target.value)} maxLength={100} /></label>
+        <button className="button secondary" type="submit">搜索</button>
+        <select aria-label="会话类型" value={conversationType} onChange={(event) => resetPage(setConversationType, event.target.value)}><option value="">全部会话</option><option value="event">活动群聊</option><option value="direct">私信</option></select>
+        <select aria-label="消息类型" value={messageType} onChange={(event) => resetPage(setMessageType, event.target.value)}><option value="">全部消息</option><option value="text">文字</option><option value="image">图片</option><option value="file">文件</option><option value="system">系统消息</option></select>
+        <select aria-label="消息状态" value={status} onChange={(event) => resetPage(setStatus, event.target.value)}><option value="">全部状态</option><option value="visible">正常</option><option value="hidden">已隐藏</option><option value="recalled">已撤回</option></select>
+        <select aria-label="时间范围" value={days} onChange={(event) => resetPage(setDays, event.target.value)}><option value="1">24 小时</option><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="93">全部保留期</option></select>
+        <label className="filter-check"><input type="checkbox" checked={reportedOnly} onChange={(event) => resetPage(setReportedOnly, event.target.checked)} /> 仅被举报</label>
+      </form>
+      <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
+        <div className="table-wrap management-table"><table><thead><tr><th>时间</th><th>发送者</th><th>会话</th><th>内容摘要</th><th>举报</th><th>状态</th><th>操作</th></tr></thead><tbody>{rows.map((message) => {
+          const messageStatus = message.deleted_at ? 'hidden' : message.recalled_at ? 'recalled' : 'visible'
+          return <tr key={message.id} className="clickable-row" onDoubleClick={() => setSelectedId(message.id)}>
+            <td><strong>{formatDate(message.created_at)}</strong><small className="block-note">{message.message_type}{message.edited_at ? ' · 已编辑' : ''}</small></td>
+            <td><strong>{message.sender_name ?? '已注销用户'}</strong><small className="block-note">{message.sender_user_id ?? '—'}</small></td>
+            <td><strong>{message.conversation_type === 'event' ? '活动群聊' : '私信'}</strong><small className="block-note">{message.event_title ?? message.conversation_title ?? message.conversation_id}</small></td>
+            <td className="message-preview-cell"><span>{message.recalled_at ? '已撤回' : message.body_preview || (message.has_media ? '附件消息' : '无文本内容')}</span><small>{message.id}</small></td>
+            <td><span className={Number(message.report_count) ? 'signal-count danger-text' : 'signal-count'}>{message.report_count}</span></td>
+            <td><Status value={messageStatus} /></td><td><button className="view-button" onClick={() => setSelectedId(message.id)}>查看上下文</button></td>
+          </tr>
+        })}</tbody></table></div>
+      </PageState>
+      <nav className="grid-pager" aria-label="消息分页"><span className="grid-pager-count" aria-live="polite">{resource.loading ? '正在加载…' : `本页 ${rows.length} 条`}</span><div className="grid-pager-controls">
+        <button type="button" title="首页" aria-label="首页" disabled={!cursor || resource.loading} onClick={() => setCursors([null])}>↤</button>
+        <button type="button" title="上一页" aria-label="上一页" disabled={!cursor || resource.loading} onClick={() => setCursors(cursors.slice(0, -1))}>←</button>
+        <span className="grid-pager-current" aria-current="page">{cursors.length}</span>
+        <button type="button" title="下一页" aria-label="下一页" disabled={!next || resource.loading} onClick={() => setCursors([...cursors, next])}>→</button>
+      </div></nav>
+    </section>
+  )
+}
+
 function Reports() {
   const dialog = useAdminDialog()
   const [status, setStatus] = useState('submitted')
@@ -1102,7 +1239,7 @@ function Settings() {
   )
 }
 
-const pages = { 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, reports: Reports, safety: Safety, suggestions: Suggestions, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
+const pages = { 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, messages: Messages, reports: Reports, safety: Safety, suggestions: Suggestions, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
 
 function AnnouncementDialog({ onClose }) {
   const [title, setTitle] = useState('')

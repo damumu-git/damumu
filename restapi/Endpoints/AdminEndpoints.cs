@@ -947,6 +947,174 @@ public static class AdminEndpoints
             return ApiSupport.Ok(flag);
         });
 
+        admin.MapGet("/messages", async (
+            HttpContext context, Db db, string? q, string? conversationType,
+            string? messageType, string? status, bool? reportedOnly, int? days,
+            DateTimeOffset? before, Guid? beforeId, CancellationToken ct) =>
+        {
+            q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+            if (q?.Length > 100 || conversationType is not (null or "event" or "direct") ||
+                messageType is not (null or "text" or "image" or "file" or "system") ||
+                status is not (null or "visible" or "hidden" or "recalled") ||
+                before.HasValue != beforeId.HasValue)
+                throw new ApiException(400, "message_filter_invalid", "消息筛选条件无效");
+            context.Response.Headers.CacheControl = "no-store";
+            const int pageSize = 50;
+            var since = DateTime.UtcNow.AddDays(-Math.Clamp(days ?? 30, 1, 93));
+            var rows = await db.QueryAsync(
+                """
+                SELECT m.id, m.conversation_id, m.sender_user_id, m.message_type,
+                       left(COALESCE(m.body,''), 240) AS body_preview,
+                       m.edited_at, m.recalled_at, m.deleted_at, m.created_at,
+                       c.conversation_type, c.title AS conversation_title, c.event_id,
+                       e.title AS event_title, sender.nickname AS sender_name,
+                       m.media_asset_id IS NOT NULL AS has_media,
+                       (SELECT count(*) FROM report r
+                        WHERE r.target_type='message' AND r.target_id=m.id) AS report_count
+                FROM message m
+                JOIN conversation c ON c.id=m.conversation_id
+                LEFT JOIN event e ON e.id=c.event_id
+                LEFT JOIN user_profile sender ON sender.user_id=m.sender_user_id
+                WHERE m.created_at>=@since
+                  AND (@conversationType IS NULL OR c.conversation_type=@conversationType)
+                  AND (@messageType IS NULL OR m.message_type=@messageType)
+                  AND (@status IS NULL OR
+                       (@status='visible' AND m.deleted_at IS NULL AND m.recalled_at IS NULL) OR
+                       (@status='hidden' AND m.deleted_at IS NOT NULL) OR
+                       (@status='recalled' AND m.recalled_at IS NOT NULL))
+                  AND (NOT @reportedOnly OR EXISTS (
+                       SELECT 1 FROM report r WHERE r.target_type='message' AND r.target_id=m.id))
+                  AND (@q IS NULL OR m.body ILIKE '%'||@q||'%'
+                       OR sender.nickname ILIKE '%'||@q||'%'
+                       OR e.title ILIKE '%'||@q||'%'
+                       OR m.id::text=@q OR m.conversation_id::text=@q)
+                  AND (@before IS NULL OR (m.created_at,m.id)<(@before,@beforeId))
+                ORDER BY m.created_at DESC,m.id DESC
+                LIMIT @take
+                """, new
+                {
+                    since, q, conversationType, messageType, status,
+                    reportedOnly = reportedOnly == true,
+                    before = before?.UtcDateTime, beforeId, take = pageSize + 1
+                }, ct);
+            object? next = null;
+            if (rows.Count > pageSize)
+            {
+                rows.RemoveAt(pageSize);
+                var last = rows[^1];
+                next = new { before = last["created_at"], beforeId = last["id"] };
+            }
+            return ApiSupport.Ok(rows, new { next, pageSize });
+        });
+
+        admin.MapGet("/messages/{id:guid}", async (
+            Guid id, HttpContext httpContext, Db db, CancellationToken ct) =>
+        {
+            httpContext.Response.Headers.CacheControl = "private,no-store";
+            var item = await db.QueryOneAsync(
+                """
+                SELECT m.id, m.conversation_id, m.sender_user_id, m.message_type, m.body,
+                       m.media_asset_id, m.reply_to_message_id, m.edited_at, m.recalled_at,
+                       m.deleted_at, m.created_at, m.updated_at,
+                       c.conversation_type, c.title AS conversation_title, c.event_id,
+                       e.title AS event_title, sender.nickname AS sender_name,
+                       ma.mime_type AS media_mime_type, ma.byte_size AS media_byte_size
+                FROM message m JOIN conversation c ON c.id=m.conversation_id
+                LEFT JOIN event e ON e.id=c.event_id
+                LEFT JOIN user_profile sender ON sender.user_id=m.sender_user_id
+                LEFT JOIN media_asset ma ON ma.id=m.media_asset_id
+                WHERE m.id=@id
+                """, new { id }, ct);
+            if (item is null) throw new ApiException(404, "message_not_found", "消息不存在");
+            var conversationId = (Guid)item["conversation_id"]!;
+            var createdAt = item["created_at"]!;
+            var context = await db.QueryAsync(
+                """
+                SELECT nearby.* FROM (
+                    SELECT m.id, m.sender_user_id, sender.nickname AS sender_name,
+                           m.message_type, m.body, m.recalled_at, m.deleted_at, m.created_at
+                    FROM message m
+                    LEFT JOIN user_profile sender ON sender.user_id=m.sender_user_id
+                    WHERE m.conversation_id=@conversationId
+                    ORDER BY abs(extract(epoch FROM (m.created_at-@createdAt))),m.created_at,m.id
+                    LIMIT 11
+                ) nearby ORDER BY nearby.created_at,nearby.id
+                """, new { conversationId, createdAt }, ct);
+            var reports = await db.QueryAsync(
+                """
+                SELECT id,reporter_user_id,category_code,description,priority,status,
+                       resolution_code,created_at
+                FROM report WHERE target_type='message' AND target_id=@id
+                ORDER BY created_at DESC
+                """, new { id }, ct);
+            var actions = await db.QueryAsync(
+                """
+                SELECT id,action_type,reason_code,reason_note,created_at
+                FROM moderation_action WHERE target_type='message' AND target_id=@id
+                ORDER BY created_at DESC
+                """, new { id }, ct);
+            await WriteAudit(db, null, "admin.message.viewed", "message", id,
+                new { conversationId }, ct);
+            return ApiSupport.Ok(new { item, context, reports, actions });
+        });
+
+        admin.MapGet("/messages/{id:guid}/media", async (
+            Guid id, HttpContext context, Db db, MediaStorage media, CancellationToken ct) =>
+        {
+            var asset = await db.QueryOneAsync(
+                """
+                SELECT ma.storage_key,ma.thumbnail_storage_key,ma.mime_type
+                FROM message m JOIN media_asset ma ON ma.id=m.media_asset_id
+                WHERE m.id=@id AND ma.deleted_at IS NULL AND ma.status='ready'
+                """, new { id }, ct);
+            if (asset is null) throw new ApiException(404, "message_media_not_found", "消息附件不存在");
+            context.Response.Headers.CacheControl = "private,no-store";
+            var key = (string?)asset["thumbnail_storage_key"] ?? (string)asset["storage_key"]!;
+            var path = media.GetPath(key);
+            if (!File.Exists(path)) throw new ApiException(404, "message_media_not_found", "消息附件不存在");
+            await WriteAudit(db, null, "admin.message.media_viewed", "message", id,
+                new { media = true }, ct);
+            return Results.File(path, (string?)asset["mime_type"] ?? "application/octet-stream");
+        });
+
+        admin.MapPatch("/messages/{id:guid}/moderation", async (
+            Guid id, AdminMessageModerationRequest request, Db db,
+            RealtimeConnectionManager realtime, CancellationToken ct) =>
+        {
+            var reason = request.Reason?.Trim();
+            if (request.Action is not ("hide" or "restore") || reason is null || reason.Length is < 3 or > 500)
+                throw new ApiException(400, "message_moderation_invalid", "请选择隐藏或恢复，并填写 3–500 字原因");
+            var result = await db.QueryOneAsync(
+                """
+                WITH updated AS (
+                    UPDATE message SET
+                        deleted_at=CASE WHEN @action='hide' THEN now() ELSE NULL END,
+                        updated_at=now()
+                    WHERE id=@id
+                      AND ((@action='hide' AND deleted_at IS NULL)
+                           OR (@action='restore' AND deleted_at IS NOT NULL))
+                    RETURNING id,conversation_id,deleted_at,updated_at
+                ), recorded AS (
+                    INSERT INTO moderation_action(target_type,target_id,action_type,reason_note)
+                    SELECT 'message',id,'message_'||@action,@reason FROM updated
+                    RETURNING id
+                )
+                SELECT updated.* FROM updated,recorded
+                """, new { id, action = request.Action, reason }, ct);
+            if (result is null)
+                throw new ApiException(409, "message_moderation_conflict", "消息状态已经发生变化，请刷新后重试");
+            var conversationId = (Guid)result["conversation_id"]!;
+            var auditAction = request.Action == "hide" ? "admin.message.hidden" : "admin.message.restored";
+            await WriteAudit(db, request.ActorUserId, auditAction,
+                "message", id, new { conversationId, reason }, ct);
+            var recipients = await db.QueryAsync(
+                "SELECT user_id FROM conversation_member WHERE conversation_id=@conversationId AND left_at IS NULL",
+                new { conversationId }, ct);
+            await realtime.PublishAsync(recipients.Select(row => (Guid)row["user_id"]!),
+                "message.updated", new { conversationId, messageId = id }, ct);
+            return ApiSupport.Ok(result);
+        });
+
         admin.MapGet("/audit", async (
             Db db, string? action, string? targetType, int? limit, int? offset, CancellationToken ct) =>
         {
@@ -1098,6 +1266,7 @@ public sealed record AdminFeatureFlagRequest(bool Enabled, Guid? ActorUserId);
 public sealed record AdminEventReviewRequest(string Status, string? Reason, Guid? ActorUserId);
 public sealed record AdminAnnouncementRequest(string Title, string Body, Guid? ActorUserId);
 public sealed record AdminApplicationApprovalRequest(Guid? ActorUserId);
+public sealed record AdminMessageModerationRequest(string Action, string? Reason, Guid? ActorUserId);
 public sealed record AdminSystemAvatarRequest(
     string Code,
     string NameZhCn,

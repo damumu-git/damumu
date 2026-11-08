@@ -83,6 +83,23 @@
 select { min-width: 130px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); }
 .table-wrap { width: 100%; overflow-x: auto; }
 .event-log-filters { flex-wrap: wrap; align-items: center; }
+.message-filters { flex-wrap: wrap; align-items: center; }
+.message-filters .search-box { min-width: min(100%, 22rem); }
+.filter-check { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); white-space: nowrap; }
+.message-preview-cell { min-width: 240px; max-width: 420px; }
+.message-preview-cell span,.message-preview-cell small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-preview-cell small { margin-top: 5px; color: var(--muted); font-size: 9px; }
+.message-full-body { margin: 14px 0 20px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: #f8faf9; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.message-media-loading { display: grid; min-height: 180px; place-items: center; border-radius: 10px; background: #f5f7f6; color: var(--muted); }
+.message-media-preview { display: block; width: min(100%, 640px); max-height: 520px; margin-bottom: 20px; border-radius: 10px; object-fit: contain; background: #f3f5f4; }
+.message-fields { margin-top: 20px; }
+.message-context { display: grid; gap: 10px; }
+.context-message { padding: 13px 15px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.context-message.target { border-color: var(--green); box-shadow: inset 3px 0 var(--green); }
+.context-message.hidden { opacity: .62; background: #f3f4f3; }
+.context-message header { display: flex; justify-content: space-between; gap: 12px; }
+.context-message time,.context-message small { color: var(--muted); font-size: 9px; }
+.context-message p { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .event-log-filters .search-box { min-width: min(100%, 16rem); }
 .event-log-table code { overflow-wrap: anywhere; }
 .event-log-table details { margin-top: 5px; }
@@ -101,10 +118,10 @@ td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: m
 .avatar img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 .event-name > span:first-child { width: 36px; height: 36px; display: grid; place-items: center; flex: 0 0 36px; border-radius: 11px; background: var(--amber-soft); font-size: 18px; }
 .status { display: inline-block; padding: 5px 8px; border-radius: 999px; background: #eef1ef; color: #5d6a63; font-size: 9px; font-weight: 700; white-space: nowrap; }
-.status-active,.status-published,.status-resolved,.status-completed { background: var(--mint); color: var(--green); }
+.status-active,.status-visible,.status-published,.status-resolved,.status-completed { background: var(--mint); color: var(--green); }
 .status-submitted,.status-open,.status-banned,.status-cancelled { background: var(--red-soft); color: var(--red); }
 .status-triaged,.status-investigating,.status-pending_review,.status-full { background: var(--amber-soft); color: #965a1c; }
-.status-hidden,.status-suspended,.status-dismissed,.status-false_alarm { background: #eceeed; color: #68736c; }
+.status-hidden,.status-recalled,.status-suspended,.status-dismissed,.status-false_alarm { background: #eceeed; color: #68736c; }
 .row-actions { display: flex; justify-content: flex-end; gap: 5px; }.row-actions button { border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; background: #fff; color: var(--muted); font-size: 9px; cursor: pointer; }.row-actions button.danger,.danger-text { color: var(--red); }
 .notice { display: flex; justify-content: space-between; margin-bottom: 13px; padding: 10px 13px; border-radius: 9px; background: var(--mint); color: var(--green); font-size: 11px; cursor: pointer; }
 .page-state { min-height: 360px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); text-align: center; }.page-state p { margin: 6px 0 12px; font-size: 12px; }.page-state code { margin-bottom: 14px; padding: 6px 9px; border-radius: 6px; background: #eef0ed; font-size: 10px; }.empty-icon { font-size: 42px; color: #a9b4ad; }

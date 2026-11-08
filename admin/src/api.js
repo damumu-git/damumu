@@ -47,6 +47,17 @@ export const api = {
   updateUserStatus: (id, body) =>
     request(`/admin/users/${id}/status`, { method: 'PATCH', body: JSON.stringify(body) }),
   events: (filters = {}) => request(`/admin/events${params(filters)}`),
+  messages: (filters = {}) => request(`/admin/messages${params(filters)}`),
+  message: (id) => request(`/admin/messages/${id}`),
+  moderateMessage: (id, body) =>
+    request(`/admin/messages/${id}/moderation`, { method: 'PATCH', body: JSON.stringify(body) }),
+  messageMedia: async (id, signal) => {
+    const response = await fetch(`${API_BASE}/admin/messages/${id}/media`, {
+      headers: { 'X-Admin-Key': ADMIN_KEY }, signal,
+    })
+    if (!response.ok) throw new Error('消息附件暂时无法读取')
+    return response.blob()
+  },
   event: (id) => request(`/admin/events/${id}`),
   pendingEventCovers: () => request('/admin/event-cover-review/count'),
   eventCover: async (id, signal) => {
