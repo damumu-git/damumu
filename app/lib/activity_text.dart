@@ -50,6 +50,23 @@ String activityText(
   return _translated(translations, language, field, original);
 }
 
+String activityRegionSearchText(Map<String, dynamic>? item) {
+  if (item == null) return '';
+  const keys = [
+    'city_name',
+    'city_name_ko_kr',
+    'city_name_en_us',
+    'district_name',
+    'district_name_ko_kr',
+    'district_name_en_us',
+  ];
+  return keys
+      .map((key) => item[key]?.toString().trim() ?? '')
+      .where((value) => value.isNotEmpty)
+      .join(' ')
+      .toLowerCase();
+}
+
 String _translated(
   Map translations,
   String language,

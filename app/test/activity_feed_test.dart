@@ -184,6 +184,55 @@ void main() {
     expect(find.text('서울 공원 산책'), findsOneWidget);
   });
 
+  testWidgets('Chinese home search matches Korean and English region names', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      ({latitude, longitude, city, district, required limit, cursor}) async =>
+          const ActivityPage(
+            items: [
+              {
+                'id': 'mapo-activity',
+                'title': '麻浦活动',
+                'capacity': 10,
+                'city_name': '首尔特别市',
+                'city_name_ko_kr': '서울특별시',
+                'city_name_en_us': 'Seoul',
+                'district_name': '麻浦区',
+                'district_name_ko_kr': '마포구',
+                'district_name_en_us': 'Mapo-gu',
+              },
+              {
+                'id': 'gangnam-activity',
+                'title': '江南活动',
+                'capacity': 10,
+                'city_name': '首尔特别市',
+                'city_name_ko_kr': '서울특별시',
+                'city_name_en_us': 'Seoul',
+                'district_name': '江南区',
+                'district_name_ko_kr': '강남구',
+                'district_name_en_us': 'Gangnam-gu',
+              },
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+    );
+    await tester.tap(find.byKey(const Key('main-nav-0')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('home-search-field')), '마포');
+    await tester.pumpAndSettle();
+    expect(find.text('麻浦活动'), findsOneWidget);
+    expect(find.text('江南活动'), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('home-search-field')), 'mapo');
+    await tester.pumpAndSettle();
+    expect(find.text('麻浦活动'), findsOneWidget);
+    expect(find.text('江南活动'), findsNothing);
+  });
+
   testWidgets(
     'append retry keeps cursor and items, deduplicates UUID, stops at end',
     (tester) async {

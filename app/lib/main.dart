@@ -954,6 +954,7 @@ class _HomePageState extends State<HomePage> {
       final searchable = [
         activityText(context, event.localizedContent, 'title', event.title),
         event.area,
+        activityRegionSearchText(event.localizedContent),
         activityText(
           context,
           event.localizedContent,
@@ -1934,18 +1935,21 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   @override
   Widget build(BuildContext context) {
+    final query = _search.text.trim().toLowerCase();
     final visible = widget.events
         .where(
           (e) =>
               !e.isExpired &&
               (_category == '全部' || e.category == _category) &&
-              (activityText(
+              (query.isEmpty ||
+                  activityText(
                     context,
                     e.localizedContent,
                     'title',
                     e.title,
-                  ).contains(_search.text) ||
-                  e.area.contains(_search.text)),
+                  ).toLowerCase().contains(query) ||
+                  e.area.toLowerCase().contains(query) ||
+                  activityRegionSearchText(e.localizedContent).contains(query)),
         )
         .toList();
     return Column(
