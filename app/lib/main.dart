@@ -1,7 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:geolocator/geolocator.dart';
@@ -658,7 +658,7 @@ class _AppShellState extends State<AppShell> {
       hostScore: (json['organizer_score'] as num?)?.toDouble() ?? 0,
       joined: (json['approved_count'] as num?)?.toInt() ?? 0,
       capacity: (json['capacity'] as num?)?.toInt() ?? 0,
-      price: priceAmount == 0 ? '免费' : '预计 ₩$priceAmount/人',
+      price: priceAmount == 0 ? '免费' : '预计 ₩${formatThousands(priceAmount)}/人',
       approval: json['approval_mode'] == 'manual',
       isOwned:
           currentUserId != null &&
@@ -3114,7 +3114,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
             ? data['district_code'] as String
             : null;
         _meetingPoint.text = data['place_name'] as String? ?? '';
-        _price.text = '${data['price_amount'] ?? 0}';
+        _price.text = formatThousands(
+          (data['price_amount'] as num?)?.toInt() ?? 0,
+        );
         _capacity = (data['capacity'] as num).toInt();
         _approval = data['approval_mode'] == 'manual';
         _beginnerFriendly = data['beginner_friendly_claimed'] == true;
@@ -3862,31 +3864,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
       TextField(
         controller: _price,
         keyboardType: TextInputType.number,
-        inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          TextInputFormatter.withFunction((_, value) {
-            if (!value.composing.isCollapsed) return value;
-            final leadingZeros = RegExp(
-              r'^0+(?=[0-9])',
-            ).stringMatch(value.text);
-            if (leadingZeros == null) return value;
-            final removed = leadingZeros.length;
-            final text = value.text.substring(removed);
-            return TextEditingValue(
-              text: text,
-              selection: TextSelection(
-                baseOffset: (value.selection.baseOffset - removed).clamp(
-                  0,
-                  text.length,
-                ),
-                extentOffset: (value.selection.extentOffset - removed).clamp(
-                  0,
-                  text.length,
-                ),
-              ),
-            );
-          }),
-        ],
+        inputFormatters: const [ThousandsInputFormatter()],
         decoration: const InputDecoration(
           prefixText: '₩ ',
           hintText: '0',
@@ -3994,7 +3972,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
       setState(() => _step++);
       return;
     }
-    final priceAmount = int.tryParse(_price.text.trim());
+    final priceAmount = parseFormattedAmount(_price.text);
     if (priceAmount == null || priceAmount < 0) {
       ScaffoldMessenger.of(
         context,
@@ -4073,7 +4051,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
         hostScore: 4.8,
         joined: 1,
         capacity: _capacity,
-        price: priceAmount == 0 ? '免费' : '预计 ₩$priceAmount/人',
+        price: priceAmount == 0
+            ? '免费'
+            : '预计 ₩${formatThousands(priceAmount)}/人',
         priceAmount: priceAmount,
         approval: _approval,
         isOwned: true,
@@ -6280,7 +6260,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
               ),
               subtitle: Text(
                 '${_localizedRegionName(row, 'city', Localizations.localeOf(context).languageCode)} · ${_localizedRegionName(row, 'district', Localizations.localeOf(context).languageCode)}\n'
-                '${_formatActivityDate(startsAt)} · ${price == 0 ? '免费' : '预计 ₩$price/人'}',
+                '${_formatActivityDate(startsAt)} · ${activityPrice(context, price)}',
               ),
               isThreeLine: true,
               trailing: isOrganizer && !widget.selectSource
@@ -6402,7 +6382,9 @@ class _MyActivityRecordPageState extends State<_MyActivityRecordPage> {
           ListTile(
             leading: const Icon(Icons.payments_outlined),
             title: const Text('预计人均费用'),
-            subtitle: Text(price == 0 ? '免费' : '₩$price/人，线下自行结算'),
+            subtitle: Text(
+              price == 0 ? '免费' : '₩${formatThousands(price)}/人，线下自行结算',
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.verified_outlined),

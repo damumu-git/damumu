@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'l10n.dart';
 
@@ -25,7 +26,37 @@ String activityPrice(BuildContext context, int amount) {
   if (amount == 0) return context.tr('activityFree');
   return context
       .tr('activityEstimatedCost')
-      .replaceFirst('{amount}', '$amount');
+      .replaceFirst('{amount}', formatThousands(amount));
+}
+
+String formatThousands(int amount) => amount.toString().replaceAllMapped(
+  RegExp(r'\B(?=(\d{3})+(?!\d))'),
+  (_) => ',',
+);
+
+int? parseFormattedAmount(String value) =>
+    int.tryParse(value.replaceAll(',', '').trim());
+
+class ThousandsInputFormatter extends TextInputFormatter {
+  const ThousandsInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (!newValue.composing.isCollapsed) return newValue;
+    var digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return const TextEditingValue();
+    digits = digits.replaceFirst(RegExp(r'^0+(?=[0-9])'), '');
+    final amount = int.tryParse(digits);
+    if (amount == null) return oldValue;
+    final formatted = formatThousands(amount);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
 }
 
 String activityText(
