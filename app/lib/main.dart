@@ -2255,6 +2255,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
     final full = e.joined >= e.capacity;
     final cancelled = _detail?['status'] == 'cancelled';
     final content = _detail ?? e.localizedContent;
+    final originalCoverUrl = _detail?['cover_original_url']?.toString();
+    final detailPhotoUrl = originalCoverUrl?.isNotEmpty == true
+        ? originalCoverUrl
+        : e.coverUrl;
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -2380,6 +2384,51 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     ),
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
+                  if (detailPhotoUrl != null && detailPhotoUrl.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    Text(
+                      context.tr('activityPhotoHeading'),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => ChatImagePreviewPage(
+                            imageUrl: absoluteImageUrl(detailPhotoUrl),
+                            titleKey: 'eventCoverPreview',
+                            heroTag: 'event-cover-$detailPhotoUrl',
+                          ),
+                        ),
+                      ),
+                      child: Hero(
+                        tag: 'event-cover-$detailPhotoUrl',
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: AspectRatio(
+                            aspectRatio: 4 / 3,
+                            child: Image.network(
+                              absoluteImageUrl(detailPhotoUrl),
+                              key: const Key('event-uploaded-cover'),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => Container(
+                                color: AppPalette.soft,
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.broken_image_outlined,
+                                  color: AppPalette.muted,
+                                  size: 42,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   Wrap(
                     spacing: 8,

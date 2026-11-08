@@ -122,6 +122,8 @@ void main() {
       image.image,
       const AssetImage('assets/activity-covers/sub/exhibition.webp'),
     );
+    expect(find.text('活动图片'), findsOneWidget);
+    expect(find.byKey(const Key('event-uploaded-cover')), findsOneWidget);
     expect(find.byIcon(Icons.home_rounded), findsOneWidget);
     expect(find.byIcon(Icons.cottage_rounded), findsNothing);
   });
@@ -263,6 +265,7 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('main-nav-0')));
     await tester.pumpAndSettle();
+    expect(find.text('DAMU · 一起出发'), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('home-search-field')), '마포');
     await tester.pumpAndSettle();
