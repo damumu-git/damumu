@@ -315,6 +315,8 @@ const _strings = <String, Map<String, String>>{
     'trustReviews': '信誉与评价',
     'blocksReports': '黑名单与举报',
     'helpRules': '帮助与社区规范',
+    'activityGuidanceTitle': '活动提示',
+    'activityGuidanceBody': '参加活动前请确认时间、地点和费用，注意人身和财产安全。组织活动时，请选择健康、环保的方式。',
     'privacyAccount': '隐私政策',
     'privacySubtitle': '查看个人信息收集、使用与删除说明',
     'privacyOpenFailed': '无法打开隐私政策，请访问 www.damumu.com/privacy.html',
@@ -680,6 +682,9 @@ const _strings = <String, Map<String, String>>{
     'trustReviews': 'Trust & reviews',
     'blocksReports': 'Blocks & reports',
     'helpRules': 'Help & community rules',
+    'activityGuidanceTitle': 'Activity guidelines',
+    'activityGuidanceBody':
+        'Confirm the time, place, and cost before joining. Look after your personal safety and belongings, and plan activities that support well-being and respect the environment.',
     'privacyAccount': 'Privacy policy',
     'privacySubtitle': 'Review data collection, use, and deletion',
     'privacyOpenFailed':
@@ -1027,6 +1032,9 @@ const _strings = <String, Map<String, String>>{
     'trustReviews': '신뢰도 및 후기',
     'blocksReports': '차단 및 신고',
     'helpRules': '도움말 및 커뮤니티 규칙',
+    'activityGuidanceTitle': '활동 안내',
+    'activityGuidanceBody':
+        '참여 전에 시간, 장소, 비용을 확인하고 신변과 소지품의 안전에 유의해 주세요. 활동을 주최할 때는 건강과 환경을 고려해 주세요.',
     'privacyAccount': '개인정보 처리방침',
     'privacySubtitle': '개인정보 수집, 이용 및 삭제 안내',
     'privacyOpenFailed':

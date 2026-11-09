@@ -2459,21 +2459,23 @@ class _EventDetailPageState extends State<EventDetailPage> {
                       color: _mint,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Row(
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.shield_outlined, color: _green),
-                        SizedBox(width: 12),
+                        const Icon(Icons.shield_outlined, color: _green),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '安心见面',
-                                style: TextStyle(fontWeight: FontWeight.w800),
+                                context.tr('activityGuidanceTitle'),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
-                              SizedBox(height: 4),
-                              Text('首次见面建议选择公共场所，并开启定时确认。遇到紧急情况请立即联系当地警方。'),
+                              const SizedBox(height: 4),
+                              Text(context.tr('activityGuidanceBody')),
                             ],
                           ),
                         ),
@@ -5885,7 +5887,7 @@ class ProfilePage extends StatelessWidget {
                 onTap: () => _openInfo(
                   context,
                   context.tr('helpRules'),
-                  '参加线下活动前请确认时间、地点和费用，不要向陌生人提前转账；遇到危险请立即联系当地警方。',
+                  context.tr('activityGuidanceBody'),
                 ),
               ),
               const Divider(height: 1, indent: 58),
