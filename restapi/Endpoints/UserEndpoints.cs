@@ -326,6 +326,15 @@ public static class UserEndpoints
                        e.capacity, e.approved_count, e.price_amount, e.price_currency,
                        em.status AS membership_status, em.member_role, em.checked_in_at,
                        s.starts_at, s.ends_at,
+                       COALESCE(s.ends_at <= now(), false)
+                           AND e.status <> 'cancelled'
+                           AND em.status IN ('approved', 'attended') AND em.left_at IS NULL
+                           AND e.organizer_user_id <> @userId
+                           AND NOT EXISTS (
+                               SELECT 1 FROM endorsement en
+                               WHERE en.context_event_id=e.id AND en.from_user_id=@userId
+                                 AND en.target_type='activity' AND en.target_id=e.id
+                           ) AS feedback_pending,
                        c.name_zh_cn AS category_name, c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
                        city.name_zh_cn AS city_name,
                        city.name_ko_kr AS city_name_ko_kr,
@@ -339,8 +348,8 @@ public static class UserEndpoints
                 LEFT JOIN administrative_region city ON city.code=e.city_code
                 LEFT JOIN administrative_region district ON district.code=e.district_code
                 LEFT JOIN LATERAL (
-                    SELECT starts_at, ends_at FROM event_schedule
-                    WHERE event_id=e.id ORDER BY starts_at LIMIT 1
+                    SELECT min(starts_at) AS starts_at, max(ends_at) AS ends_at
+                    FROM event_schedule WHERE event_id=e.id
                 ) s ON true
                 WHERE em.user_id=@userId
                   AND (@status IS NULL OR em.status=@status)

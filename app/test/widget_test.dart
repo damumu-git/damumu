@@ -45,6 +45,17 @@ void main() {
     expect(find.text('活动群聊已解锁，可在「消息」中查看'), findsOneWidget);
   });
 
+  testWidgets('首页铃铛打开消息页的通知标签', (tester) async {
+    await tester.pumpWidget(authenticatedApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('通知'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('暂无通知'), findsOneWidget);
+    expect(find.text('报名已通过'), findsNothing);
+  });
+
   testWidgets('自己发布的活动显示身份且不出现报名按钮', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     final ownedEvent = EventItem(

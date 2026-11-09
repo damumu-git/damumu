@@ -87,7 +87,7 @@ void main() {
           const DaziApp(home: MyActivitiesPage(token: 'test-token')),
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Test activity'));
+        await tester.tap(find.text('活动管理'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('取消活动'));
         await tester.pumpAndSettle();
@@ -108,40 +108,57 @@ void main() {
         expect(find.text('取消活动'), findsNothing);
         tester.state<NavigatorState>(find.byType(Navigator).first).pop();
         await tester.pumpAndSettle();
+        await tester.tap(find.text('历史'));
+        await tester.pumpAndSettle();
         expect(find.text('活动取消 · Test activity'), findsOneWidget);
       }, () => client);
     },
   );
 
-  testWidgets('participant has no cancel action', (tester) async {
-    final client = MockClient(
-      (_) async => jsonResponse(
-        jsonEncode({
-          'data': [
-            {
-              'id': 'event',
-              'title': 'Joined activity',
-              'member_role': 'member',
-              'event_status': 'published',
-              'membership_status': 'approved',
-            },
-          ],
-        }),
-        200,
-      ),
-    );
-    await http.runWithClient(() async {
-      await tester.pumpWidget(
-        const DaziApp(home: MyActivitiesPage(token: 'token')),
+  testWidgets(
+    'participant opens the shared activity detail without cancel action',
+    (tester) async {
+      final auth = AuthController()
+        ..token = 'token'
+        ..user = const AuthUser(
+          id: 'member',
+          nickname: 'Member',
+          email: 'member@example.com',
+        );
+      addTearDown(auth.dispose);
+      final row = {
+        'id': 'event',
+        'title': 'Joined activity',
+        'member_role': 'member',
+        'event_status': 'published',
+        'membership_status': 'approved',
+        'capacity': 8,
+      };
+      final client = MockClient(
+        (request) async => jsonResponse(
+          jsonEncode({
+            'data': request.url.path.endsWith('/activities')
+                ? [row]
+                : {'item': row, 'members': []},
+          }),
+          200,
+        ),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('我参加的'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Joined activity'));
-      await tester.pumpAndSettle();
-      expect(find.text('取消活动'), findsNothing);
-    }, () => client);
-  });
+      await http.runWithClient(() async {
+        await tester.pumpWidget(
+          AuthScope(
+            controller: auth,
+            child: const DaziApp(home: MyActivitiesPage(token: 'token')),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Joined activity'));
+        await tester.pumpAndSettle();
+        expect(find.byType(EventDetailPage), findsOneWidget);
+        expect(find.text('取消活动'), findsNothing);
+      }, () => client);
+    },
+  );
 
   testWidgets('group renders cancellation title and reason as a notice', (
     tester,

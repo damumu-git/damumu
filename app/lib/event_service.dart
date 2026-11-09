@@ -148,10 +148,12 @@ class ActivityPage {
     required this.items,
     required this.nextCursor,
     required this.hasMore,
+    this.totalCount,
   });
   final List<Map<String, dynamic>> items;
   final String? nextCursor;
   final bool hasMore;
+  final int? totalCount;
 }
 
 class EventDetailData {
@@ -408,6 +410,7 @@ class EventService {
       throw const EventServiceException('活动暂时无法加载，请稍后再试');
     }
     return ActivityPage(
+      totalCount: (data['totalCount'] as num?)?.toInt(),
       items: (data['items'] as List)
           .map((item) => (item as Map).cast<String, dynamic>())
           .toList(),

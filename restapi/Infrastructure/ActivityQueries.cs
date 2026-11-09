@@ -3,7 +3,8 @@ namespace Muda.Api.Infrastructure;
 public static class ActivityQueries
 {
     public const string List = """
-                SELECT e.id, e.created_at, e.title, e.description, e.status, e.visibility, e.approval_mode,
+                WITH matching AS (
+                SELECT count(*) OVER () AS total_count, e.id, e.created_at, e.title, e.description, e.status, e.visibility, e.approval_mode,
                        e.min_participants, e.capacity, e.approved_count, e.waitlist_count,
                        e.price_min, e.price_max, e.price_amount,
                        e.price_currency, e.city_code, e.district_code, e.language_codes,
@@ -74,16 +75,12 @@ public static class ActivityQueries
                     SELECT starts_at, ends_at
                     FROM event_schedule
                     WHERE event_id=e.id AND status='scheduled'
-                    ORDER BY (ends_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Seoul')
-                              AT TIME ZONE 'Asia/Seoul') DESC, starts_at LIMIT 1
+                    ORDER BY (ends_at > now()) DESC, starts_at LIMIT 1
                 ) s ON true
                 WHERE e.deleted_at IS NULL
                   AND e.visibility='public'
-                  AND (NOT @hasCursor OR e.created_at < @cursorCreatedAt
-                       OR (e.created_at = @cursorCreatedAt AND e.id < @cursorActivityId))
-                  AND e.status IN ('published', 'full', 'completed')
-                  AND (s.ends_at IS NULL OR s.ends_at >=
-                      date_trunc('day', now() AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'Asia/Seoul')
+                  AND e.status IN ('published', 'full')
+                  AND (s.ends_at IS NULL OR s.ends_at > now())
                   AND (@city IS NULL OR e.city_code=@city)
                   AND (@district IS NULL OR e.district_code=@district)
                   AND (@categoryId IS NULL OR e.category_id=@categoryId)
@@ -92,7 +89,11 @@ public static class ActivityQueries
                   AND (@to IS NULL OR s.starts_at <= @to)
                   AND (NOT @hasGeo OR p.public_geo IS NULL OR ST_DWithin(
                         p.public_geo, ST_Point(@longitude, @latitude, 4326)::geography, @radius))
-                ORDER BY e.created_at DESC, e.id DESC
+                )
+                SELECT * FROM matching
+                WHERE NOT @hasCursor OR created_at < @cursorCreatedAt
+                   OR (created_at = @cursorCreatedAt AND id < @cursorActivityId)
+                ORDER BY created_at DESC, id DESC
                 LIMIT @limit
                 """;
 }

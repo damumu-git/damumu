@@ -45,13 +45,15 @@ public static class ActivityEndpoints
                     cursorCreatedAt = position?.CreatedAt ?? DateTime.UnixEpoch,
                     cursorActivityId = position?.ActivityId ?? Guid.Empty
                 }, ct);
+            var totalCount = rows.Count == 0 ? 0L : (long)rows[0]["total_count"]!;
+            foreach (var row in rows) row.Remove("total_count");
             var hasMore = rows.Count > take;
             if (hasMore) rows.RemoveAt(rows.Count - 1);
             await ActivityLocalization.AttachAsync(db, rows, ct);
             var nextCursor = hasMore
                 ? ActivityCursor.Encode((DateTime)rows[^1]["created_at"]!, (Guid)rows[^1]["id"]!)
                 : null;
-            return ApiSupport.Ok(new ActivityPage(rows, nextCursor, hasMore));
+            return ApiSupport.Ok(new ActivityPage(rows, nextCursor, hasMore, totalCount));
         });
 
         return api;
@@ -59,4 +61,4 @@ public static class ActivityEndpoints
 }
 
 public sealed record ActivityPage(
-    IReadOnlyList<Dictionary<string, object?>> Items, string? NextCursor, bool HasMore);
+    IReadOnlyList<Dictionary<string, object?>> Items, string? NextCursor, bool HasMore, long TotalCount);

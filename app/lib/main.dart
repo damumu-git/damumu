@@ -445,6 +445,7 @@ class _AppShellState extends State<AppShell> {
   bool _eventsLoading = true;
   bool _eventsLoadFailed = false;
   static const _pageSize = 20;
+  int? _eventTotalCount;
   String? _nextEventCursor;
   bool _eventsRefreshing = false;
   int _eventGeneration = 0;
@@ -494,6 +495,13 @@ class _AppShellState extends State<AppShell> {
         if (auth.token != null) await auth.restore(background: true);
       }
     }
+  }
+
+  final _messagesKey = GlobalKey<_MessagesPageState>();
+
+  void _openNotifications() {
+    _messagesKey.currentState?._selectSegment(2);
+    _selectTab(3);
   }
 
   GlobalKey<_CreateEventPageState> _createKey =
@@ -585,9 +593,12 @@ class _AppShellState extends State<AppShell> {
       final rows = page.items;
       // Convert before mutating the cursor or deduplication state so retries
       // request the same page if a response cannot be rendered.
-      final items = rows.map(_eventFromApi).toList();
+      final items = rows.map((row) => _eventFromApi(context, row)).toList();
       setState(() {
-        if (!append) _events = [];
+        if (!append) {
+          _events = [];
+          _eventTotalCount = page.totalCount;
+        }
         for (var i = 0; i < rows.length; i++) {
           if (_loadedEventIds.add(rows[i]['id'].toString())) {
             _events.add(items[i]);
@@ -620,64 +631,6 @@ class _AppShellState extends State<AppShell> {
     failed: _moreEventsFailed,
     onLoadMore: _loadMoreEvents,
   );
-
-  EventItem _eventFromApi(Map<String, dynamic> json) {
-    final rawId = json['id'].toString();
-    final startsAt = DateTime.tryParse('${json['starts_at']}')?.toLocal();
-    String two(int number) => number.toString().padLeft(2, '0');
-    final time = startsAt == null
-        ? '时间待定'
-        : '${startsAt.month}月${startsAt.day}日 ${two(startsAt.hour)}:${two(startsAt.minute)}';
-    final language = Localizations.localeOf(context).languageCode;
-    final city = _localizedRegionName(json, 'city', language);
-    final district = _localizedRegionName(json, 'district', language);
-    final distanceMeters = json['distance_meters'] as num?;
-    final priceAmount = (json['price_amount'] as num?)?.toInt() ?? 0;
-    final currentUserId = AuthScope.of(context).user?.id;
-    return EventItem(
-      id: rawId.hashCode,
-      apiId: rawId,
-      emoji: '${json['category_icon'] ?? '✨'}',
-      emojiUrl: json['category_icon_url'] as String?,
-      coverUrl: json['cover_url'] as String?,
-      coverCategoryCode: json['cover_category_code'] as String?,
-      coverSubcategoryCode: json['cover_subcategory_code'] as String?,
-      localizedContent: json,
-      priceAmount: priceAmount,
-      organizerRiskTag: json['organizer_risk_tag'] as String?,
-      title: '${json['title'] ?? ''}',
-      category: '${json['category_name'] ?? ''}',
-      time: time,
-      area: [city, district].where((value) => value.isNotEmpty).join(' · '),
-      distance: distanceMeters == null
-          ? '距离待计算'
-          : '${(distanceMeters / 1000).toStringAsFixed(1)} km',
-      host: '${json['organizer_name'] ?? '活动组织者'}',
-      organizerUserId: json['organizer_user_id']?.toString(),
-      organizerAvatar: json['organizer_avatar'] as String?,
-      hostScore: (json['organizer_score'] as num?)?.toDouble() ?? 0,
-      joined: (json['approved_count'] as num?)?.toInt() ?? 0,
-      capacity: (json['capacity'] as num?)?.toInt() ?? 0,
-      price: priceAmount == 0 ? '免费' : '预计 ₩${formatThousands(priceAmount)}/人',
-      approval: json['approval_mode'] == 'manual',
-      isOwned:
-          currentUserId != null &&
-          '${json['organizer_user_id']}' == currentUserId,
-      description: '${json['description'] ?? ''}',
-      startsAt: startsAt,
-      endsAt: DateTime.tryParse('${json["ends_at"]}')?.toLocal(),
-      beginnerFriendly: json['beginner_friendly'] == true,
-      beginnerFriendlyVerified: json['beginner_friendly_verified'] == true,
-      tags: [
-        '${json['category_name'] ?? ''}',
-        json['approval_mode'] == 'manual' ? '需审核' : '直接加入',
-        if (json['beginner_friendly'] == true)
-          json['beginner_friendly_verified'] == true
-              ? context.tr('beginnerFriendlyVerified')
-              : context.tr('beginnerFriendly'),
-      ],
-    );
-  }
 
   void _openEvent(EventItem event) {
     Navigator.of(context).push(
@@ -727,6 +680,8 @@ class _AppShellState extends State<AppShell> {
     final pages = [
       HomePage(
         events: _events,
+        totalCount: _eventTotalCount,
+        onOpenNotifications: _openNotifications,
         onOpen: _openEvent,
         onLocationChanged: _locationChanged,
         loading: _eventsLoading,
@@ -753,7 +708,7 @@ class _AppShellState extends State<AppShell> {
         onCreated: _created,
         loadRemoteData: widget.loadRemoteEvents,
       ),
-      MessagesPage(onUnreadChanged: _loadUnread),
+      MessagesPage(key: _messagesKey, onUnreadChanged: _loadUnread),
       const ProfilePage(),
     ];
     return Scaffold(
@@ -903,6 +858,8 @@ class HomePage extends StatefulWidget {
     required this.onOpen,
     required this.onRetry,
     this.footer,
+    this.totalCount,
+    this.onOpenNotifications,
     this.onRefresh,
     this.onLocationChanged,
     this.loading = false,
@@ -910,6 +867,8 @@ class HomePage extends StatefulWidget {
     super.key,
   });
   final List<EventItem> events;
+  final int? totalCount;
+  final VoidCallback? onOpenNotifications;
   final ValueChanged<EventItem> onOpen;
   final VoidCallback onRetry;
   final Future<void> Function()? onRefresh;
@@ -1222,7 +1181,8 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     IconButton(
-                      onPressed: () => _showNotice(context),
+                      onPressed: widget.onOpenNotifications,
+                      tooltip: context.tr('notifications'),
                       icon: const Icon(Icons.notifications_none_outlined),
                     ),
                   ],
@@ -1303,52 +1263,72 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                TextField(
-                  key: const Key('home-search-field'),
-                  controller: _searchController,
-                  textInputAction: TextInputAction.search,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText: context.tr('homeSearchHint'),
-                    prefixIcon: const Icon(Icons.search, color: _green),
-                    suffixIcon: _searchController.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: context.tr('clearSearch'),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {});
-                            },
-                            icon: const Icon(Icons.close),
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: const ['今天', '周末', '新手友好']
-                      .map(
-                        (filter) => FilterChipLabel(
-                          filter,
-                          selected: _selectedFilters.contains(filter),
-                          onTap: () => _toggleFilter(filter),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 22),
-                SectionTitle(
-                  title:
-                      '${context.tr('nearbyMoments')} · ${_visibleEvents.length}',
-                  action:
-                      _searchController.text.isNotEmpty ||
-                          _selectedFilters.isNotEmpty
-                      ? context.tr('clearFilters')
-                      : null,
-                  onAction: _clearFilters,
-                ),
               ],
+            ),
+          ),
+        ),
+        PinnedHeaderSliver(
+          child: Material(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    key: const Key('home-search-field'),
+                    controller: _searchController,
+                    textInputAction: TextInputAction.search,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: context.tr('homeSearchHint'),
+                      prefixIcon: const Icon(Icons.search, color: _green),
+                      suffixIcon: _searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: context.tr('clearSearch'),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.close),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: const ['今天', '周末', '新手友好']
+                        .map(
+                          (filter) => FilterChipLabel(
+                            filter,
+                            selected: _selectedFilters.contains(filter),
+                            onTap: () => _toggleFilter(filter),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 22),
+                  SectionTitle(
+                    title:
+                        _searchController.text.isEmpty &&
+                            _selectedFilters.isEmpty &&
+                            widget.totalCount != null &&
+                            !widget.loading &&
+                            !widget.loadFailed
+                        ? '${context.tr('nearbyMoments')} · ${widget.totalCount}'
+                        : context.tr('nearbyMoments'),
+                    action:
+                        _searchController.text.isNotEmpty ||
+                            _selectedFilters.isNotEmpty
+                        ? context.tr('clearFilters')
+                        : null,
+                    onAction: _clearFilters,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1376,39 +1356,6 @@ class _HomePageState extends State<HomePage> {
     return widget.onRefresh == null
         ? list
         : RefreshIndicator(onRefresh: widget.onRefresh!, child: list);
-  }
-
-  void _showNotice(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (_) => const SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(24, 0, 24, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '通知',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-              ),
-              SizedBox(height: 18),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
-                  backgroundColor: _mint,
-                  child: Icon(Icons.how_to_reg),
-                ),
-                title: Text('报名已通过'),
-                subtitle: Text('汉江日落野餐局 · 记得按时到达'),
-                trailing: Text('刚刚'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -2193,6 +2140,64 @@ class _MapPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+EventItem _eventFromApi(BuildContext context, Map<String, dynamic> json) {
+  final rawId = json['id'].toString();
+  final startsAt = DateTime.tryParse('${json['starts_at']}')?.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  final time = startsAt == null
+      ? '时间待定'
+      : '${startsAt.month}月${startsAt.day}日 ${two(startsAt.hour)}:${two(startsAt.minute)}';
+  final language = Localizations.localeOf(context).languageCode;
+  final city = _localizedRegionName(json, 'city', language);
+  final district = _localizedRegionName(json, 'district', language);
+  final distanceMeters = json['distance_meters'] as num?;
+  final priceAmount = (json['price_amount'] as num?)?.toInt() ?? 0;
+  final currentUserId = AuthScope.of(context).user?.id;
+  return EventItem(
+    id: rawId.hashCode,
+    apiId: rawId,
+    emoji: '${json['category_icon'] ?? '✨'}',
+    emojiUrl: json['category_icon_url'] as String?,
+    coverUrl: json['cover_url'] as String?,
+    coverCategoryCode: json['cover_category_code'] as String?,
+    coverSubcategoryCode: json['cover_subcategory_code'] as String?,
+    localizedContent: json,
+    priceAmount: priceAmount,
+    organizerRiskTag: json['organizer_risk_tag'] as String?,
+    title: '${json['title'] ?? ''}',
+    category: '${json['category_name'] ?? ''}',
+    time: time,
+    area: [city, district].where((value) => value.isNotEmpty).join(' · '),
+    distance: distanceMeters == null
+        ? '距离待计算'
+        : '${(distanceMeters / 1000).toStringAsFixed(1)} km',
+    host: '${json['organizer_name'] ?? '活动组织者'}',
+    organizerUserId: json['organizer_user_id']?.toString(),
+    organizerAvatar: json['organizer_avatar'] as String?,
+    hostScore: (json['organizer_score'] as num?)?.toDouble() ?? 0,
+    joined: (json['approved_count'] as num?)?.toInt() ?? 0,
+    capacity: (json['capacity'] as num?)?.toInt() ?? 0,
+    price: priceAmount == 0 ? '免费' : '预计 ₩${formatThousands(priceAmount)}/人',
+    approval: json['approval_mode'] == 'manual',
+    isOwned:
+        currentUserId != null &&
+        '${json['organizer_user_id']}' == currentUserId,
+    description: '${json['description'] ?? ''}',
+    startsAt: startsAt,
+    endsAt: DateTime.tryParse('${json["ends_at"]}')?.toLocal(),
+    beginnerFriendly: json['beginner_friendly'] == true,
+    beginnerFriendlyVerified: json['beginner_friendly_verified'] == true,
+    tags: [
+      '${json['category_name'] ?? ''}',
+      json['approval_mode'] == 'manual' ? '需审核' : '直接加入',
+      if (json['beginner_friendly'] == true)
+        json['beginner_friendly_verified'] == true
+            ? context.tr('beginnerFriendlyVerified')
+            : context.tr('beginnerFriendly'),
+    ],
+  );
+}
+
 class EventDetailPage extends StatefulWidget {
   const EventDetailPage({
     required this.event,
@@ -2253,8 +2258,13 @@ class _EventDetailPageState extends State<EventDetailPage> {
   Widget build(BuildContext context) {
     final e = widget.event;
     final full = e.joined >= e.capacity;
-    final cancelled = _detail?['status'] == 'cancelled';
+    final cancelled =
+        (_detail?['status'] ?? e.localizedContent?['event_status']) ==
+        'cancelled';
     final content = _detail ?? e.localizedContent;
+    final organizerName = _detail?['organizer_name'] as String? ?? e.host;
+    final organizerScore =
+        (_detail?['organizer_score'] as num?)?.toDouble() ?? e.hostScore;
     final uploadedCover =
         _detail?['cover_original_url'] as String? ??
         _detail?['cover_url'] as String? ??
@@ -2316,7 +2326,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   ),
                   if (cancelled)
                     EventCancellationNotice(
-                      reason: '${_detail?['cancellation_reason'] ?? ''}',
+                      reason:
+                          '${_detail?['cancellation_reason'] ?? content?['cancellation_reason'] ?? ''}',
                     ),
                   if (uploadedCover != null && uploadedCover.trim().isNotEmpty)
                     Padding(
@@ -2361,17 +2372,19 @@ class _EventDetailPageState extends State<EventDetailPage> {
                             eventId: e.apiId,
                           ),
                     leading: UserAvatarImage(
-                      nickname: e.host,
+                      nickname: organizerName,
                       avatarUrl:
                           _detail?['organizer_avatar'] as String? ??
                           e.organizerAvatar,
                       radius: 25,
                     ),
                     title: Text(
-                      '组织者 · ${e.host}',
+                      '组织者 · $organizerName',
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
-                    subtitle: Text('信誉 ${e.hostScore} · 已组织 12 场 · 回复迅速'),
+                    subtitle: organizerScore > 0
+                        ? Text('${context.tr('trust')} $organizerScore')
+                        : null,
                     trailing: const Icon(Icons.chevron_right),
                   ),
                   const SizedBox(height: 20),
@@ -4371,6 +4384,8 @@ class MessagesPage extends StatefulWidget {
 }
 
 class _MessagesPageState extends State<MessagesPage> {
+  void _selectSegment(int index) => setState(() => _segment = index);
+
   int _segment = 0;
   bool _loading = true;
   bool _readingAll = false;
@@ -4505,7 +4520,7 @@ class _MessagesPageState extends State<MessagesPage> {
                         : _chatUnread(index == 0 ? 'event' : 'direct'),
                   ),
                   selected: _segment == index,
-                  onSelected: (_) => setState(() => _segment = index),
+                  onSelected: (_) => _selectSegment(index),
                   showCheckmark: false,
                   selectedColor: AppPalette.primary,
                   backgroundColor: Colors.white,
@@ -6127,7 +6142,7 @@ class MyActivitiesPage extends StatefulWidget {
 
 class _MyActivitiesPageState extends State<MyActivitiesPage>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 2, vsync: this);
+  late final TabController _tabs = TabController(length: 3, vsync: this);
   late Future<List<Map<String, dynamic>>> _future;
 
   @override
@@ -6146,16 +6161,19 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(
-        widget.selectSource ? context.tr('createFromPrevious') : '我的活动',
+        widget.selectSource
+            ? context.tr('createFromPrevious')
+            : context.tr('myEvents'),
       ),
       actions: const [_HomeAction()],
       bottom: widget.selectSource
           ? null
           : TabBar(
               controller: _tabs,
-              tabs: const [
-                Tab(text: '我发布的'),
-                Tab(text: '我参加的'),
+              tabs: [
+                Tab(text: context.tr('myActivityCurrent')),
+                Tab(text: context.tr('myActivityPendingFeedback')),
+                Tab(text: context.tr('myActivityHistory')),
               ],
             ),
     ),
@@ -6176,9 +6194,6 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
         final organized = rows
             .where((row) => row['member_role'] == 'organizer')
             .toList();
-        final joined = rows
-            .where((row) => row['member_role'] != 'organizer')
-            .toList();
         if (widget.selectSource) {
           return _activityList(
             organized,
@@ -6186,11 +6201,25 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
             isOrganizer: true,
           );
         }
+        final now = DateTime.now();
+        final history = rows.where((row) {
+          final endsAt = DateTime.tryParse('${row['ends_at']}');
+          return row['event_status'] == 'cancelled' ||
+              row['event_status'] == 'completed' ||
+              (endsAt != null && !endsAt.isAfter(now));
+        }).toSet();
         return TabBarView(
           controller: _tabs,
           children: [
-            _activityList(organized, '你还没有发布活动', isOrganizer: true),
-            _activityList(joined, '你还没有参加活动'),
+            _activityList(
+              rows.where((row) => !history.contains(row)).toList(),
+              context.tr('myActivityEmpty'),
+            ),
+            _activityList(
+              rows.where((row) => row['feedback_pending'] == true).toList(),
+              context.tr('myActivityEmpty'),
+            ),
+            _activityList(history.toList(), context.tr('myActivityEmpty')),
           ],
         );
       },
@@ -6216,9 +6245,13 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
         separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           final row = rows[index];
+          final organizedByMe =
+              isOrganizer || row['member_role'] == 'organizer';
           final startsAt = DateTime.tryParse('${row['starts_at']}')?.toLocal();
           final endsAt = DateTime.tryParse('${row['ends_at']}');
-          final isPast = expiredActivity(endsAt, DateTime.now());
+          final isPast =
+              row['event_status'] == 'completed' ||
+              (endsAt != null && !endsAt.isAfter(DateTime.now()));
           final price = (row['price_amount'] as num?)?.toInt() ?? 0;
           return Card(
             child: ListTile(
@@ -6243,11 +6276,10 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                 '${_formatActivityDate(startsAt)} · ${activityPrice(context, price)}',
               ),
               isThreeLine: true,
-              trailing: isOrganizer && !widget.selectSource
+              trailing: organizedByMe && !widget.selectSource
                   ? TextButton(
-                      onPressed: () =>
-                          _openSimilarEvent(context, '${row['id']}'),
-                      child: Text(context.tr('publishSimilar')),
+                      onPressed: () => _openManagement(row),
+                      child: Text(context.tr('activityManagement')),
                     )
                   : const Icon(Icons.chevron_right),
               onTap: () async {
@@ -6257,10 +6289,10 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                 }
                 await Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => _MyActivityRecordPage(
-                      activity: row,
-                      token: widget.token,
-                      isOrganizer: isOrganizer,
+                    builder: (_) => EventDetailPage(
+                      event: _eventFromApi(context, row),
+                      onChanged: () {},
+                      onOpenMyActivities: () => _openManagement(row),
                     ),
                   ),
                 );
@@ -6275,6 +6307,23 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
         },
       ),
     );
+  }
+
+  Future<void> _openManagement(Map<String, dynamic> row) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _MyActivityRecordPage(
+          activity: row,
+          token: widget.token,
+          isOrganizer: true,
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() {
+        _future = EventService.myActivities(widget.token);
+      });
+    }
   }
 
   String _formatActivityDate(DateTime? value) {
