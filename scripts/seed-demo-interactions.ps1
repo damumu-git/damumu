@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateRange(2, 100)]
+    [ValidateRange(4, 100)]
     [int]$UserCount = 20,
     [string]$ApiBaseUrl = 'http://127.0.0.1:8080/api/v1',
     [string]$RunTag = (Get-Date -Format 'yyyyMMdd-HHmmss'),
@@ -115,6 +115,7 @@ if (-not [string]::IsNullOrWhiteSpace($ResumeManifest)) {
             Token = [string]$login.accessToken
             Theme = [string]$profile.Theme
             EventId = [string]$savedAccount.EventId
+            FillEvent = [bool]$savedAccount.FillEvent
         })
     }
     $outputPath = [string]$resolvedManifest
@@ -142,6 +143,7 @@ if (-not [string]::IsNullOrWhiteSpace($ResumeManifest)) {
             Token = [string]$registration.accessToken
             Theme = [string]$profile.Theme
             EventId = $null
+            FillEvent = ($sequence % 5 -eq 0)
         })
     }
 
@@ -163,7 +165,7 @@ if (-not [string]::IsNullOrWhiteSpace($ResumeManifest)) {
             startsAt = $startsAt.ToUniversalTime().ToString('o')
             endsAt = $endsAt.ToUniversalTime().ToString('o')
             minParticipants = 2
-            capacity = 8
+            capacity = $(if ($account.FillEvent) { 3 } else { 8 })
             approvalMode = 'manual'
             visibility = 'public'
             minAge = 18
@@ -196,7 +198,7 @@ New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
     Status = 'activities_created'
     UserCount = $accounts.Count
     EventCount = ($accounts | Where-Object { -not [string]::IsNullOrWhiteSpace($_.EventId) }).Count
-    Accounts = @($accounts | Select-Object Index, UserId, Nickname, Email, Password, EventId)
+    Accounts = @($accounts | Select-Object Index, UserId, Nickname, Email, Password, EventId, FillEvent)
 } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $outputPath -Encoding utf8
 
 Write-Host 'Creating cross-account applications and organizer decisions...'
@@ -245,12 +247,22 @@ for ($index = 0; $index -lt $accounts.Count; $index++) {
         [string]$_.user_id -eq [string]$pendingApplicant.UserId
     } | Select-Object -First 1
     if ($null -eq $pendingMember) {
+        $applicationNote = if ($organizer.FillEvent) {
+            "我是 $($pendingApplicant.Nickname)，申请参加 DEMO 活动。"
+        } else {
+            "我是 $($pendingApplicant.Nickname)，请在界面中手动审批这条 DEMO 申请。"
+        }
         Invoke-DamumuApi -Path "/events/$($organizer.EventId)/join" -Method POST `
             -Token $pendingApplicant.Token -Body @{
                 partySize = 1
-                note = "我是 $($pendingApplicant.Nickname)，请在界面中手动审批这条 DEMO 申请。"
+                note = $applicationNote
                 shareContact = $false
             } | Out-Null
+        $pendingMember = [pscustomobject]@{ status = 'applied' }
+    }
+    if ($organizer.FillEvent -and $pendingMember.status -eq 'applied') {
+        Invoke-DamumuApi -Path "/events/$($organizer.EventId)/members/$($pendingApplicant.UserId)/approve" `
+            -Method POST -Token $organizer.Token -Body @{} | Out-Null
     }
 
     $conversations = @(Invoke-DamumuApi -Path '/conversations' -Token $organizer.Token)
@@ -300,10 +312,11 @@ $manifest = [pscustomobject]@{
     Status = 'complete'
     UserCount = $accounts.Count
     EventCount = ($accounts | Where-Object { -not [string]::IsNullOrWhiteSpace($_.EventId) }).Count
-    Accounts = @($accounts | Select-Object Index, UserId, Nickname, Email, Password, EventId)
+    Accounts = @($accounts | Select-Object Index, UserId, Nickname, Email, Password, EventId, FillEvent)
 }
 $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $outputPath -Encoding utf8
 
 Write-Host "Created $($manifest.UserCount) members and $($manifest.EventCount) activities."
-Write-Host 'Each activity has one approved, one rejected, and one pending application plus group-chat messages.'
+$fullEventCount = @($accounts | Where-Object FillEvent).Count
+Write-Host "$fullEventCount activities are configured to fill all three spots through approvals."
 Write-Host "Credentials manifest: $outputPath"
