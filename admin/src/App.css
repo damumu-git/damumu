@@ -113,6 +113,8 @@ th:first-child { border-radius: 10px 0 0 10px; } th:last-child { border-radius: 
 td { padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .identity,.event-name { display: flex; align-items: center; gap: 10px; min-width: 150px; }.identity strong,.identity small,.event-name strong,.event-name small { display: block; }
 .detail-name-link { width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.event-name-cell, .event-name-cell .event-name { text-align: left; }
+.event-name-cell .event-name { justify-content: flex-start; }
 .detail-name-link strong { color: var(--ink); text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; transition: color .15s ease,text-decoration-color .15s ease; }
 .detail-name-link:hover strong,.detail-name-link:focus-visible strong { color: var(--green); text-decoration-color: currentColor; }
 .detail-name-link:focus-visible { outline: 2px solid color-mix(in srgb,var(--green) 45%,transparent); outline-offset: 4px; border-radius: 6px; }
