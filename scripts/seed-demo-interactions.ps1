@@ -5,7 +5,8 @@ param(
     [string]$ApiBaseUrl = 'http://127.0.0.1:8080/api/v1',
     [string]$RunTag = (Get-Date -Format 'yyyyMMdd-HHmmss'),
     [string]$Password = $env:DAMUMU_DEMO_PASSWORD,
-    [string]$ResumeManifest
+    [string]$ResumeManifest,
+    [switch]$IncludeDahai
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,6 +70,21 @@ $usableCities = @($cities | Where-Object {
 })
 if ($categories.Count -eq 0 -or $usableCities.Count -eq 0 -or $districts.Count -eq 0) {
     throw 'Active categories or administrative regions are missing.'
+}
+
+$dahai = $null
+if ($IncludeDahai) {
+    $credentials = Get-Credential -Message '请输入大海测试账号的登录邮箱和密码'
+    if ($null -eq $credentials) {
+        throw 'Login cancelled.'
+    }
+    $dahai = Invoke-DamumuApi -Path '/auth/login' -Method POST -Body @{
+        email = $credentials.UserName
+        password = $credentials.GetNetworkCredential().Password
+    }
+    if ($dahai.user.nickname -ne '大海') {
+        throw 'The signed-in account does not have the nickname 大海.'
+    }
 }
 
 $profiles = @(
@@ -165,7 +181,7 @@ if (-not [string]::IsNullOrWhiteSpace($ResumeManifest)) {
             startsAt = $startsAt.ToUniversalTime().ToString('o')
             endsAt = $endsAt.ToUniversalTime().ToString('o')
             minParticipants = 2
-            capacity = $(if ($account.FillEvent) { 3 } else { 8 })
+            capacity = $(if ($account.FillEvent) { 3 + [int]$IncludeDahai.IsPresent } else { 8 })
             approvalMode = 'manual'
             visibility = 'public'
             minAge = 18
@@ -209,6 +225,26 @@ for ($index = 0; $index -lt $accounts.Count; $index++) {
     $pendingApplicant = $accounts[($index + 3) % $accounts.Count]
 
     $members = @(Invoke-DamumuApi -Path "/events/$($organizer.EventId)/members" -Token $organizer.Token)
+    if ($null -ne $dahai -and $organizer.UserId -ne [string]$dahai.user.id) {
+        $dahaiMember = $members | Where-Object {
+            [string]$_.user_id -eq [string]$dahai.user.id
+        } | Select-Object -First 1
+        if ($null -eq $dahaiMember) {
+            Invoke-DamumuApi -Path "/events/$($organizer.EventId)/join" -Method POST `
+                -Token $dahai.accessToken -Body @{
+                    partySize = 1
+                    note = '大海申请参加 DEMO 活动。'
+                    shareContact = $false
+                } | Out-Null
+            $dahaiMember = [pscustomobject]@{ status = 'applied' }
+        }
+        if ($dahaiMember.status -eq 'applied') {
+            Invoke-DamumuApi -Path "/events/$($organizer.EventId)/members/$($dahai.user.id)/approve" `
+                -Method POST -Token $organizer.Token -Body @{} | Out-Null
+        } elseif ($dahaiMember.status -notin @('approved', 'attended')) {
+            throw "大海 cannot join $($organizer.EventId) from status $($dahaiMember.status)."
+        }
+    }
     $approvedMember = $members | Where-Object {
         [string]$_.user_id -eq [string]$approvedApplicant.UserId
     } | Select-Object -First 1
@@ -318,5 +354,5 @@ $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $outputPath -Enco
 
 Write-Host "Created $($manifest.UserCount) members and $($manifest.EventCount) activities."
 $fullEventCount = @($accounts | Where-Object FillEvent).Count
-Write-Host "$fullEventCount activities are configured to fill all three spots through approvals."
+Write-Host "$fullEventCount activities are configured to fill all spots through approvals."
 Write-Host "Credentials manifest: $outputPath"
