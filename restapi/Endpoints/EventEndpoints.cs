@@ -224,9 +224,10 @@ public static class EventEndpoints
                 """, new { id }, ct);
             var members = await db.QueryAsync(
                 """
-                SELECT em.user_id, em.member_role, em.status, up.nickname, up.avatar_url
+                SELECT em.user_id, em.member_role, em.status, up.nickname, COALESCE(member_avatar.image_url, up.avatar_url) AS avatar_url
                 FROM event_member em
                 LEFT JOIN user_profile up ON up.user_id=em.user_id
+                LEFT JOIN system_avatar member_avatar ON up.avatar_url='system:'||member_avatar.id::text
                 WHERE em.event_id=@id AND em.status IN ('approved', 'attended')
                 ORDER BY em.joined_at
                 LIMIT 12
@@ -244,10 +245,11 @@ public static class EventEndpoints
             var viewerId = ApiSupport.GetOptionalUserId(context);
             var profile = await db.QueryOneAsync(
                 """
-                SELECT u.id, COALESCE(up.nickname, '用户') AS nickname, up.avatar_url,
+                SELECT u.id, COALESCE(up.nickname, '用户') AS nickname, COALESCE(member_avatar.image_url, up.avatar_url) AS avatar_url,
                        (SELECT count(*) FROM endorsement en WHERE en.target_user_id=u.id) AS like_count
                 FROM app_user u
                 LEFT JOIN user_profile up ON up.user_id=u.id
+                LEFT JOIN system_avatar member_avatar ON up.avatar_url='system:'||member_avatar.id::text
                 WHERE u.id=@id AND u.status='active' AND u.deleted_at IS NULL
                 """, new { id }, ct);
             if (profile is null)
@@ -733,11 +735,12 @@ public static class EventEndpoints
                        em.party_size, em.application_note, em.share_contact,
                        em.rejection_reason, em.reviewed_at, em.joined_at, em.checked_in_at,
                        em.created_at,
-                       up.nickname, up.avatar_url, COALESCE(ts.score, 0) AS trust_score,
+                       up.nickname, COALESCE(member_avatar.image_url, up.avatar_url) AS avatar_url, COALESCE(ts.score, 0) AS trust_score,
                        (SELECT count(*) FROM endorsement en WHERE en.target_user_id=em.user_id) AS like_count,
                        member_risk.category_code AS member_risk_tag
                 FROM event_member em
                 LEFT JOIN user_profile up ON up.user_id=em.user_id
+                LEFT JOIN system_avatar member_avatar ON up.avatar_url='system:'||member_avatar.id::text
                 LEFT JOIN trust_snapshot ts ON ts.user_id=em.user_id
                 LEFT JOIN LATERAL (
                     SELECT r.category_code
