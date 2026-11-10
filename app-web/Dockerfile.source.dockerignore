@@ -5,6 +5,8 @@
 !app/assets/
 !app/assets/activity-covers/
 !app/assets/activity-covers/*.webp
+!app/assets/activity-covers/sub/
+!app/assets/activity-covers/sub/*.webp
 !app-web/
 !app-web/nginx.conf
 !app-web/site/

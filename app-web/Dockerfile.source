@@ -3,4 +3,5 @@ COPY app-web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY app-web/site/ /usr/share/nginx/html/
 COPY app/web/logo.png /usr/share/nginx/html/assets/logo.png
 COPY app/assets/activity-covers/*.webp /usr/share/nginx/html/assets/covers/
+COPY app/assets/activity-covers/sub/ /usr/share/nginx/html/assets/covers/sub/
 EXPOSE 80
