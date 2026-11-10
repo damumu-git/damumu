@@ -10,6 +10,7 @@ readonly NGINX_TARGET="/etc/nginx/sites-available/damumu"
 readonly DEPLOY_BRANCH="main"
 readonly LOCK_FILE="/tmp/damumu-deploy.lock"
 readonly HEALTH_TIMEOUT="180"
+readonly -a SERVICES=(site api admin app-web)
 
 ACKNOWLEDGE_MIGRATIONS=false
 CHECK_PUBLIC=true
@@ -58,7 +59,7 @@ show_failure_context() {
     "$exit_code" "$OLD_REVISION" "$NEW_REVISION" >&2
   if [[ "$COMPOSE_STARTED" == true ]]; then
     compose ps >&2 || true
-    compose logs --tail=100 site api admin >&2 || true
+    compose logs --tail=100 "${SERVICES[@]}" >&2 || true
   fi
   printf 'The script does not delete volumes or roll back database changes.\n' >&2
   exit "$exit_code"
@@ -159,6 +160,14 @@ EOF
   exit 2
 fi
 
+if [[ "$UPDATE_NGINX" == true ]]; then
+  command -v sudo >/dev/null 2>&1 || die "sudo is required to update Nginx."
+  if ! sudo openssl x509 -in /etc/letsencrypt/live/damumu.com/fullchain.pem \
+    -noout -checkhost app.damumu.com | grep -Fxq 'Hostname app.damumu.com does match certificate'; then
+    die "The DAMUMU certificate must cover app.damumu.com. Complete the one-time setup in deploy/README.md."
+  fi
+fi
+
 log "Validating Compose configuration"
 compose config --quiet
 
@@ -176,27 +185,30 @@ if [[ -n "$api_container" ]]; then
 fi
 
 available_kb="$(df -Pk "$REPO_ROOT" | awk 'NR == 2 {print $4}')"
-if ((available_kb < 2097152)); then
-  printf 'WARNING: less than 2 GiB is available on the deployment filesystem.\n' >&2
+if ((available_kb < 6291456)); then
+  printf 'WARNING: less than 6 GiB is available on the deployment filesystem.\n' >&2
   df -h "$REPO_ROOT" >&2
 fi
+
+log "Building the Flutter Web image"
+compose build --pull app-web
 
 log "Building site, API, and Admin images"
 compose build --pull site api admin
 
 log "Starting containers and waiting for health checks"
 COMPOSE_STARTED=true
-compose up -d --remove-orphans --wait --wait-timeout "$HEALTH_TIMEOUT" site api admin
+compose up -d --remove-orphans --wait --wait-timeout "$HEALTH_TIMEOUT" "${SERVICES[@]}"
 
 log "Checking services through their loopback ports"
 curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8081/healthz >/dev/null
 curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8080/api/v1/health >/dev/null
 curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8082/healthz >/dev/null
+curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8083/healthz >/dev/null
 curl --fail --silent --show-error --max-time 15 \
   http://127.0.0.1:8080/uploads/system-avatars/green-sprout.jpg >/dev/null
 
 if [[ "$UPDATE_NGINX" == true ]]; then
-  command -v sudo >/dev/null 2>&1 || die "sudo is required to update Nginx."
   sudo nginx -v >/dev/null 2>&1 || die "Nginx is not installed on the host."
   sudo test -f "$NGINX_TARGET" || \
     die "Nginx site is not installed. Complete the first-deployment steps in deploy/README.md."
@@ -223,6 +235,7 @@ fi
 if [[ "$CHECK_PUBLIC" == true ]]; then
   log "Checking public HTTPS routes"
   curl --fail --silent --show-error --max-time 20 https://www.damumu.com/healthz >/dev/null
+  curl --fail --silent --show-error --max-time 20 https://app.damumu.com/healthz >/dev/null
   curl --fail --silent --show-error --max-time 20 https://api.damumu.com/api/v1/health >/dev/null
   curl --fail --silent --show-error --max-time 20 \
     https://api.damumu.com/uploads/system-avatars/green-sprout.jpg >/dev/null
@@ -244,3 +257,4 @@ printf '\nRevision: %s\n' "$(git rev-parse HEAD)"
 printf 'Public site: https://www.damumu.com\n'
 printf 'Public API:  https://api.damumu.com/api/v1/health\n'
 printf 'Admin:       https://admin.damumu.com\n'
+printf 'Web app:     https://app.damumu.com\n'

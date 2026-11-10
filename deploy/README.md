@@ -1,9 +1,10 @@
 # Lightsail 单机测试部署
 
 本目录用于 Ubuntu 24.04 Lightsail 单机测试环境。公网只访问宿主机 Nginx；
-产品主页、API 和 Admin 容器分别绑定 `127.0.0.1:8081`、`8080`、`8082`。
-Nginx 按域名把 `www.damumu.com`、`admin.damumu.com`、`api.damumu.com`
-分别转发给三个服务，`damumu.com` 跳转到 `www.damumu.com`。网页版 `app.damumu.com` 由 Flutter `app/` 构建，通过 [独立发布项目](../app-web/README.md) 部署。
+API、产品主页、Admin 和网页版分别绑定回环端口 `8080`、`8081`、`8082`、`8083`。
+宿主机 Nginx 按域名转发，`damumu.com` 跳转到 `www.damumu.com`。
+`damumu-deploy` 从同一个 `main` 构建并发布四项服务。Flutter 在 Docker 构建阶段运行，
+服务器无需安装 Flutter 或预先上传 `app-web/dist`。
 
 ## Ubuntu 目录与图片访问
 
@@ -163,7 +164,7 @@ sudo chmod 640 /etc/nginx/.htpasswd-damumu-admin
 sudo chown root:www-data /etc/nginx/.htpasswd-damumu-admin
 ```
 
-首次签发证书前安装 HTTP 引导配置，并构建三个容器：
+首次签发证书前安装 HTTP 引导配置，并构建四个容器：
 
 ```bash
 sudo mkdir -p /var/www/certbot
@@ -176,12 +177,12 @@ sudo systemctl reload nginx
 
 sudo install -d -m 755 /srv/damumu /srv/damumu/uploads
 sudo install -d -m 700 /var/backups/damumu
-docker compose --env-file deploy/.env -f deploy/compose.yaml build site api admin
-docker compose --env-file deploy/.env -f deploy/compose.yaml up -d site api admin
+docker compose --env-file deploy/.env -f deploy/compose.yaml build site api admin app-web
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d site api admin app-web
 docker compose --env-file deploy/.env -f deploy/compose.yaml ps
 ```
 
-先确认四个域名已经能从公网解析到本机，再签发包含全部域名的证书。把下面的
+先确认五个域名已经能从公网解析到本机，再签发包含全部域名的证书。把下面的
 `YOUR_EMAIL` 替换为 ACME 注册使用的真实邮箱；证书续期依赖 Certbot 定时任务，
 不能依赖到期提醒邮件：
 
@@ -193,7 +194,8 @@ sudo certbot certonly \
   -d damumu.com \
   -d www.damumu.com \
   -d admin.damumu.com \
-  -d api.damumu.com
+  -d api.damumu.com \
+  -d app.damumu.com
 
 sudo cp deploy/nginx/damumu.conf /etc/nginx/sites-available/damumu
 sudo install -m 755 deploy/nginx/reload-nginx.sh \
@@ -202,6 +204,30 @@ sudo nginx -t
 sudo systemctl reload nginx
 sudo certbot renew --dry-run
 ```
+
+## 已有服务器首次启用 app.damumu.com
+
+1. 把 `app.damumu.com` 的 DNS 指向现有服务器。首次升级时，先执行
+   `cd /opt/damumu/repo && git pull --ff-only origin main`，让已安装的
+   `damumu-deploy` 命令读取新版脚本。
+2. 如果现有证书尚不覆盖新域名，保留当前 HTTPS 站点，只为 App 域名启用临时 HTTP 验证配置：
+
+   ```bash
+   cd /opt/damumu/repo
+   sudo mkdir -p /var/www/certbot
+   awk '/^server \{/ && ++blocks == 2 {exit} {print}' app-web/app.damumu.com.conf \
+     | sudo tee /etc/nginx/sites-available/damumu-app-acme >/dev/null
+   sudo ln -sfn /etc/nginx/sites-available/damumu-app-acme /etc/nginx/sites-enabled/damumu-app-acme
+   sudo nginx -t && sudo systemctl reload nginx
+   sudo certbot certonly --webroot -w /var/www/certbot --cert-name damumu.com --expand \
+     -d damumu.com -d www.damumu.com -d admin.damumu.com -d api.damumu.com -d app.damumu.com
+   ```
+
+   如果 App 域名已有启用的独立配置且包含 HTTP 验证路由，直接利用它签发即可，无需添加临时配置。
+   证书签发成功后，删除临时启用链接 `/etc/nginx/sites-enabled/damumu-app-acme`（如创建过）。
+3. 如果之前用 ZIP 单独运行了网页版，先停止旧 Compose 项目的 `app-web` 服务以释放 8083，
+   并停用旧的独立 App Nginx 配置，避免同一个域名出现两份配置。
+4. 运行 `damumu-deploy`。部署成功后，后续推送到 `main` 只需再运行这一条命令。
 
 ## 验证
 

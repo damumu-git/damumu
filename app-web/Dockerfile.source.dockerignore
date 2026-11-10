@@ -1,0 +1,12 @@
+*
+!app/
+!app/pubspec.yaml
+!app/pubspec.lock
+!app/lib/
+!app/lib/**
+!app/assets/
+!app/assets/**
+!app/web/
+!app/web/**
+!app-web/
+!app-web/nginx.conf
