@@ -125,7 +125,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: EventCard(event: event, onTap: () {}),
+          body: AuthScope(
+            controller: AuthController(),
+            child: EventCard(event: event, onTap: () {}),
+          ),
         ),
       ),
     );

@@ -371,6 +371,23 @@ class EventService {
     _decodeResponse(response, '退出活动没有成功，请稍后再试');
   }
 
+  static Future<ActivityPage> recommendations({
+    double? latitude,
+    double? longitude,
+    String? city,
+    String? district,
+    required int limit,
+    String? cursor,
+  }) => list(
+    latitude: latitude,
+    longitude: longitude,
+    city: city,
+    district: district,
+    limit: limit,
+    cursor: cursor,
+    recommended: true,
+  );
+
   static Future<ActivityPage> list({
     double? latitude,
     double? longitude,
@@ -379,10 +396,12 @@ class EventService {
     int radiusMeters = 10000,
     int limit = 20,
     String? cursor,
+    bool recommended = false,
   }) async {
     final query = <String, String>{
       'limit': limit.toString(),
       'cursor': ?cursor,
+      if (recommended) 'sort': 'recommended',
     };
     if (latitude != null && longitude != null) {
       query.addAll({

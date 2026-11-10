@@ -545,7 +545,7 @@ HTTP 400/500、连接失败、超时、空响应、非 JSON 及技术异常必�
 
 - APP 公开活动列表使用 `GET /api/v1/activities?limit=20&cursor=...`。
 - 沿用 `ApiSupport.Ok` envelope，`data` 内为 `{ items, nextCursor, hasMore }`。
-- 按 `event.created_at DESC, event.id DESC` 固定排序；`id` 即活动 UUID。
+- 默认按 `event.created_at DESC, event.id DESC`；`id` 即活动 UUID。首页推荐通过 `sort=recommended` 按公开位置距离、活动开始时间、UUID 升序，缺失距离和时间分别排在末尾。推荐游标额外保存距离与开始时间，仍可继续使用旧游标完成原排序的分页。
 - 使用 keyset 条件及 `limit + 1`，游标保存版本、UTC 创建时间和 UUID，Base64URL 编码；限制长度并校验格式、版本、时间和 UUID。游标是公开查询位置，不是授权凭证，解码结果仅用于参数化 SQL。
 - 最后一页 `nextCursor=null, hasMore=false`。新增活动通过刷新获得；分页时应保留相同过滤条件，变更定位或查询条件时丢弃旧游标。
 - 保留原 `/events` 兼容接口和后台分页。其他 APP 列表未来优先遵循 Cursor 规则，本次不宣称已迁移消息、评论和我的活动。

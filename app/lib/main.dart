@@ -282,6 +282,7 @@ class EventItem {
     this.coverSubcategoryCode,
     this.localizedContent,
     this.priceAmount,
+    this.distanceMeters,
     this.organizerRiskTag,
     this.emojiUrl,
   });
@@ -323,6 +324,7 @@ class EventItem {
   final String? coverSubcategoryCode;
   final Map<String, dynamic>? localizedContent;
   final int? priceAmount;
+  final num? distanceMeters;
   final String? organizerRiskTag;
 }
 
@@ -372,7 +374,7 @@ final demoEvents = <EventItem>[
     joined: 7,
     capacity: 10,
     description: '约 3 小时新手路线，途中会休息拍照。请穿防滑鞋并自备饮用水。',
-    tags: ['新手友好', '户外', '准时出发'],
+    tags: ['户外', '准时出发'],
   ),
   EventItem(
     id: 4,
@@ -490,8 +492,9 @@ class _AppShellState extends State<AppShell> {
         }
         _index = value;
       });
-      if (value == 3) await _loadUnread();
-      if (value == 4) {
+      if (value == 3) {
+        await _loadUnread();
+      } else if (value == 4) {
         final auth = AuthScope.of(context);
         if (auth.token != null) await auth.restore(background: true);
       }
@@ -582,7 +585,7 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _fetchEventPage(int generation, {required bool append}) async {
     try {
-      final page = await (widget.eventLoader ?? EventService.list)(
+      final page = await (widget.eventLoader ?? EventService.recommendations)(
         latitude: _latitude,
         longitude: _longitude,
         city: _cityCode,
@@ -695,6 +698,10 @@ class _AppShellState extends State<AppShell> {
       ),
       DiscoverPage(
         events: _events,
+        loadRegions: widget.loadRemoteEvents && _index == 1,
+        regionalLoader:
+            widget.eventLoader ??
+            (widget.loadRemoteEvents ? EventService.list : null),
         onOpen: _openEvent,
         loading: _eventsLoading,
         loadFailed: _eventsLoadFailed,
@@ -937,14 +944,21 @@ class _HomePageState extends State<HomePage> {
       if (_selectedFilters.contains('周末') && !_isWeekend(event)) {
         return false;
       }
-      if (_selectedFilters.contains('新手友好') &&
-          !event.beginnerFriendly &&
-          !event.tags.contains('新手友好')) {
-        return false;
-      }
       return true;
     }).toList();
-    return events;
+    final ranked = events.indexed.toList()
+      ..sort((a, b) {
+        final distance = (a.$2.distanceMeters ?? double.infinity).compareTo(
+          b.$2.distanceMeters ?? double.infinity,
+        );
+        if (distance != 0) return distance;
+        final start = (a.$2.startsAt?.millisecondsSinceEpoch ?? double.infinity)
+            .compareTo(
+              b.$2.startsAt?.millisecondsSinceEpoch ?? double.infinity,
+            );
+        return start == 0 ? a.$1.compareTo(b.$1) : start;
+      });
+    return ranked.map((entry) => entry.$2).toList();
   }
 
   bool _isToday(EventItem event) {
@@ -1301,7 +1315,7 @@ class _HomePageState extends State<HomePage> {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: const ['今天', '周末', '新手友好']
+                    children: const ['今天', '周末']
                         .map(
                           (filter) => FilterChipLabel(
                             filter,
@@ -1736,15 +1750,6 @@ class EventCard extends StatelessWidget {
                       ),
                       green: true,
                     ),
-                    if (event.beginnerFriendly)
-                      _Pill(
-                        context.tr(
-                          event.beginnerFriendlyVerified
-                              ? 'beginnerFriendlyVerified'
-                              : 'beginnerFriendlyClaimBadge',
-                        ),
-                        green: true,
-                      ),
                     if (event.isInProgress)
                       _Pill(context.tr('activityInProgress'), green: true),
                     if (event.isOwned)
@@ -1859,6 +1864,8 @@ class DiscoverPage extends StatefulWidget {
     required this.events,
     required this.onOpen,
     this.footer,
+    this.loadRegions = false,
+    this.regionalLoader,
     this.loading = false,
     this.loadFailed = false,
     this.onRetry,
@@ -1867,6 +1874,8 @@ class DiscoverPage extends StatefulWidget {
   });
   final Future<void> Function()? onRefresh;
   final Widget? footer;
+  final bool loadRegions;
+  final ActivityPageLoader? regionalLoader;
   final bool loading;
   final bool loadFailed;
   final VoidCallback? onRetry;
@@ -1878,10 +1887,100 @@ class DiscoverPage extends StatefulWidget {
 }
 
 class _DiscoverPageState extends State<DiscoverPage> {
-  String? _area;
+  String? _city;
+  String? _district;
   String? _category;
   final _filters = <String>{};
   final _search = TextEditingController();
+
+  List<AdministrativeRegion> _regions = [];
+  List<EventItem> _regionalEvents = [];
+  String? _regionalCursor;
+  bool _regionalLoading = false;
+  bool _regionalFailed = false;
+  bool _regionalHasMore = false;
+  bool _regionsLoading = false;
+  int _regionalRequest = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRegions();
+  }
+
+  @override
+  void didUpdateWidget(covariant DiscoverPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.loadRegions && !oldWidget.loadRegions) _loadRegions();
+  }
+
+  Future<void> _loadRegions() async {
+    if (!widget.loadRegions || _regionsLoading || _regions.isNotEmpty) return;
+    _regionsLoading = true;
+    try {
+      final regions = await RegionService.load();
+      if (mounted) setState(() => _regions = regions);
+    } catch (_) {
+      // Loaded activities can still supply region choices if the catalog is unavailable.
+    } finally {
+      _regionsLoading = false;
+    }
+  }
+
+  bool get _usesRegionalFeed => _city != null && widget.regionalLoader != null;
+
+  Future<void> _loadRegional({bool append = false}) async {
+    if (!_usesRegionalFeed || (append && _regionalLoading)) return;
+    final request = ++_regionalRequest;
+    setState(() {
+      _regionalLoading = true;
+      _regionalFailed = false;
+      if (!append) {
+        _regionalEvents = [];
+        _regionalHasMore = false;
+        _regionalCursor = null;
+      }
+    });
+    try {
+      final page = await widget.regionalLoader!(
+        city: _city,
+        district: _district,
+        limit: 20,
+        cursor: _regionalCursor,
+      );
+      if (!mounted || request != _regionalRequest) return;
+      final events = page.items
+          .map((item) => _eventFromApi(context, item))
+          .toList();
+      setState(() {
+        final loaded = _regionalEvents.map((event) => event.apiId).toSet();
+        _regionalEvents.addAll(
+          events.where((event) => loaded.add(event.apiId)),
+        );
+        _regionalCursor = page.nextCursor;
+        _regionalHasMore = page.hasMore;
+      });
+    } catch (_) {
+      if (mounted && request == _regionalRequest) {
+        setState(() => _regionalFailed = true);
+      }
+    } finally {
+      if (mounted && request == _regionalRequest) {
+        setState(() => _regionalLoading = false);
+      }
+    }
+  }
+
+  void _selectRegion(String? city, String? district) {
+    setState(() {
+      _city = city;
+      _district = district;
+      _category = null;
+      _regionalRequest++;
+      _regionalLoading = false;
+    });
+    _loadRegional();
+  }
 
   @override
   void dispose() {
@@ -1913,40 +2012,59 @@ class _DiscoverPageState extends State<DiscoverPage> {
         (event.approval || event.joined < event.capacity) &&
         !event.isOwned &&
         !event.isJoined;
-    final upcoming = widget.events.where((event) => !event.isPast).toList();
-    final areas =
-        upcoming
-            .expand((event) => [event.area.split(' · ').first, event.area])
-            .where((area) => area.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
+    final upcoming = (_usesRegionalFeed ? _regionalEvents : widget.events)
+        .where((event) => !event.isPast)
+        .toList();
+    String city(EventItem event) =>
+        event.localizedContent?['city_code']?.toString() ??
+        event.area.split(' · ').first;
+    String district(EventItem event) {
+      final code = event.localizedContent?['district_code']?.toString();
+      if (code != null) return code;
+      final parts = event.area.split(' · ');
+      return parts.length > 1 ? parts.last : '';
+    }
+
+    final language = Localizations.localeOf(context).languageCode;
+    final cities = <String, String>{
+      for (final event in widget.events)
+        if (city(event).isNotEmpty) city(event): event.area.split(' · ').first,
+      for (final region in _regions)
+        if (region.level == 1) region.code: region.displayName(language),
+    };
+    final districts = <String, String>{
+      for (final event in [...widget.events, ..._regionalEvents])
+        if (city(event) == _city && district(event).isNotEmpty)
+          district(event): event.area.split(' · ').last,
+      for (final region in _regions)
+        if (_city != null && region.parentCode == _city)
+          region.code: region.displayName(language),
+    };
     final categories =
         upcoming.map(category).where((name) => name.isNotEmpty).toSet().toList()
           ..sort();
     final visible =
         upcoming.where((event) {
           final start = event.startsAt?.toLocal();
-          if (_area != null &&
-              event.area != _area &&
-              !event.area.startsWith('$_area · '))
-            return false;
+          if (_city != null && city(event) != _city) return false;
+          if (_district != null && district(event) != _district) return false;
           if (_category != null && category(event) != _category) return false;
           if (_filters.contains('discoverToday') &&
-              (start == null || DateUtils.dateOnly(start) != today))
+              (start == null || DateUtils.dateOnly(start) != today)) {
             return false;
+          }
           if (_filters.contains('discoverWeekend') &&
               (start == null ||
                   start.isBefore(saturday) ||
                   !start.isBefore(monday))) {
             return false;
           }
-          if (_filters.contains('beginnerFriendly') && !event.beginnerFriendly)
+          if (_filters.contains('discoverFree') && event.priceAmount != 0) {
             return false;
-          if (_filters.contains('discoverFree') && event.priceAmount != 0)
+          }
+          if (_filters.contains('discoverOpen') && !canJoin(event)) {
             return false;
-          if (_filters.contains('discoverOpen') && !canJoin(event))
-            return false;
+          }
           return '${title(event)} ${event.area} ${activityRegionSearchText(event.localizedContent)}'
               .toLowerCase()
               .contains(query);
@@ -1959,7 +2077,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
         });
 
     return RefreshIndicator(
-      onRefresh: widget.onRefresh ?? () async {},
+      onRefresh: _usesRegionalFeed
+          ? () => _loadRegional()
+          : widget.onRefresh ?? () async {},
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -1978,26 +2098,47 @@ class _DiscoverPageState extends State<DiscoverPage> {
             ),
           ),
           const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _DiscoverMenu(
+                  label: context.tr('discoverCity'),
+                  value: _city,
+                  options: cities,
+                  onChanged: (value) => _selectRegion(value, null),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DiscoverMenu(
+                  label: context.tr('discoverDistrict'),
+                  value: _district,
+                  options: districts,
+                  enabled: _city != null && districts.isNotEmpty,
+                  onChanged: (value) => _selectRegion(_city, value),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DiscoverMenu(
+                  label: context.tr('discoverCategory'),
+                  value: _category,
+                  options: {
+                    for (final category in categories) category: category,
+                  },
+                  onChanged: (value) => setState(() => _category = value),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 6,
             children: [
-              _DiscoverMenu(
-                label: context.tr('discoverArea'),
-                value: _area,
-                options: areas,
-                onChanged: (value) => setState(() => _area = value),
-              ),
-              _DiscoverMenu(
-                label: context.tr('discoverCategory'),
-                value: _category,
-                options: categories,
-                onChanged: (value) => setState(() => _category = value),
-              ),
               for (final filter in [
                 'discoverToday',
                 'discoverWeekend',
-                'beginnerFriendly',
                 'discoverFree',
                 'discoverOpen',
               ])
@@ -2006,10 +2147,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   selected: _filters.contains(filter),
                   onSelected: (selected) => setState(() {
                     if (selected) {
-                      if (filter == 'discoverToday')
+                      if (filter == 'discoverToday') {
                         _filters.remove('discoverWeekend');
-                      if (filter == 'discoverWeekend')
+                      }
+                      if (filter == 'discoverWeekend') {
                         _filters.remove('discoverToday');
+                      }
                       _filters.add(filter);
                     } else {
                       _filters.remove(filter);
@@ -2019,15 +2162,23 @@ class _DiscoverPageState extends State<DiscoverPage> {
             ],
           ),
           const SizedBox(height: 14),
-          if (widget.loading)
+          if (_usesRegionalFeed
+              ? _regionalLoading && !_regionalHasMore
+              : widget.loading)
             const Center(child: CircularProgressIndicator())
-          else if (widget.loadFailed)
-            LoadFailure(onRetry: widget.onRetry ?? () {})
+          else if (_usesRegionalFeed
+              ? _regionalFailed && !_regionalHasMore
+              : widget.loadFailed)
+            LoadFailure(
+              onRetry: _usesRegionalFeed
+                  ? () => _loadRegional()
+                  : widget.onRetry ?? () {},
+            )
           else ...[
             if (visible.isEmpty) ...[
               Text(context.tr('discoverEmpty')),
               if (query.isNotEmpty ||
-                  _area != null ||
+                  _city != null ||
                   _category != null ||
                   _filters.isNotEmpty)
                 Align(
@@ -2035,7 +2186,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   child: TextButton(
                     onPressed: () => setState(() {
                       _search.clear();
-                      _area = null;
+                      _city = null;
+                      _district = null;
                       _category = null;
                       _filters.clear();
                     }),
@@ -2046,31 +2198,53 @@ class _DiscoverPageState extends State<DiscoverPage> {
             for (final event in visible)
               Card(
                 child: ListTile(
-                  leading: EmojiPicture(
-                    event.emoji,
-                    url: event.emojiUrl,
-                    size: 26,
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox.square(
+                      dimension: 44,
+                      child: _ActivityCategoryCover(event: event),
+                    ),
                   ),
                   title: Text(
                     title(event),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  subtitle: Text(
-                    [
-                      event.time,
-                      if (event.area.isNotEmpty) event.area,
-                      event.priceAmount == null
-                          ? event.price
-                          : activityPrice(context, event.priceAmount!),
-                      if (canJoin(event)) context.tr('discoverOpen'),
-                    ].join(' · '),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (category(event).isNotEmpty) Text(category(event)),
+                      Text(
+                        [
+                          if (event.startsAt != null)
+                            activityTime(context, event.startsAt!)
+                          else if (event.localizedContent != null)
+                            context.tr('activityTimeUnknown')
+                          else
+                            event.time,
+                          if (event.area.isNotEmpty) event.area,
+                          event.priceAmount == null
+                              ? event.price
+                              : activityPrice(context, event.priceAmount!),
+                          if (canJoin(event)) context.tr('discoverOpen'),
+                        ].join(' · '),
+                      ),
+                    ],
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => widget.onOpen(event),
                 ),
               ),
-            if (widget.footer != null) widget.footer!,
+            if (_usesRegionalFeed) ...[
+              if (_regionalHasMore)
+                _EventPaginationFooter(
+                  hasMore: true,
+                  loading: _regionalLoading,
+                  failed: _regionalFailed,
+                  onLoadMore: () => _loadRegional(append: true),
+                ),
+            ] else if (widget.footer != null)
+              widget.footer!,
           ],
         ],
       ),
@@ -2084,25 +2258,76 @@ class _DiscoverMenu extends StatelessWidget {
     required this.value,
     required this.options,
     required this.onChanged,
+    this.enabled = true,
   });
 
   final String label;
   final String? value;
-  final List<String> options;
+  final Map<String, String> options;
   final ValueChanged<String?> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => PopupMenuButton<String>(
     tooltip: label,
+    enabled: enabled,
+    position: PopupMenuPosition.under,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     onSelected: (selection) => onChanged(selection.isEmpty ? null : selection),
     itemBuilder: (context) => [
-      PopupMenuItem(value: '', child: Text(context.tr('discoverAll'))),
-      for (final option in options)
-        PopupMenuItem(value: option, child: Text(option)),
+      CheckedPopupMenuItem(
+        value: '',
+        checked: value == null,
+        child: Text(context.tr('discoverAll')),
+      ),
+      for (final option
+          in (options.entries.toList()
+            ..sort((a, b) => a.value.compareTo(b.value))))
+        CheckedPopupMenuItem(
+          value: option.key,
+          checked: value == option.key,
+          child: Text(option.value),
+        ),
     ],
-    child: Chip(
-      label: Text(value ?? label),
-      avatar: const Icon(Icons.expand_more, size: 18),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: enabled
+            ? AppPalette.soft
+            : Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+                Text(
+                  options[value] ?? context.tr('discoverAll'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: enabled ? null : Theme.of(context).disabledColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 16,
+            color: enabled ? null : Theme.of(context).disabledColor,
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -2168,6 +2393,7 @@ EventItem _eventFromApi(BuildContext context, Map<String, dynamic> json) {
     coverSubcategoryCode: json['cover_subcategory_code'] as String?,
     localizedContent: json,
     priceAmount: priceAmount,
+    distanceMeters: distanceMeters,
     organizerRiskTag: json['organizer_risk_tag'] as String?,
     title: '${json['title'] ?? ''}',
     category: '${json['category_name'] ?? ''}',
@@ -2195,10 +2421,6 @@ EventItem _eventFromApi(BuildContext context, Map<String, dynamic> json) {
     tags: [
       '${json['category_name'] ?? ''}',
       json['approval_mode'] == 'manual' ? '需审核' : '直接加入',
-      if (json['beginner_friendly'] == true)
-        json['beginner_friendly_verified'] == true
-            ? context.tr('beginnerFriendlyVerified')
-            : context.tr('beginnerFriendly'),
     ],
   );
 }
@@ -2922,16 +3144,28 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                       Text(
                         nickname,
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineSmall,
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         '♥ ${context.tr('profileLikes')} ${profile['like_count'] ?? 0}',
                         style: const TextStyle(
-                          color: Colors.pink,
+                          color: Color(0xFFFFB9DB),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (tags.isEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          context.tr('profileNoTags'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Color(0xFFC8D9F5)),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -2998,41 +3232,63 @@ class _ProfileOrbitState extends State<_ProfileOrbit>
     if (animate && !_motion.isAnimating) _motion.repeat();
     if (!animate && _motion.isAnimating) _motion.stop();
 
-    Widget band(int parity) => Wrap(
-      spacing: 8,
-      runSpacing: 12,
-      alignment: WrapAlignment.center,
-      children: [
-        for (var i = parity; i < widget.tags.length; i += 2)
-          AnimatedBuilder(
-            animation: _motion,
-            child: _tag(context, widget.tags[i]),
-            builder: (_, child) => Transform.translate(
-              offset: Offset(
-                0,
-                animate
-                    ? 3 * math.sin(_motion.value * 2 * math.pi + i * 1.3)
-                    : 0,
-              ),
-              child: child,
-            ),
-          ),
+    final anchors = switch (widget.tags.length) {
+      1 => const [Alignment(.50, -.63)],
+      2 => const [Alignment(-.52, -.62), Alignment(.52, .66)],
+      _ => const [
+        Alignment(-.62, -.65),
+        Alignment(.66, -.49),
+        Alignment(.57, .68),
+        Alignment(-.67, .52),
+        Alignment(.1, -.91),
+        Alignment(-.1, .91),
       ],
-    );
-
+    };
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 440),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+      constraints: const BoxConstraints(maxWidth: 480, minHeight: 338),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: AppPalette.soft,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
+        gradient: const RadialGradient(
+          radius: .83,
+          colors: [Color(0xFF405B8B), Color(0xFF232A54), Color(0xFF15182F)],
+        ),
       ),
-      child: Column(
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          if (widget.tags.isNotEmpty) ...[band(0), const SizedBox(height: 18)],
-          widget.child,
-          if (widget.tags.length > 1) ...[const SizedBox(height: 18), band(1)],
+          const Positioned.fill(child: CustomPaint(painter: _OrbitLines())),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(30, 104, 30, 104),
+            child: widget.child,
+          ),
+          for (var i = 0; i < widget.tags.length; i++)
+            Positioned.fill(
+              child: Align(
+                alignment: anchors[i],
+                child: FractionallySizedBox(
+                  widthFactor: .48,
+                  child: Center(
+                    widthFactor: 1,
+                    heightFactor: 1,
+                    child: AnimatedBuilder(
+                      animation: _motion,
+                      child: _tag(context, widget.tags[i]),
+                      builder: (_, child) {
+                        final phase = _motion.value * 2 * math.pi + i * 1.4;
+                        return Transform.translate(
+                          offset: animate
+                              ? Offset(3 * math.cos(phase), 5 * math.sin(phase))
+                              : Offset.zero,
+                          child: child,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -3043,7 +3299,14 @@ class _ProfileOrbitState extends State<_ProfileOrbit>
     final count = tag['count'] as num?;
     final text = count == null ? label : '$label ×${count.toInt()}';
     return ActionChip(
-      label: Text(text),
+      label: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+      backgroundColor: const Color(0xD4364770),
+      labelStyle: const TextStyle(
+        color: Color(0xFFE1EEFF),
+        fontWeight: FontWeight.w600,
+      ),
+      shape: const StadiumBorder(),
+      side: const BorderSide(color: Color(0xFF7185AC)),
       onPressed: () => showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
@@ -3061,6 +3324,47 @@ class _ProfileOrbitState extends State<_ProfileOrbit>
       ),
     );
   }
+}
+
+class _OrbitLines extends CustomPainter {
+  const _OrbitLines();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final line = Paint()
+      ..color = const Color(0x507990C4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(-.24);
+    for (final scale in [.64, .84, 1.0]) {
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset.zero,
+          width: size.width * .85 * scale,
+          height: size.height * .63 * scale,
+        ),
+        line,
+      );
+    }
+    canvas.restore();
+    final star = Paint()..color = const Color(0x907EC9FF);
+    for (var i = 0; i < 24; i++) {
+      canvas.drawCircle(
+        Offset(
+          size.width * ((i * 37 + 11) % 101) / 101,
+          size.height * ((i * 59 + 17) % 103) / 103,
+        ),
+        i % 5 == 0 ? 1.6 : .7,
+        star,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_OrbitLines oldDelegate) => false;
 }
 
 class _Pill extends StatelessWidget {
@@ -4204,14 +4508,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         description: _description.text.trim().isEmpty
             ? '一起度过轻松愉快的时间，欢迎第一次参加的新朋友。'
             : _description.text.trim(),
-        tags: [
-          _category,
-          _approval ? '需审核' : '直接加入',
-          if (createdBeginnerFriendly)
-            createdBeginnerFriendlyVerified
-                ? context.tr('beginnerFriendlyVerified')
-                : context.tr('beginnerFriendly'),
-        ],
+        tags: [_category, _approval ? '需审核' : '直接加入'],
       ),
     );
     _title.clear();

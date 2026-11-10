@@ -2,7 +2,7 @@ namespace Muda.Api.Infrastructure;
 
 public static class ActivityQueries
 {
-    public const string List = """
+    private const string Matching = """
                 WITH matching AS (
                 SELECT count(*) OVER () AS total_count, e.id, e.created_at, e.title, e.description, e.status, e.visibility, e.approval_mode,
                        e.min_participants, e.capacity, e.approved_count, e.waitlist_count,
@@ -90,10 +90,27 @@ public static class ActivityQueries
                   AND (NOT @hasGeo OR p.public_geo IS NULL OR ST_DWithin(
                         p.public_geo, ST_Point(@longitude, @latitude, 4326)::geography, @radius))
                 )
+                """;
+
+    public const string List = Matching + """
+
                 SELECT * FROM matching
                 WHERE NOT @hasCursor OR created_at < @cursorCreatedAt
                    OR (created_at = @cursorCreatedAt AND id < @cursorActivityId)
                 ORDER BY created_at DESC, id DESC
                 LIMIT @limit
                 """;
+
+    public const string Recommended = Matching + """
+
+                SELECT * FROM matching
+                WHERE NOT @hasCursor OR
+                    (COALESCE(distance_meters, 'Infinity'::double precision),
+                     COALESCE(starts_at, 'infinity'::timestamptz), id) >
+                    (COALESCE(@cursorDistance, 'Infinity'::double precision),
+                     COALESCE(@cursorStart, 'infinity'::timestamptz), @cursorActivityId)
+                ORDER BY distance_meters ASC NULLS LAST, starts_at ASC NULLS LAST, id
+                LIMIT @limit
+                """;
+
 }

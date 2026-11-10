@@ -73,7 +73,7 @@ void main() {
       );
       final image = tester.widget<Image>(
         find.descendant(
-          of: find.byType(EventCard),
+          of: find.byType(ListTile),
           matching: find.byType(Image),
         ),
       );

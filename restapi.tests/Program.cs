@@ -89,11 +89,17 @@ var timestamp = new DateTime(2026, 9, 11, 12, 30, 15, DateTimeKind.Utc).AddTicks
 var encoded = ActivityCursor.Encode(timestamp, id);
 var decoded = ActivityCursor.Decode(encoded)!;
 Check(decoded.CreatedAt == timestamp && decoded.ActivityId == id, "Cursor roundtrip lost precision");
+var ranked = ActivityCursor.Decode(ActivityCursor.Encode(timestamp, id, true, 450.25, timestamp))!;
+Check(ranked.Recommended && ranked.Distance == 450.25 && ranked.Start == timestamp,
+    "Recommendation cursor preserves distance and start time");
+var unlocated = ActivityCursor.Decode(ActivityCursor.Encode(timestamp, id, true))!;
+Check(unlocated.Recommended && unlocated.Distance is null && unlocated.Start is null,
+    "Recommendation cursor preserves missing sort values");
 Check(ActivityCursor.Decode(null) is null, "First page should have no cursor");
 string Payload(int version, DateTime time, Guid key) => WebEncoders.Base64UrlEncode(
     JsonSerializer.SerializeToUtf8Bytes(new { Version = version, CreatedAt = time, ActivityId = key }));
 foreach (var invalid in new[] { "", " ", "%%%", "a", new string('a', 513),
-    WebEncoders.Base64UrlEncode("{}"u8.ToArray()), Payload(2, timestamp, id),
+    WebEncoders.Base64UrlEncode("{}"u8.ToArray()), Payload(3, timestamp, id),
     Payload(1, timestamp, Guid.Empty), Payload(1, DateTime.SpecifyKind(timestamp, DateTimeKind.Unspecified), id) })
 {
     try { ActivityCursor.Decode(invalid); throw new Exception("Invalid cursor accepted"); }

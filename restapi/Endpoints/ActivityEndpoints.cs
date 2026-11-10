@@ -19,14 +19,16 @@ public static class ActivityEndpoints
             int? radiusMeters,
             int? limit,
             string? cursor,
+            string? sort,
             CancellationToken ct) =>
         {
             var take = Math.Clamp(limit ?? 20, 1, 100);
             var position = ActivityCursor.Decode(cursor);
+            var recommended = position?.Recommended ?? (sort == "recommended");
             var hasGeo = latitude.HasValue && longitude.HasValue;
             var radius = Math.Clamp(radiusMeters ?? 20000, 500, 100000);
             var rows = await db.QueryAsync(
-                ActivityQueries.List,
+                recommended ? ActivityQueries.Recommended : ActivityQueries.List,
                 new
                 {
                     city,
@@ -43,6 +45,8 @@ public static class ActivityEndpoints
                     limit = take + 1,
                     hasCursor = position is not null,
                     cursorCreatedAt = position?.CreatedAt ?? DateTime.UnixEpoch,
+                    cursorDistance = position?.Distance,
+                    cursorStart = position?.Start,
                     cursorActivityId = position?.ActivityId ?? Guid.Empty
                 }, ct);
             var totalCount = rows.Count == 0 ? 0L : (long)rows[0]["total_count"]!;
@@ -51,7 +55,9 @@ public static class ActivityEndpoints
             if (hasMore) rows.RemoveAt(rows.Count - 1);
             await ActivityLocalization.AttachAsync(db, rows, ct);
             var nextCursor = hasMore
-                ? ActivityCursor.Encode((DateTime)rows[^1]["created_at"]!, (Guid)rows[^1]["id"]!)
+                ? ActivityCursor.Encode((DateTime)rows[^1]["created_at"]!, (Guid)rows[^1]["id"]!, recommended,
+                    recommended ? (double?)rows[^1]["distance_meters"] : null,
+                    recommended ? (DateTime?)rows[^1]["starts_at"] : null)
                 : null;
             return ApiSupport.Ok(new ActivityPage(rows, nextCursor, hasMore, totalCount));
         });
