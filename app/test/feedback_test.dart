@@ -8,7 +8,6 @@ import 'package:zaihandazi/auth.dart';
 import 'package:zaihandazi/feedback.dart';
 import 'package:zaihandazi/feedback_model.dart';
 import 'package:zaihandazi/main.dart';
-import 'package:zaihandazi/emoji_picture.dart';
 
 void main() {
   testWidgets(
@@ -86,23 +85,21 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
-      expect(
-        find.byWidgetPredicate(
-          (widget) => widget is EmojiPicture && widget.emoji == '❤',
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget is Text &&
-              widget.textSpan?.toPlainText(includePlaceholders: false).trim() ==
-                  '7',
-        ),
-        findsOneWidget,
-      );
-      expect(find.text('值得信赖'), findsOneWidget);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('♥ 获赞 7'), findsOneWidget);
+      final tag = find.widgetWithText(ActionChip, '值得信赖 ×3');
+      expect(tag, findsOneWidget);
+      final position = tester.getTopLeft(tag);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(tester.getTopLeft(tag).dy, isNot(position.dy));
+      await tester.tap(tag);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(find.text('来自活动后的参与者评价'), findsOneWidget);
+      Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
       expect(find.text('喜欢'), findsOneWidget);
       expect(find.text('举报'), findsOneWidget);
     }, () => client);

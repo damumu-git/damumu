@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -1877,8 +1878,9 @@ class DiscoverPage extends StatefulWidget {
 }
 
 class _DiscoverPageState extends State<DiscoverPage> {
-  bool _map = false;
-  String _category = '全部';
+  String? _area;
+  String? _category;
+  final _filters = <String>{};
   final _search = TextEditingController();
 
   @override
@@ -1890,105 +1892,219 @@ class _DiscoverPageState extends State<DiscoverPage> {
   @override
   Widget build(BuildContext context) {
     final query = _search.text.trim().toLowerCase();
-    final visible = widget.events
-        .where(
-          (e) =>
-              !e.isExpired &&
-              (_category == '全部' || e.category == _category) &&
-              (query.isEmpty ||
-                  activityText(
-                    context,
-                    e.localizedContent,
-                    'title',
-                    e.title,
-                  ).toLowerCase().contains(query) ||
-                  e.area.toLowerCase().contains(query) ||
-                  activityRegionSearchText(e.localizedContent).contains(query)),
-        )
-        .toList();
-    return Column(
-      children: [
-        PagePadding(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final saturday = DateTime(
+      now.year,
+      now.month,
+      now.day + (now.weekday == DateTime.sunday ? -1 : 6 - now.weekday),
+    );
+    final monday = DateTime(saturday.year, saturday.month, saturday.day + 2);
+    String category(EventItem event) => activityText(
+      context,
+      event.localizedContent,
+      'category',
+      event.category,
+    );
+    String title(EventItem event) =>
+        activityText(context, event.localizedContent, 'title', event.title);
+    bool canJoin(EventItem event) =>
+        !event.isPast &&
+        (event.approval || event.joined < event.capacity) &&
+        !event.isOwned &&
+        !event.isJoined;
+    final upcoming = widget.events.where((event) => !event.isPast).toList();
+    final areas =
+        upcoming
+            .expand((event) => [event.area.split(' · ').first, event.area])
+            .where((area) => area.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    final categories =
+        upcoming.map(category).where((name) => name.isNotEmpty).toSet().toList()
+          ..sort();
+    final visible =
+        upcoming.where((event) {
+          final start = event.startsAt?.toLocal();
+          if (_area != null &&
+              event.area != _area &&
+              !event.area.startsWith('$_area · '))
+            return false;
+          if (_category != null && category(event) != _category) return false;
+          if (_filters.contains('discoverToday') &&
+              (start == null || DateUtils.dateOnly(start) != today))
+            return false;
+          if (_filters.contains('discoverWeekend') &&
+              (start == null ||
+                  start.isBefore(saturday) ||
+                  !start.isBefore(monday))) {
+            return false;
+          }
+          if (_filters.contains('beginnerFriendly') && !event.beginnerFriendly)
+            return false;
+          if (_filters.contains('discoverFree') && event.priceAmount != 0)
+            return false;
+          if (_filters.contains('discoverOpen') && !canJoin(event))
+            return false;
+          return '${title(event)} ${event.area} ${activityRegionSearchText(event.localizedContent)}'
+              .toLowerCase()
+              .contains(query);
+        }).toList()..sort((a, b) {
+          final first = a.startsAt;
+          final second = b.startsAt;
+          if (first == null) return second == null ? 0 : 1;
+          if (second == null) return -1;
+          return first.compareTo(second);
+        });
+
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh ?? () async {},
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        children: [
+          Text(
+            context.tr('discover'),
+            style: Theme.of(context).textTheme.headlineLarge,
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _search,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: context.tr('discoverSearch'),
+              prefixIcon: const Icon(Icons.search),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
             children: [
-              Row(
-                children: [
-                  Text('发现', style: Theme.of(context).textTheme.headlineLarge),
-                  const Spacer(),
-                  SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(
-                        value: false,
-                        icon: Icon(Icons.view_agenda_outlined),
-                      ),
-                      ButtonSegment(
-                        value: true,
-                        icon: Icon(Icons.map_outlined),
-                      ),
-                    ],
-                    selected: {_map},
-                    showSelectedIcon: false,
-                    onSelectionChanged: (v) => setState(() => _map = v.first),
-                  ),
-                ],
+              _DiscoverMenu(
+                label: context.tr('discoverArea'),
+                value: _area,
+                options: areas,
+                onChanged: (value) => setState(() => _area = value),
               ),
-              const SizedBox(height: 18),
-              TextField(
-                controller: _search,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  hintText: '搜索活动或地点',
-                  prefixIcon: Icon(Icons.search),
+              _DiscoverMenu(
+                label: context.tr('discoverCategory'),
+                value: _category,
+                options: categories,
+                onChanged: (value) => setState(() => _category = value),
+              ),
+              for (final filter in [
+                'discoverToday',
+                'discoverWeekend',
+                'beginnerFriendly',
+                'discoverFree',
+                'discoverOpen',
+              ])
+                FilterChip(
+                  label: Text(context.tr(filter)),
+                  selected: _filters.contains(filter),
+                  onSelected: (selected) => setState(() {
+                    if (selected) {
+                      if (filter == 'discoverToday')
+                        _filters.remove('discoverWeekend');
+                      if (filter == 'discoverWeekend')
+                        _filters.remove('discoverToday');
+                      _filters.add(filter);
+                    } else {
+                      _filters.remove(filter);
+                    }
+                  }),
                 ),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                height: 38,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: ['全部', '户外', '语言', '运动', '桌游'].map((label) {
-                    final selected = _category == label;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(label),
-                        selected: selected,
-                        onSelected: (_) => setState(() => _category = label),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
             ],
           ),
-        ),
-        Expanded(
-          child: widget.loading
-              ? const _EventListSkeleton()
-              : widget.loadFailed
-              ? LoadFailure(onRetry: widget.onRetry ?? () {})
-              : _map
-              ? MapPlaceholder(events: visible, onOpen: widget.onOpen)
-              : RefreshIndicator(
-                  onRefresh: widget.onRefresh ?? () async {},
-                  child: ListView.separated(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                    itemCount: visible.length + (widget.footer == null ? 0 : 1),
-                    itemBuilder: (_, i) => i == visible.length
-                        ? widget.footer!
-                        : EventCard(
-                            event: visible[i],
-                            onTap: () => widget.onOpen(visible[i]),
-                          ),
-                    separatorBuilder: (_, _) => const SizedBox(height: 14),
+          const SizedBox(height: 14),
+          if (widget.loading)
+            const Center(child: CircularProgressIndicator())
+          else if (widget.loadFailed)
+            LoadFailure(onRetry: widget.onRetry ?? () {})
+          else ...[
+            if (visible.isEmpty) ...[
+              Text(context.tr('discoverEmpty')),
+              if (query.isNotEmpty ||
+                  _area != null ||
+                  _category != null ||
+                  _filters.isNotEmpty)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(
+                    onPressed: () => setState(() {
+                      _search.clear();
+                      _area = null;
+                      _category = null;
+                      _filters.clear();
+                    }),
+                    child: Text(context.tr('discoverReset')),
                   ),
                 ),
-        ),
-      ],
+            ],
+            for (final event in visible)
+              Card(
+                child: ListTile(
+                  leading: EmojiPicture(
+                    event.emoji,
+                    url: event.emojiUrl,
+                    size: 26,
+                  ),
+                  title: Text(
+                    title(event),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    [
+                      event.time,
+                      if (event.area.isNotEmpty) event.area,
+                      event.priceAmount == null
+                          ? event.price
+                          : activityPrice(context, event.priceAmount!),
+                      if (canJoin(event)) context.tr('discoverOpen'),
+                    ].join(' · '),
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => widget.onOpen(event),
+                ),
+              ),
+            if (widget.footer != null) widget.footer!,
+          ],
+        ],
+      ),
     );
   }
+}
+
+class _DiscoverMenu extends StatelessWidget {
+  const _DiscoverMenu({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String? value;
+  final List<String> options;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<String>(
+    tooltip: label,
+    onSelected: (selection) => onChanged(selection.isEmpty ? null : selection),
+    itemBuilder: (context) => [
+      PopupMenuItem(value: '', child: Text(context.tr('discoverAll'))),
+      for (final option in options)
+        PopupMenuItem(value: option, child: Text(option)),
+    ],
+    child: Chip(
+      label: Text(value ?? label),
+      avatar: const Icon(Icons.expand_more, size: 18),
+    ),
+  );
 }
 
 class _EventPaginationFooter extends StatelessWidget {
@@ -2027,117 +2143,6 @@ class _EventPaginationFooter extends StatelessWidget {
       ],
     ),
   );
-}
-
-class MapPlaceholder extends StatelessWidget {
-  const MapPlaceholder({required this.events, required this.onOpen, super.key});
-  final List<EventItem> events;
-  final ValueChanged<EventItem> onOpen;
-
-  @override
-  Widget build(BuildContext context) => Stack(
-    children: [
-      Container(
-        margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE5E8DE),
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: CustomPaint(
-          painter: _MapPainter(),
-          child: const SizedBox.expand(),
-        ),
-      ),
-      ...events.take(4).toList().asMap().entries.map((entry) {
-        final positions = [
-          const Offset(.25, .25),
-          const Offset(.65, .18),
-          const Offset(.55, .52),
-          const Offset(.22, .66),
-        ];
-        final pos = positions[entry.key];
-        return Positioned(
-          left: MediaQuery.sizeOf(context).width * pos.dx,
-          top: MediaQuery.sizeOf(context).height * pos.dy * .55,
-          child: GestureDetector(
-            onTap: () => onOpen(entry.value),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: const BoxDecoration(
-                color: _green,
-                shape: BoxShape.circle,
-              ),
-              child: EmojiPicture(
-                entry.value.emoji,
-                url: entry.value.emojiUrl,
-                size: 20,
-              ),
-            ),
-          ),
-        );
-      }),
-      Positioned(
-        left: 35,
-        right: 35,
-        bottom: 40,
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                const Icon(Icons.privacy_tip_outlined, color: _green),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '公开地图仅显示区域范围，报名通过后才展示准确集合点',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
-class _MapPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final road = Paint()
-      ..color = Colors.white.withValues(alpha: .9)
-      ..strokeWidth = 13
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(
-      Offset(0, size.height * .35),
-      Offset(size.width, size.height * .58),
-      road,
-    );
-    canvas.drawLine(
-      Offset(size.width * .3, 0),
-      Offset(size.width * .42, size.height),
-      road,
-    );
-    canvas.drawLine(
-      Offset(0, size.height * .78),
-      Offset(size.width, size.height * .2),
-      road,
-    );
-    final river = Paint()
-      ..color = const Color(0xFFAEDBE7)
-      ..strokeWidth = 35
-      ..style = PaintingStyle.stroke;
-    canvas.drawLine(
-      Offset(0, size.height * .55),
-      Offset(size.width, size.height * .82),
-      river,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 EventItem _eventFromApi(BuildContext context, Map<String, dynamic> json) {
@@ -2878,70 +2883,58 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
         }
         final profile = snapshot.data!;
         final nickname = '${profile['nickname'] ?? '用户'}';
+        final tags = (profile['positive_tags'] as List? ?? const [])
+            .whereType<Map>()
+            .take(6)
+            .toList();
+        final avatarUrl = profile['avatar_url'] as String?;
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(20),
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Tooltip(
-                  message: context.tr('viewAvatar'),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(52),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => AvatarPreviewPage(
-                          nickname: nickname,
-                          avatarUrl: profile['avatar_url'] as String?,
+                _ProfileOrbit(
+                  tags: tags,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Tooltip(
+                        message: context.tr('viewAvatar'),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(48),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => AvatarPreviewPage(
+                                nickname: nickname,
+                                avatarUrl: avatarUrl,
+                              ),
+                            ),
+                          ),
+                          child: UserAvatarImage(
+                            nickname: nickname,
+                            avatarUrl: avatarUrl,
+                            radius: 48,
+                          ),
                         ),
                       ),
-                    ),
-                    child: UserAvatarImage(
-                      nickname: nickname,
-                      avatarUrl: profile['avatar_url'] as String?,
-                      radius: 52,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  nickname,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text.rich(
-                  TextSpan(
-                    children: [
-                      const WidgetSpan(child: EmojiPicture('❤', size: 18)),
-                      TextSpan(text: " ${profile['like_count'] ?? 0}"),
+                      const SizedBox(height: 12),
+                      Text(
+                        nickname,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '♥ ${context.tr('profileLikes')} ${profile['like_count'] ?? 0}',
+                        style: const TextStyle(
+                          color: Colors.pink,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ],
                   ),
-                  style: const TextStyle(
-                    color: Colors.pink,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                  ),
                 ),
-                if (profile['positive_tags'] is List &&
-                    (profile['positive_tags'] as List).isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: (profile['positive_tags'] as List)
-                        .map(
-                          (tag) => _Pill(
-                            feedbackTagLabel(context, '${tag['tag_code']}'),
-                            green: true,
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
                 if (widget.eventId != null &&
                     profile['feedback_eligible'] == true)
                   FeedbackActionGrid(
@@ -2973,6 +2966,101 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
       },
     ),
   );
+}
+
+class _ProfileOrbit extends StatefulWidget {
+  const _ProfileOrbit({required this.tags, required this.child});
+
+  final List<Map> tags;
+  final Widget child;
+
+  @override
+  State<_ProfileOrbit> createState() => _ProfileOrbitState();
+}
+
+class _ProfileOrbitState extends State<_ProfileOrbit>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _motion = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 5),
+  );
+
+  @override
+  void dispose() {
+    _motion.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final animate =
+        widget.tags.isNotEmpty && !MediaQuery.disableAnimationsOf(context);
+    if (animate && !_motion.isAnimating) _motion.repeat();
+    if (!animate && _motion.isAnimating) _motion.stop();
+
+    Widget band(int parity) => Wrap(
+      spacing: 8,
+      runSpacing: 12,
+      alignment: WrapAlignment.center,
+      children: [
+        for (var i = parity; i < widget.tags.length; i += 2)
+          AnimatedBuilder(
+            animation: _motion,
+            child: _tag(context, widget.tags[i]),
+            builder: (_, child) => Transform.translate(
+              offset: Offset(
+                0,
+                animate
+                    ? 3 * math.sin(_motion.value * 2 * math.pi + i * 1.3)
+                    : 0,
+              ),
+              child: child,
+            ),
+          ),
+      ],
+    );
+
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(maxWidth: 440),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+      decoration: BoxDecoration(
+        color: AppPalette.soft,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        children: [
+          if (widget.tags.isNotEmpty) ...[band(0), const SizedBox(height: 18)],
+          widget.child,
+          if (widget.tags.length > 1) ...[const SizedBox(height: 18), band(1)],
+        ],
+      ),
+    );
+  }
+
+  Widget _tag(BuildContext context, Map tag) {
+    final label = feedbackTagLabel(context, '${tag['tag_code']}');
+    final count = tag['count'] as num?;
+    final text = count == null ? label : '$label ×${count.toInt()}';
+    return ActionChip(
+      label: Text(text),
+      onPressed: () => showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(text),
+          content: Text(context.tr('profileTagSource')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(
+                MaterialLocalizations.of(dialogContext).okButtonLabel,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _Pill extends StatelessWidget {
