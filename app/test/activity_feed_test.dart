@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,6 +50,95 @@ void main() {
     await tester.tap(find.byKey(const Key('main-nav-1')));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('navigation adapts when the viewport is resized', (tester) async {
+    final auth = AuthController()
+      ..user = const AuthUser(
+        id: 'test-user',
+        nickname: 'Tester',
+        email: 'test@example.com',
+        avatarUrl: 'system:sprout',
+      );
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(
+      DaziApp(
+        home: AuthScope(
+          controller: auth,
+          child: const AppShell(loadRemoteEvents: false),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('main-nav-1')), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
+
+    await tester.binding.setSurfaceSize(const Size(1100, 660));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('main-nav-1')), findsNothing);
+    expect(find.byType(NavigationRail), findsOneWidget);
+    final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
+    rail.onDestinationSelected!(1);
+    await tester.pumpAndSettle();
+
+    await tester.binding.setSurfaceSize(const Size(600, 800));
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.text('发现'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('web feed fits its cards to the available width', (tester) async {
+    final auth = AuthController()
+      ..user = const AuthUser(
+        id: 'test-user',
+        nickname: 'Tester',
+        email: 'test@example.com',
+        avatarUrl: 'system:sprout',
+      );
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(
+      DaziApp(
+        home: AuthScope(
+          controller: auth,
+          child: AppShell(
+            loadRemoteEvents: false,
+            eventLoader:
+                ({
+                  latitude,
+                  longitude,
+                  city,
+                  district,
+                  required limit,
+                  cursor,
+                }) async => const ActivityPage(
+                  items: [
+                    {'id': 'walk', 'title': 'Weekend walk', 'capacity': 6},
+                  ],
+                  nextCursor: null,
+                  hasMore: false,
+                ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    int columns() =>
+        (tester.widget<SliverGrid>(find.byType(SliverGrid)).gridDelegate
+                as SliverGridDelegateWithFixedCrossAxisCount)
+            .crossAxisCount;
+    expect(columns(), 1);
+
+    await tester.binding.setSurfaceSize(const Size(650, 800));
+    await tester.pumpAndSettle();
+    expect(columns(), 2);
+
+    await tester.binding.setSurfaceSize(const Size(1200, 800));
+    await tester.pumpAndSettle();
+    expect(columns(), 4);
+    expect(tester.takeException(), isNull);
+  }, skip: !kIsWeb);
 
   testWidgets(
     'discovery uses the small category cover and ignores the uploaded photo',

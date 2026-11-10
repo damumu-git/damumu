@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -204,7 +205,7 @@ class _DaziAppState extends State<DaziApp> with WidgetsBindingObserver {
               );
               ErrorWidget.builder = _installedErrorBuilder!;
             }
-            return Actions(
+            final app = Actions(
               actions: {
                 EditableTextTapOutsideIntent:
                     CallbackAction<EditableTextTapOutsideIntent>(
@@ -215,6 +216,27 @@ class _DaziAppState extends State<DaziApp> with WidgetsBindingObserver {
                     ),
               },
               child: child!,
+            );
+            if (!kIsWeb) return app;
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final width = math.min(constraints.maxWidth, 1200.0);
+                return ColoredBox(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  child: Center(
+                    child: SizedBox(
+                      width: width,
+                      height: constraints.maxHeight,
+                      child: MediaQuery(
+                        data: MediaQuery.of(
+                          context,
+                        ).copyWith(size: Size(width, constraints.maxHeight)),
+                        child: app,
+                      ),
+                    ),
+                  ),
+                );
+              },
             );
           },
           title: '搭慕',
@@ -719,36 +741,84 @@ class _AppShellState extends State<AppShell> {
       MessagesPage(key: _messagesKey, onUnreadChanged: _loadUnread),
       const ProfilePage(),
     ];
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            if ((_index == 0 || _index == 1) &&
-                notification.depth == 0 &&
-                notification is ScrollUpdateNotification &&
-                (notification.scrollDelta ?? 0) > 0 &&
-                notification.metrics.extentAfter < 240 &&
-                !_moreEventsFailed) {
-              _loadMoreEvents();
-            }
-            return false;
-          },
-          child: IndexedStack(index: _index, children: pages),
-        ),
-      ),
-      bottomNavigationBar: _FloatingDock(
-        selectedIndex: _index,
-        unread: _unread,
-        labels: [
-          context.tr('home'),
-          context.tr('discover'),
-          context.tr('create'),
-          context.tr('messages'),
-          context.tr('profile'),
-        ],
-        onSelected: _selectTab,
-      ),
+    final labels = [
+      context.tr('home'),
+      context.tr('discover'),
+      context.tr('create'),
+      context.tr('messages'),
+      context.tr('profile'),
+    ];
+    final pageStack = NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if ((_index == 0 || _index == 1) &&
+            notification.depth == 0 &&
+            notification is ScrollUpdateNotification &&
+            (notification.scrollDelta ?? 0) > 0 &&
+            notification.metrics.extentAfter < 240 &&
+            !_moreEventsFailed) {
+          _loadMoreEvents();
+        }
+        return false;
+      },
+      child: IndexedStack(index: _index, children: pages),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 900;
+        return Scaffold(
+          body: SafeArea(
+            bottom: wide,
+            child: Row(
+              children: [
+                if (wide) ...[
+                  NavigationRail(
+                    minWidth: 104,
+                    scrollable: true,
+                    leading: kIsWeb
+                        ? Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 14, 12, 20),
+                            child: Text(
+                              'DAMU',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: _ink,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 2,
+                                  ),
+                            ),
+                          )
+                        : null,
+                    selectedIndex: _index,
+                    onDestinationSelected: _selectTab,
+                    labelType: NavigationRailLabelType.all,
+                    destinations: [
+                      for (var i = 0; i < labels.length; i++)
+                        NavigationRailDestination(
+                          icon: Badge.count(
+                            count: _unread,
+                            isLabelVisible: i == 3 && _unread > 0,
+                            child: Icon(_FloatingDock._icons[i]),
+                          ),
+                          label: Text(labels[i]),
+                        ),
+                    ],
+                  ),
+                  const VerticalDivider(width: 1),
+                ],
+                Expanded(child: pageStack),
+              ],
+            ),
+          ),
+          bottomNavigationBar: wide
+              ? null
+              : _FloatingDock(
+                  selectedIndex: _index,
+                  unread: _unread,
+                  labels: labels,
+                  onSelected: _selectTab,
+                ),
+        );
+      },
     );
   }
 }
@@ -1163,6 +1233,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final events = _visibleEvents;
     final list = CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -1178,18 +1249,20 @@ class _HomePageState extends State<HomePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            context.tr('previewBrandLine'),
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: _green,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.5,
+                          if (!kIsWeb) ...[
+                            Text(
+                              context.tr('previewBrandLine'),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: _green,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.5,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
+                            const SizedBox(height: 8),
+                          ],
                           Text(
-                            context.tr('homeGreeting'),
+                            context.tr(kIsWeb ? 'home' : 'homeGreeting'),
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                         ],
@@ -1237,46 +1310,47 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: _ink,
-                    borderRadius: BorderRadius.circular(AppPalette.radius),
+                if (!kIsWeb)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: _ink,
+                      borderRadius: BorderRadius.circular(AppPalette.radius),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.tr('homeEyebrow'),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AppPalette.primary,
+                            letterSpacing: 2,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          context.tr('homeHeroTitle'),
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            height: 1.4,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          context.tr('homeHeroSubtitle'),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFFBDD3E2),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.tr('homeEyebrow'),
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppPalette.primary,
-                          letterSpacing: 2,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        context.tr('homeHeroTitle'),
-                        style: const TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                          height: 1.4,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        context.tr('homeHeroSubtitle'),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFFBDD3E2),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: 18),
               ],
             ),
@@ -1353,13 +1427,41 @@ class _HomePageState extends State<HomePage> {
               ? const SliverToBoxAdapter(child: _EventListSkeleton())
               : widget.loadFailed
               ? SliverToBoxAdapter(child: LoadFailure(onRetry: widget.onRetry))
-              : _visibleEvents.isEmpty
+              : events.isEmpty
               ? SliverToBoxAdapter(child: _EmptySearch(onClear: _clearFilters))
+              : kIsWeb
+              ? SliverLayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.crossAxisExtent;
+                    final columns = switch (width) {
+                      >= 1010 => 4,
+                      >= 710 => 3,
+                      >= 470 => 2,
+                      _ => 1,
+                    };
+                    final textScale =
+                        MediaQuery.textScalerOf(context).scale(16) / 16;
+                    return SliverGrid.builder(
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 20,
+                        mainAxisExtent:
+                            (columns == 1 ? 190 : 170) + 126 * textScale,
+                      ),
+                      itemCount: events.length,
+                      itemBuilder: (context, index) => _WebEventCard(
+                        event: events[index],
+                        onTap: () => widget.onOpen(events[index]),
+                      ),
+                    );
+                  },
+                )
               : SliverList.separated(
-                  itemCount: _visibleEvents.length,
+                  itemCount: events.length,
                   itemBuilder: (_, index) => EventCard(
-                    event: _visibleEvents[index],
-                    onTap: () => widget.onOpen(_visibleEvents[index]),
+                    event: events[index],
+                    onTap: () => widget.onOpen(events[index]),
                   ),
                   separatorBuilder: (_, _) => const SizedBox(height: 14),
                 ),
@@ -1371,6 +1473,124 @@ class _HomePageState extends State<HomePage> {
     return widget.onRefresh == null
         ? list
         : RefreshIndicator(onRefresh: widget.onRefresh!, child: list);
+  }
+}
+
+class _WebEventCard extends StatelessWidget {
+  const _WebEventCard({required this.event, required this.onTap});
+
+  final EventItem event;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final category = activityText(
+      context,
+      event.localizedContent,
+      'category',
+      event.category,
+    );
+    final time = event.startsAt == null
+        ? context.tr('activityTimeUnknown')
+        : activityTime(context, event.startsAt!);
+    final cover = event.coverUrl;
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: cover == null || cover.isEmpty
+                  ? _ActivityCategoryCover(event: event)
+                  : Image.network(
+                      absoluteImageUrl(cover),
+                      fit: BoxFit.cover,
+                      excludeFromSemantics: true,
+                      errorBuilder: (_, _, _) =>
+                          _ActivityCategoryCover(event: event),
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (category.isNotEmpty)
+                    Text(
+                      category,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: _green,
+                      ),
+                    ),
+                  const SizedBox(height: 4),
+                  Text(
+                    activityText(
+                      context,
+                      event.localizedContent,
+                      'title',
+                      event.title,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    [time, if (event.area.isNotEmpty) event.area].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      UserAvatarImage(
+                        nickname: event.host,
+                        avatarUrl: event.organizerAvatar,
+                        radius: 10,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          event.host,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          event.priceAmount == null
+                              ? event.price
+                              : activityPrice(context, event.priceAmount!),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                          style: theme.textTheme.labelSmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

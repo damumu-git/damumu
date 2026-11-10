@@ -3,8 +3,7 @@
 本目录用于 Ubuntu 24.04 Lightsail 单机测试环境。公网只访问宿主机 Nginx；
 产品主页、API 和 Admin 容器分别绑定 `127.0.0.1:8081`、`8080`、`8082`。
 Nginx 按域名把 `www.damumu.com`、`admin.damumu.com`、`api.damumu.com`
-分别转发给三个服务，`damumu.com` 跳转到 `www.damumu.com`。Flutter `app/`
-只构建 Android/iOS 客户端，不部署 Flutter Web。
+分别转发给三个服务，`damumu.com` 跳转到 `www.damumu.com`。网页版 `app.damumu.com` 由 Flutter `app/` 构建，通过 [独立发布项目](../app-web/README.md) 部署。
 
 ## Ubuntu 目录与图片访问
 

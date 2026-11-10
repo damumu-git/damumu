@@ -20,6 +20,7 @@ DAMUMU（中文 UI 名称“搭慕”）是一款面向韩国本地生活场景�
 - `restapi/Migrations/`：按编号执行的 PostgreSQL 迁移。
 - `admin/`：React/Vite 运营管理后台。
 - `website/`：独立静态产品介绍网站。
+- `app-web/`：面向 `app.damumu.com` 的独立网页发布项目，由 `app/` 生成静态产物。
 - `preview/`：App / Admin 两个离线 UI 设计预览入口，示例数据与正式服务隔离；用于视觉评审，不自动发布或同步生产页面。
 - `docs/`：项目上下文、当前状态与架构决策。
 

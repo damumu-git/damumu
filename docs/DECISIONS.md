@@ -679,7 +679,7 @@ offset 会随列表头部插入/删除发生位置偏移；创建时间与 UUID 
 
 ### 决定
 
-- 测试环境先使用一台 Ubuntu Lightsail 实例。宿主机 Nginx 是唯一公网入口，Admin 和 API 容器只绑定回环地址，不直接开放容器端口；Flutter `app/` 只作为 Android/iOS 客户端构建，不部署 Flutter Web。
+- 测试环境先使用一台 Ubuntu Lightsail 实例。宿主机 Nginx 是唯一公网入口，Admin 和 API 容器只绑定回环地址，不直接开放容器端口；移动端与 Web 复用 Flutter `app/`。网页版通过 `app-web/` 独立发布到 `app.damumu.com`，访问公共 API；宿主机 Nginx 终止 TLS 并转发到回环端口 8083。
 - 公网按主机名分流：`www.damumu.com` 提供独立产品主页，`api.damumu.com` 提供移动端公共 API，`admin.damumu.com` 提供 Admin 及其同源管理 API 代理，根域名跳转到 `www`。三个容器继续只绑定回环端口，Lightsail 不开放 8080 至 8082。
 - `/api/v1/realtime` 保留 WebSocket Upgrade；`/uploads` 和 API 同源。API 的 `uploads` 使用 Docker 命名卷，在单实例阶段保持持久化。
 - 当前 PostgreSQL 位于 Tailscale 私网，Lightsail 必须加入同一 Tailnet；不得为了部署开放公网 5432。
