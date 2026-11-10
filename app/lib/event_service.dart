@@ -108,6 +108,47 @@ class AdministrativeRegion {
       );
 }
 
+List<AdministrativeRegion> administrativeRegionPath(
+  List<AdministrativeRegion> regions,
+  String? cityCode,
+  String? districtCode,
+) {
+  final city = regions
+      .where((region) => region.code == cityCode && region.level == 1)
+      .firstOrNull;
+  if (city == null) return [];
+  final selected = regions
+      .where((region) => region.code == districtCode)
+      .firstOrNull;
+  if (selected == null) return [city];
+  final district = selected.level == 3
+      ? regions
+            .where((region) => region.code == selected.parentCode)
+            .firstOrNull
+      : selected;
+  if (district?.level != 2 || district?.parentCode != city.code) return [city];
+  return [city, district!, if (selected.level == 3) selected];
+}
+
+String regionNameWithoutParent(String name, String parent) =>
+    parent.isNotEmpty && name.startsWith('$parent ')
+    ? name.substring(parent.length).trimLeft()
+    : name;
+
+String administrativeRegionLabel(
+  List<AdministrativeRegion> path,
+  String language,
+) {
+  final names = path.map((region) => region.displayName(language)).toList();
+  if (path.isNotEmpty && path.last.level == 3 && names.length >= 2) {
+    names[names.length - 1] = regionNameWithoutParent(
+      names.last,
+      names[names.length - 2],
+    );
+  }
+  return names.join(' · ');
+}
+
 class RegionService {
   static Future<List<AdministrativeRegion>> resolve({
     required http.Client client,

@@ -231,6 +231,27 @@ void main() {
           await tester.pumpAndSettle();
           expect(selected?.districtCode, 'KR-11200');
           expect(find.text('首尔 · 성동구'), findsOneWidget);
+          await tester.tap(find.text('首尔 · 성동구'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('手动选择地区'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('市／道 · 首尔'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('京畿道'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('所在区域 · 全市'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('水原市'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('下辖区 · 全市'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('八达区'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('使用所选地区'));
+          await tester.pumpAndSettle();
+          expect(selected?.cityCode, 'KR-41');
+          expect(selected?.districtCode, 'KR-41115');
+          expect(find.text('京畿道 · 水原市 · 八达区'), findsOneWidget);
         },
         () => MockClient(
           (_) async => http.Response(
@@ -248,6 +269,19 @@ void main() {
                   'level': 2,
                   'name_zh_cn': '성동구',
                   'name_ko_kr': '성동구',
+                },
+                {'code': 'KR-41', 'level': 1, 'name_zh_cn': '京畿道'},
+                {
+                  'code': 'KR-41110',
+                  'parent_code': 'KR-41',
+                  'level': 2,
+                  'name_zh_cn': '水原市',
+                },
+                {
+                  'code': 'KR-41115',
+                  'parent_code': 'KR-41110',
+                  'level': 3,
+                  'name_zh_cn': '八达区',
                 },
               ],
             }),

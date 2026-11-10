@@ -447,6 +447,17 @@ String _localizedRegionName(
   return json['${prefix}_code']?.toString() ?? '';
 }
 
+String _activityArea(Map<String, dynamic> row, String language) {
+  final province = _localizedRegionName(row, 'city', language);
+  final municipality = _localizedRegionName(row, 'municipality', language);
+  final district = _localizedRegionName(row, 'district', language);
+  return [
+    province,
+    municipality,
+    regionNameWithoutParent(district, municipality),
+  ].where((name) => name.isNotEmpty).join(' · ');
+}
+
 class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
@@ -1088,25 +1099,17 @@ class _HomePageState extends State<HomePage> {
     ManualRegionSelection selection,
     List<AdministrativeRegion> regions,
   ) {
-    AdministrativeRegion? city;
-    AdministrativeRegion? district;
-    for (final region in regions) {
-      if (region.code == selection.cityCode && region.level == 1) city = region;
-      if (region.code == selection.districtCode &&
-          region.parentCode == selection.cityCode) {
-        district = region;
-      }
-    }
-    if (city == null) return null;
+    final path = administrativeRegionPath(
+      regions,
+      selection.cityCode,
+      selection.districtCode,
+    );
+    if (path.isEmpty) return null;
     final language = _locationLanguage ?? 'zh';
-    final label = [
-      city.displayName(language),
-      if (district != null) district.displayName(language),
-    ].join(' · ');
     return AppLocation(
-      label: label,
-      cityCode: city.code,
-      districtCode: district?.code,
+      label: administrativeRegionLabel(path, language),
+      cityCode: path.first.code,
+      districtCode: path.length > 1 ? path.last.code : null,
     );
   }
 
@@ -1612,13 +1615,21 @@ class _ManualLocationSheet extends StatefulWidget {
 class _ManualLocationSheetState extends State<_ManualLocationSheet> {
   String? _cityCode;
   String? _districtCode;
-  bool? _choosingCity;
+  String? _wardCode;
+  int? _choosingLevel;
 
   List<AdministrativeRegion> get _cities =>
       widget.regions.where((region) => region.level == 1).toList();
 
-  List<AdministrativeRegion> get _districts =>
-      widget.regions.where((region) => region.parentCode == _cityCode).toList();
+  List<AdministrativeRegion> get _districts => widget.regions
+      .where((region) => region.level == 2 && region.parentCode == _cityCode)
+      .toList();
+
+  List<AdministrativeRegion> get _wards => widget.regions
+      .where(
+        (region) => region.level == 3 && region.parentCode == _districtCode,
+      )
+      .toList();
 
   @override
   void initState() {
@@ -1628,41 +1639,64 @@ class _ManualLocationSheetState extends State<_ManualLocationSheet> {
     _cityCode = cities.any((city) => city.code == initialCity)
         ? initialCity
         : (cities.isEmpty ? null : cities.first.code);
-    final districts = _districts;
-    final initialDistrict = widget.initialSelection?.districtCode;
-    _districtCode =
-        districts.any((district) => district.code == initialDistrict)
-        ? initialDistrict
-        : null;
+    final path = administrativeRegionPath(
+      widget.regions,
+      _cityCode,
+      widget.initialSelection?.districtCode,
+    );
+    _districtCode = path.elementAtOrNull(1)?.code;
+    _wardCode = path.elementAtOrNull(2)?.code;
   }
 
   @override
   Widget build(BuildContext context) {
     final cities = _cities;
     final districts = _districts;
+    final wards = _wards;
     String? selectedName(List<AdministrativeRegion> options, String? code) =>
         options
             .where((region) => region.code == code)
             .firstOrNull
             ?.displayName(widget.languageCode);
 
-    Widget selector(bool city, String label, String value) => OutlinedButton(
-      onPressed: !city && _cityCode == null
+    Widget selector(int level, String label, String value) => OutlinedButton(
+      onPressed: level == 2 && _cityCode == null
           ? null
           : () => setState(() {
-              _choosingCity = _choosingCity == city ? null : city;
+              _choosingLevel = _choosingLevel == level ? null : level;
             }),
       child: Row(
         children: [
           Expanded(child: Text('$label · $value')),
-          Icon(_choosingCity == city ? Icons.expand_less : Icons.expand_more),
+          Icon(_choosingLevel == level ? Icons.expand_less : Icons.expand_more),
         ],
       ),
     );
 
-    final choosingCity = _choosingCity;
-    final options = choosingCity == true ? cities : districts;
-    final selectedCode = choosingCity == true ? _cityCode : _districtCode;
+    final level = _choosingLevel;
+    final options = switch (level) {
+      1 => cities,
+      2 => districts,
+      _ => wards,
+    };
+    final selectedCode = switch (level) {
+      1 => _cityCode,
+      2 => _districtCode,
+      _ => _wardCode,
+    };
+    void select(String? code) => setState(() {
+      if (level == 1 && code != _cityCode) {
+        _cityCode = code;
+        _districtCode = null;
+        _wardCode = null;
+      } else if (level == 2 && code != _districtCode) {
+        _districtCode = code;
+        _wardCode = null;
+      } else if (level == 3) {
+        _wardCode = code;
+      }
+      _choosingLevel = null;
+    });
     return SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -1701,54 +1735,59 @@ class _ManualLocationSheetState extends State<_ManualLocationSheet> {
                     ),
                     const SizedBox(height: 12),
                     selector(
-                      true,
-                      context.tr('city'),
+                      1,
+                      context.tr('regionProvince'),
                       selectedName(cities, _cityCode) ??
                           context.tr('chooseLocation'),
                     ),
                     const SizedBox(height: 6),
                     selector(
-                      false,
+                      2,
                       context.tr('district'),
                       selectedName(districts, _districtCode) ??
                           context.tr('wholeCity'),
                     ),
-                    if (choosingCity != null)
+                    if (wards.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      selector(
+                        3,
+                        context.tr('regionWard'),
+                        selectedName(wards, _wardCode) ??
+                            context.tr('wholeCity'),
+                      ),
+                    ],
+                    if (level != null)
                       Card(
                         color: AppPalette.soft,
                         margin: const EdgeInsets.only(top: 8),
                         child: Column(
                           children: [
-                            if (!choosingCity)
+                            if (level != 1)
                               ListTile(
                                 title: Text(context.tr('wholeCity')),
                                 trailing: selectedCode == null
                                     ? const Icon(Icons.check)
                                     : null,
-                                onTap: () => setState(() {
-                                  _districtCode = null;
-                                  _choosingCity = null;
-                                }),
+                                onTap: () => select(null),
                               ),
                             for (final region in options)
                               ListTile(
                                 title: Text(
-                                  region.displayName(widget.languageCode),
+                                  regionNameWithoutParent(
+                                    region.displayName(widget.languageCode),
+                                    level == 3
+                                        ? selectedName(
+                                                districts,
+                                                _districtCode,
+                                              ) ??
+                                              ''
+                                        : '',
+                                  ),
                                 ),
                                 trailing: selectedCode == region.code
                                     ? const Icon(Icons.check)
                                     : null,
-                                onTap: () => setState(() {
-                                  if (choosingCity) {
-                                    if (_cityCode != region.code) {
-                                      _districtCode = null;
-                                    }
-                                    _cityCode = region.code;
-                                  } else {
-                                    _districtCode = region.code;
-                                  }
-                                  _choosingCity = null;
-                                }),
+                                onTap: () => select(region.code),
                               ),
                           ],
                         ),
@@ -1764,7 +1803,7 @@ class _ManualLocationSheetState extends State<_ManualLocationSheet> {
                         context,
                         ManualRegionSelection(
                           cityCode: _cityCode!,
-                          districtCode: _districtCode,
+                          districtCode: _wardCode ?? _districtCode,
                         ),
                       ),
                 icon: const Icon(Icons.check),
@@ -2109,6 +2148,7 @@ class DiscoverPage extends StatefulWidget {
 class _DiscoverPageState extends State<DiscoverPage> {
   String? _city;
   String? _district;
+  String? _ward;
   String? _category;
   final _filters = <String>{};
   final _search = TextEditingController();
@@ -2164,7 +2204,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
     try {
       final page = await widget.regionalLoader!(
         city: _city,
-        district: _district,
+        district: _ward ?? _district,
         limit: 20,
         cursor: _regionalCursor,
       );
@@ -2191,10 +2231,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
     }
   }
 
-  void _selectRegion(String? city, String? district) {
+  void _selectRegion(String? city, String? district, [String? ward]) {
     setState(() {
       _city = city;
       _district = district;
+      _ward = ward;
       _category = null;
       _regionalRequest++;
       _regionalLoading = false;
@@ -2245,6 +2286,17 @@ class _DiscoverPageState extends State<DiscoverPage> {
       return parts.length > 1 ? parts.last : '';
     }
 
+    String? municipality(EventItem event) {
+      final apiCode = event.localizedContent?['municipality_code']?.toString();
+      if (apiCode != null) return apiCode;
+      return _regions
+          .where(
+            (region) => region.level == 3 && region.code == district(event),
+          )
+          .firstOrNull
+          ?.parentCode;
+    }
+
     final language = Localizations.localeOf(context).languageCode;
     final cities = <String, String>{
       for (final event in widget.events)
@@ -2254,11 +2306,21 @@ class _DiscoverPageState extends State<DiscoverPage> {
     };
     final districts = <String, String>{
       for (final event in [...widget.events, ..._regionalEvents])
-        if (city(event) == _city && district(event).isNotEmpty)
+        if (city(event) == _city &&
+            district(event).isNotEmpty &&
+            municipality(event) == null)
           district(event): event.area.split(' · ').last,
       for (final region in _regions)
-        if (_city != null && region.parentCode == _city)
+        if (region.level == 2 && region.parentCode == _city)
           region.code: region.displayName(language),
+    };
+    final wards = <String, String>{
+      for (final region in _regions)
+        if (region.level == 3 && region.parentCode == _district)
+          region.code: regionNameWithoutParent(
+            region.displayName(language),
+            districts[_district] ?? '',
+          ),
     };
     final categories =
         upcoming.map(category).where((name) => name.isNotEmpty).toSet().toList()
@@ -2267,7 +2329,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
         upcoming.where((event) {
           final start = event.startsAt?.toLocal();
           if (_city != null && city(event) != _city) return false;
-          if (_district != null && district(event) != _district) return false;
+          if (_district != null &&
+              district(event) != _district &&
+              municipality(event) != _district) {
+            return false;
+          }
+          if (_ward != null && district(event) != _ward) return false;
           if (_category != null && category(event) != _category) return false;
           if (_filters.contains('discoverToday') &&
               (start == null || DateUtils.dateOnly(start) != today)) {
@@ -2322,7 +2389,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             children: [
               Expanded(
                 child: _DiscoverMenu(
-                  label: context.tr('discoverCity'),
+                  label: context.tr('regionProvince'),
                   value: _city,
                   options: cities,
                   onChanged: (value) => _selectRegion(value, null),
@@ -2331,7 +2398,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: _DiscoverMenu(
-                  label: context.tr('discoverDistrict'),
+                  label: context.tr('regionMunicipality'),
                   value: _district,
                   options: districts,
                   enabled: _city != null && districts.isNotEmpty,
@@ -2351,6 +2418,15 @@ class _DiscoverPageState extends State<DiscoverPage> {
               ),
             ],
           ),
+          if (wards.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _DiscoverMenu(
+              label: context.tr('regionWard'),
+              value: _ward,
+              options: wards,
+              onChanged: (value) => _selectRegion(_city, _district, value),
+            ),
+          ],
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -2408,6 +2484,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                       _search.clear();
                       _city = null;
                       _district = null;
+                      _ward = null;
                       _category = null;
                       _filters.clear();
                     }),
@@ -2598,8 +2675,6 @@ EventItem _eventFromApi(BuildContext context, Map<String, dynamic> json) {
       ? '时间待定'
       : '${startsAt.month}月${startsAt.day}日 ${two(startsAt.hour)}:${two(startsAt.minute)}';
   final language = Localizations.localeOf(context).languageCode;
-  final city = _localizedRegionName(json, 'city', language);
-  final district = _localizedRegionName(json, 'district', language);
   final distanceMeters = json['distance_meters'] as num?;
   final priceAmount = (json['price_amount'] as num?)?.toInt() ?? 0;
   final currentUserId = AuthScope.of(context).user?.id;
@@ -2618,7 +2693,7 @@ EventItem _eventFromApi(BuildContext context, Map<String, dynamic> json) {
     title: '${json['title'] ?? ''}',
     category: '${json['category_name'] ?? ''}',
     time: time,
-    area: [city, district].where((value) => value.isNotEmpty).join(' · '),
+    area: _activityArea(json, language),
     distance: distanceMeters == null
         ? '距离待计算'
         : '${(distanceMeters / 1000).toStringAsFixed(1)} km',
@@ -4395,23 +4470,30 @@ class _CreateEventPageState extends State<CreateEventPage> {
             _cityCode = cities.first.code;
           }
           final districts = regions
-              .where((region) => region.parentCode == _cityCode)
+              .where(
+                (region) => region.level == 2 && region.parentCode == _cityCode,
+              )
               .toList();
-          if (!districts.any((region) => region.code == _districtCode)) {
-            _districtCode = districts.isEmpty ? null : districts.first.code;
-          }
-          _city = cities
-              .firstWhere((region) => region.code == _cityCode)
-              .displayName(language);
-          if (_districtCode != null) {
-            _district = districts
-                .firstWhere((region) => region.code == _districtCode)
-                .displayName(language);
-          }
+          final path = administrativeRegionPath(
+            regions,
+            _cityCode,
+            _districtCode,
+          );
+          final district = path.elementAtOrNull(1) ?? districts.firstOrNull;
+          final ward = path.elementAtOrNull(2);
+          final wards = regions
+              .where(
+                (region) =>
+                    region.level == 3 && region.parentCode == district?.code,
+              )
+              .toList();
+          _districtCode = ward?.code ?? district?.code;
+          _city = path.first.displayName(language);
+          _district = administrativeRegionLabel([?district, ?ward], language);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const FieldLabel('城市'),
+              FieldLabel(context.tr('regionProvince')),
               DropdownButtonFormField<String>(
                 initialValue: _cityCode,
                 decoration: const InputDecoration(
@@ -4432,10 +4514,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
                 }),
               ),
               const SizedBox(height: 18),
-              const FieldLabel('所在区域'),
+              FieldLabel(context.tr('regionMunicipality')),
               DropdownButtonFormField<String>(
                 key: ValueKey(_cityCode),
-                initialValue: _districtCode,
+                initialValue: district?.code,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.map_outlined),
                 ),
@@ -4452,6 +4534,35 @@ class _CreateEventPageState extends State<CreateEventPage> {
                   _districtCode = code;
                 }),
               ),
+              if (wards.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                FieldLabel(context.tr('regionWard')),
+                DropdownButtonFormField<String>(
+                  key: ValueKey(('ward', district?.code, ward?.code)),
+                  initialValue: ward?.code,
+                  hint: Text(context.tr('wholeCity')),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.place_outlined),
+                  ),
+                  items: [
+                    DropdownMenuItem(child: Text(context.tr('wholeCity'))),
+                    for (final region in wards)
+                      DropdownMenuItem(
+                        value: region.code,
+                        child: Text(
+                          regionNameWithoutParent(
+                            region.displayName(language),
+                            district?.displayName(language) ?? '',
+                          ),
+                        ),
+                      ),
+                  ],
+                  onChanged: (code) => setState(() {
+                    _selectionEdited = true;
+                    _districtCode = code ?? district?.code;
+                  }),
+                ),
+              ],
             ],
           );
         },
@@ -6877,7 +6988,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               subtitle: Text(
-                '${_localizedRegionName(row, 'city', Localizations.localeOf(context).languageCode)} · ${_localizedRegionName(row, 'district', Localizations.localeOf(context).languageCode)}\n'
+                '${_activityArea(row, Localizations.localeOf(context).languageCode)}\n'
                 '${_formatActivityDate(startsAt)} · ${activityPrice(context, price)}',
               ),
               isThreeLine: true,
@@ -7010,7 +7121,10 @@ class _MyActivityRecordPageState extends State<_MyActivityRecordPage> {
             leading: const Icon(Icons.location_on_outlined),
             title: const Text('活动区域'),
             subtitle: Text(
-              '${_localizedRegionName(activity, 'city', Localizations.localeOf(context).languageCode)} · ${_localizedRegionName(activity, 'district', Localizations.localeOf(context).languageCode)}',
+              _activityArea(
+                activity,
+                Localizations.localeOf(context).languageCode,
+              ),
             ),
           ),
           ListTile(

@@ -148,9 +148,7 @@ class LocationService {
         longitude: longitude,
       );
       if (regions.isNotEmpty) {
-        return regions
-            .map((region) => region.displayName(languageCode))
-            .join(' · ');
+        return administrativeRegionLabel(regions, languageCode);
       }
     } catch (_) {
       // GPS still works when the catalog is unavailable or an older API is deployed.

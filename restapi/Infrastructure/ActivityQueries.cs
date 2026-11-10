@@ -2,6 +2,16 @@ namespace Muda.Api.Infrastructure;
 
 public static class ActivityQueries
 {
+    public const string ValidRegion = """
+                SELECT count(*) FROM administrative_region district
+                LEFT JOIN administrative_region municipality ON district.level=3
+                    AND municipality.code=district.parent_code AND municipality.level=2 AND municipality.is_active
+                JOIN administrative_region city ON city.code=CASE
+                    WHEN district.level=3 THEN municipality.parent_code ELSE district.parent_code END
+                WHERE city.code=@cityCode AND city.level=1 AND city.is_active
+                  AND district.code=@districtCode AND district.level IN (2, 3) AND district.is_active
+                """;
+
     private const string Matching = """
                 WITH matching AS (
                 SELECT count(*) OVER () AS total_count, e.id, e.created_at, e.title, e.description, e.status, e.visibility, e.approval_mode,
@@ -22,6 +32,10 @@ public static class ActivityQueries
                        district_region.name_zh_cn AS district_name,
                        district_region.name_ko_kr AS district_name_ko_kr,
                        district_region.name_en_us AS district_name_en_us,
+                       municipality.code AS municipality_code,
+                       municipality.name_zh_cn AS municipality_name,
+                       municipality.name_ko_kr AS municipality_name_ko_kr,
+                       municipality.name_en_us AS municipality_name_en_us,
                        NULL::text AS place_name, NULL::text AS address_public,
                        s.starts_at, s.ends_at,
                        u.id AS organizer_user_id, up.nickname AS organizer_name,
@@ -71,6 +85,7 @@ public static class ActivityQueries
                 LEFT JOIN place p ON p.id=e.place_id
                 LEFT JOIN administrative_region city_region ON city_region.code=e.city_code
                 LEFT JOIN administrative_region district_region ON district_region.code=e.district_code
+                LEFT JOIN administrative_region municipality ON district_region.level=3 AND municipality.code=district_region.parent_code
                 LEFT JOIN LATERAL (
                     SELECT starts_at, ends_at
                     FROM event_schedule
@@ -82,7 +97,7 @@ public static class ActivityQueries
                   AND e.status IN ('published', 'full')
                   AND (s.ends_at IS NULL OR s.ends_at > now())
                   AND (@city IS NULL OR e.city_code=@city)
-                  AND (@district IS NULL OR e.district_code=@district)
+                  AND (@district IS NULL OR e.district_code=@district OR municipality.code=@district)
                   AND (@categoryId IS NULL OR e.category_id=@categoryId)
                   AND (@q IS NULL OR e.title ILIKE '%' || @q || '%' OR e.description ILIKE '%' || @q || '%')
                   AND (@from IS NULL OR s.starts_at >= @from)

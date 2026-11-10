@@ -341,12 +341,17 @@ public static class UserEndpoints
                        city.name_en_us AS city_name_en_us,
                        district.name_zh_cn AS district_name,
                        district.name_ko_kr AS district_name_ko_kr,
-                       district.name_en_us AS district_name_en_us
+                       district.name_en_us AS district_name_en_us,
+                       municipality.code AS municipality_code,
+                       municipality.name_zh_cn AS municipality_name,
+                       municipality.name_ko_kr AS municipality_name_ko_kr,
+                       municipality.name_en_us AS municipality_name_en_us
                 FROM event_member em
                 JOIN event e ON e.id=em.event_id
                 JOIN category c ON c.id=e.category_id
                 LEFT JOIN administrative_region city ON city.code=e.city_code
                 LEFT JOIN administrative_region district ON district.code=e.district_code
+                LEFT JOIN administrative_region municipality ON district.level=3 AND municipality.code=district.parent_code
                 LEFT JOIN LATERAL (
                     SELECT min(starts_at) AS starts_at, max(ends_at) AS ends_at
                     FROM event_schedule WHERE event_id=e.id

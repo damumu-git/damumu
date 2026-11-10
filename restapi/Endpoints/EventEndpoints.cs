@@ -44,6 +44,10 @@ public static class EventEndpoints
                        district_region.name_zh_cn AS district_name,
                        district_region.name_ko_kr AS district_name_ko_kr,
                        district_region.name_en_us AS district_name_en_us,
+                       municipality.code AS municipality_code,
+                       municipality.name_zh_cn AS municipality_name,
+                       municipality.name_ko_kr AS municipality_name_ko_kr,
+                       municipality.name_en_us AS municipality_name_en_us,
                        NULL::text AS place_name, NULL::text AS address_public,
                        s.starts_at, s.ends_at,
                        u.id AS organizer_user_id, up.nickname AS organizer_name,
@@ -91,6 +95,7 @@ public static class EventEndpoints
                 LEFT JOIN place p ON p.id=e.place_id
                 LEFT JOIN administrative_region city_region ON city_region.code=e.city_code
                 LEFT JOIN administrative_region district_region ON district_region.code=e.district_code
+                LEFT JOIN administrative_region municipality ON district_region.level=3 AND municipality.code=district_region.parent_code
                 LEFT JOIN LATERAL (
                     SELECT starts_at, ends_at
                     FROM event_schedule
@@ -101,7 +106,7 @@ public static class EventEndpoints
                   AND e.visibility='public'
                   AND e.status IN ('published', 'full')
                   AND (@city IS NULL OR e.city_code=@city)
-                  AND (@district IS NULL OR e.district_code=@district)
+                  AND (@district IS NULL OR e.district_code=@district OR municipality.code=@district)
                   AND (@categoryId IS NULL OR e.category_id=@categoryId)
                   AND (@q IS NULL OR e.title ILIKE '%' || @q || '%' OR e.description ILIKE '%' || @q || '%')
                   AND (@from IS NULL OR s.starts_at >= @from)
@@ -142,6 +147,16 @@ public static class EventEndpoints
             var item = await db.QueryOneAsync(
                 """
                 SELECT e.*,
+                       city_region.name_zh_cn AS city_name,
+                       city_region.name_ko_kr AS city_name_ko_kr,
+                       city_region.name_en_us AS city_name_en_us,
+                       district_region.name_zh_cn AS district_name,
+                       district_region.name_ko_kr AS district_name_ko_kr,
+                       district_region.name_en_us AS district_name_en_us,
+                       municipality.code AS municipality_code,
+                       municipality.name_zh_cn AS municipality_name,
+                       municipality.name_ko_kr AS municipality_name_ko_kr,
+                       municipality.name_en_us AS municipality_name_en_us,
                        CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || COALESCE(cover.thumbnail_storage_key, cover.storage_key) END AS cover_url,
                        CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || cover.storage_key END AS cover_original_url,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
@@ -187,6 +202,9 @@ public static class EventEndpoints
                 LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
                     AND cover.status='ready' AND e.cover_review_status='approved' AND e.visibility='public'
                     AND e.status IN ('published','full','completed','cancelled')
+                LEFT JOIN administrative_region city_region ON city_region.code=e.city_code
+                LEFT JOIN administrative_region district_region ON district_region.code=e.district_code
+                LEFT JOIN administrative_region municipality ON district_region.level=3 AND municipality.code=district_region.parent_code
                 LEFT JOIN place p ON p.id=e.place_id
                 LEFT JOIN user_profile up ON up.user_id=e.organizer_user_id
                 LEFT JOIN system_avatar organizer_avatar
@@ -381,12 +399,7 @@ public static class EventEndpoints
                 new { coverMediaId, userId }, ct) == 0)
                 throw new ApiException(400, "cover_invalid", "活动图片不存在或无权使用");
             var regionValid = await db.ScalarAsync<int>(
-                """
-                SELECT count(*) FROM administrative_region district
-                JOIN administrative_region city ON city.code=district.parent_code
-                WHERE city.code=@cityCode AND city.level=1 AND city.is_active
-                  AND district.code=@districtCode AND district.level=2 AND district.is_active
-                """, new { request.CityCode, request.DistrictCode }, ct);
+                ActivityQueries.ValidRegion, new { request.CityCode, request.DistrictCode }, ct);
             if (regionValid == 0)
                 throw new ApiException(400, "region_invalid", "请选择有效的城市和地区");
 

@@ -7,6 +7,7 @@ const cards = $("#cards");
 const status = $("#status");
 const city = $("#city");
 const district = $("#district");
+const ward = $("#ward");
 const more = $("#more");
 let regions = [],
   categories = [],
@@ -92,15 +93,35 @@ function fillSelect(
     element.value = previous;
 }
 
+function region(code) {
+  return regions.find((entry) => entry.code === code);
+}
+
+function regionChildren(parent, level) {
+  return regions.filter(
+    (entry) => entry.parent_code === parent && entry.level === level,
+  );
+}
+
 function area(item) {
+  const leaf = region(item.district_code);
+  const middle =
+    item.municipality_code || (leaf?.level === 3 ? leaf.parent_code : "");
   return [
-    item.city_name ||
-      regions.find((region) => region.code === item.city_code)?.name_zh_cn,
-    item.district_name ||
-      regions.find((region) => region.code === item.district_code)?.name_zh_cn,
+    item.city_name || region(item.city_code)?.name_zh_cn,
+    item.municipality_name || region(middle)?.name_zh_cn,
+    item.district_name || leaf?.name_zh_cn,
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+function updateWard(select, label, parent, placeholder = "全部下辖区") {
+  const choices = regionChildren(parent, 3);
+  select.value = "";
+  fillSelect(select, choices, placeholder, "code");
+  select.disabled = choices.length === 0;
+  label.hidden = select.disabled;
 }
 
 const dates = new Intl.DateTimeFormat("zh-CN", {
@@ -223,7 +244,7 @@ async function loadFeed(append = false) {
   const params = new URLSearchParams({ limit: "20" });
   for (const [key, value] of Object.entries({
     city: city.value,
-    district: district.value,
+    district: ward.value || district.value,
     sort: $("#sort").value,
     q: query,
     categoryId: category,
@@ -687,7 +708,8 @@ function showPublish() {
     <label>活动名称<input name="title" required maxlength="80"></label>
     <label>活动介绍<textarea name="description" required maxlength="3000"></textarea></label>
     <div class="form-row"><label>活动分类<select name="categoryId" required></select></label><label id="custom-label" hidden>自定义分类<input name="customSubcategory" maxlength="15"></label></div>
-    <div class="form-row"><label>城市<select name="cityCode" required></select></label><label>地区<select name="districtCode" required disabled></select></label></div>
+    <div class="form-row"><label>市／道<select name="cityCode" required></select></label><label>市／郡／区<select name="districtCode" required disabled></select></label></div>
+    <label id="publish-ward" hidden>下辖区<select name="wardCode" disabled></select></label>
     <div class="form-row"><label>开始时间（韩国）<input name="startsAt" type="datetime-local" required></label><label>结束时间（韩国）<input name="endsAt" type="datetime-local" required></label></div>
     <div class="form-row"><label>人数上限（含组织者）<input name="capacity" type="number" value="6" min="2" max="100" required></label><label>预计线下人均费用（₩）<input name="price" type="number" value="0" min="0" required></label></div>
     <label>集合点（报名通过后可见）<input name="place" required maxlength="100"></label>
@@ -696,12 +718,14 @@ function showPublish() {
   content.append(form);
   const publishCity = $('[name="cityCode"]', form);
   const publishDistrict = $('[name="districtCode"]', form);
+  const publishWard = $('[name="wardCode"]', form);
+  const publishWardLabel = $("#publish-ward", form);
   const publishCategory = $('[name="categoryId"]', form);
   const custom = $('[name="customSubcategory"]', form);
   fillSelect(
     publishCity,
     regions.filter((entry) => entry.level === 1),
-    "选择城市",
+    "选择市／道",
     "code",
   );
   fillSelect(
@@ -720,13 +744,23 @@ function showPublish() {
     if (!required) custom.value = "";
   });
   publishCity.addEventListener("change", () => {
+    publishDistrict.value = "";
     fillSelect(
       publishDistrict,
-      regions.filter((entry) => entry.parent_code === publishCity.value),
-      "选择地区",
+      regionChildren(publishCity.value, 2),
+      "选择市／郡／区",
       "code",
     );
     publishDistrict.disabled = !publishCity.value;
+    updateWard(publishWard, publishWardLabel, "");
+  });
+  publishDistrict.addEventListener("change", () => {
+    updateWard(
+      publishWard,
+      publishWardLabel,
+      publishDistrict.value,
+      "不指定下辖区",
+    );
   });
   handleForm(form, content, async (values) => {
     const startsAt = new Date(values.startsAt + ":00+09:00");
@@ -740,7 +774,7 @@ function showPublish() {
         title: values.title.trim(),
         description: values.description.trim(),
         cityCode: values.cityCode,
-        districtCode: values.districtCode,
+        districtCode: values.wardCode || values.districtCode,
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
         minParticipants: 2,
@@ -804,16 +838,17 @@ $("#search").addEventListener("submit", (event) => {
   $("#gallery").scrollIntoView();
 });
 city.addEventListener("change", () => {
-  fillSelect(
-    district,
-    regions.filter((entry) => entry.parent_code === city.value),
-    "全部地区",
-    "code",
-  );
+  district.value = "";
+  fillSelect(district, regionChildren(city.value, 2), "全部地区", "code");
   district.disabled = !city.value;
+  updateWard(ward, $("#ward-filter"), "");
   loadFeed();
 });
-district.addEventListener("change", () => loadFeed());
+district.addEventListener("change", () => {
+  updateWard(ward, $("#ward-filter"), district.value);
+  loadFeed();
+});
+ward.addEventListener("change", () => loadFeed());
 $("#sort").addEventListener("change", () => loadFeed());
 more.addEventListener("click", () => loadFeed(true));
 $("#close").addEventListener("click", () => dialog.close());
@@ -847,7 +882,7 @@ request("/regions")
     fillSelect(
       city,
       regions.filter((entry) => entry.level === 1),
-      "全部城市",
+      "全部市／道",
       "code",
     );
   })

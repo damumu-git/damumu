@@ -22,7 +22,7 @@ internal static class DatabaseChecks
         {
             "event", "category", "app_user", "user_profile", "trust_snapshot",
             "place", "administrative_region", "event_schedule", "event_tag", "interest",
-            "report"
+            "report", "endorsement", "emoji_asset"
         })
         {
             await Execute($"CREATE TEMP TABLE {table} ON COMMIT DROP AS SELECT * FROM public.{table} WITH NO DATA");
@@ -51,16 +51,18 @@ internal static class DatabaseChecks
         }
         foreach (var number in new[] { 1, 2, 3, 4, 5 }) await Seed(number, time);
         await Execute("CREATE INDEX ix_cursor_test ON event (created_at DESC, id DESC) WHERE deleted_at IS NULL AND visibility='public' AND status IN ('published', 'full')");
-        async Task<List<ActivityCursor>> Read(ActivityCursor? cursor)
+        async Task<List<ActivityCursor>> Read(ActivityCursor? cursor, string? district = null)
         {
             await using var command = new NpgsqlCommand(ActivityQueries.List, connection, transaction);
-            foreach (var name in new[] { "city", "district", "q" }) command.Parameters.Add(name, NpgsqlDbType.Text).Value = DBNull.Value;
+            foreach (var name in new[] { "city", "q" }) command.Parameters.Add(name, NpgsqlDbType.Text).Value = DBNull.Value;
+            command.Parameters.Add("district", NpgsqlDbType.Text).Value = (object?)district ?? DBNull.Value;
             command.Parameters.Add("categoryId", NpgsqlDbType.Uuid).Value = DBNull.Value;
             foreach (var name in new[] { "from", "to" }) command.Parameters.Add(name, NpgsqlDbType.TimestampTz).Value = DBNull.Value;
             command.Parameters.AddWithValue("hasGeo", false);
             command.Parameters.AddWithValue("latitude", 0d);
             command.Parameters.AddWithValue("longitude", 0d);
             command.Parameters.AddWithValue("radius", 10000);
+            command.Parameters.AddWithValue("beginnerFriendlyThreshold", FeedbackPolicy.BeginnerFriendlyVerificationThreshold);
             command.Parameters.AddWithValue("limit", 3); // pageSize + 1
             command.Parameters.AddWithValue("hasCursor", cursor is not null);
             command.Parameters.AddWithValue("cursorCreatedAt", cursor?.CreatedAt ?? DateTime.UnixEpoch);
@@ -80,6 +82,41 @@ internal static class DatabaseChecks
         var last = await Read(second[1]);
         if (last.Count != 1 || !last[0].ActivityId.ToString().EndsWith("000000000001")) throw new Exception("Final page failed");
         if ((await Read(last[0])).Count != 0) throw new Exception("Empty tail failed");
+        await Execute("""
+            INSERT INTO administrative_region (code, parent_code, level, is_active) VALUES
+              ('P', NULL, 1, true), ('OTHER', NULL, 1, true),
+              ('CITY', 'P', 2, true), ('DIRECT', 'P', 2, true),
+              ('WARD', 'CITY', 3, true), ('SIBLING', 'CITY', 3, true),
+              ('INACTIVE', 'CITY', 3, false);
+            UPDATE event SET city_code='P', district_code='CITY'
+              WHERE id='00000000-0000-0000-0000-000000000001';
+            UPDATE event SET city_code='P', district_code='WARD'
+              WHERE id='00000000-0000-0000-0000-000000000002';
+            UPDATE event SET city_code='P', district_code='SIBLING'
+              WHERE id='00000000-0000-0000-0000-000000000003';
+            UPDATE event SET city_code='P', district_code='DIRECT'
+              WHERE id='00000000-0000-0000-0000-000000000005';
+            """);
+        var cityResults = await Read(null, "CITY");
+        var wardResults = await Read(null, "WARD");
+        var directResults = await Read(null, "DIRECT");
+        if (cityResults.Count != 3 || wardResults.Count != 1 ||
+            !wardResults[0].ActivityId.ToString().EndsWith("000000000002") ||
+            directResults.Count != 1 || !directResults[0].ActivityId.ToString().EndsWith("000000000005"))
+            throw new Exception("City/ward filtering did not preserve old rows and isolate selected districts");
+        foreach (var (city, district, expected) in new[]
+        {
+            ("P", "CITY", true), ("P", "DIRECT", true), ("P", "WARD", true),
+            ("OTHER", "WARD", false), ("P", "INACTIVE", false)
+        })
+        {
+            await using var validation = new NpgsqlCommand(ActivityQueries.ValidRegion, connection, transaction);
+            validation.Parameters.AddWithValue("cityCode", city);
+            validation.Parameters.AddWithValue("districtCode", district);
+            var valid = (long)(await validation.ExecuteScalarAsync())! == 1;
+            if (valid != expected) throw new Exception($"Unexpected validation result for {city}/{district}");
+        }
+        Console.WriteLine("PASS: database two- and three-level region filtering and publish validation");
         await transaction.RollbackAsync();
         Console.WriteLine("PASS: actual feed SQL with temporary fixtures, timestamp ties, insertion/deletion between pages, limit+1, final/empty pages; rolled back");
     }
