@@ -29,35 +29,44 @@ public sealed class SocialIdentityVerifier(HttpClient http, IConfiguration confi
             {
                 var audience = configuration["SocialLogin:google:ClientId"];
                 if (string.IsNullOrWhiteSpace(audience)) throw Unavailable();
-                // Google's library verifies signature, issuer, audience and expiry.
-                // Never accept a decoded-but-unverified JWT or a client profile ID.
-                var payload = await GoogleJsonWebSignature.ValidateAsync(token,
-                    new GoogleJsonWebSignature.ValidationSettings { Audience = [audience] });
-                if (string.IsNullOrWhiteSpace(payload.Subject) || payload.Subject.Length > 255)
-                    throw InvalidToken();
-                return new(provider, payload.Subject);
+                return await VerifyGoogleAsync(token, audience);
             }
 
             if (!long.TryParse(configuration["SocialLogin:kakao:AppId"], out var expectedAppId)
                 || expectedAppId <= 0) throw Unavailable();
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                "https://kapi.kakao.com/v1/user/access_token_info");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            using var response = await http.SendAsync(request, ct);
-            if ((int)response.StatusCode >= 500) throw UpstreamUnavailable();
-            if (!response.IsSuccessStatusCode) throw InvalidToken();
-            using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
-            var root = body.RootElement;
-            if (!ReadLong(root, "app_id", out var appId) || appId != expectedAppId
-                || !ReadLong(root, "expires_in", out var seconds) || seconds <= 0
-                || !ReadLong(root, "id", out var subject) || subject <= 0)
-                throw InvalidToken();
-            return new(provider, subject.ToString(CultureInfo.InvariantCulture));
+            return await VerifyKakaoAsync(http, token, expectedAppId, ct);
         }
         catch (InvalidJwtException) { throw InvalidToken(); }
         catch (JsonException) { throw UpstreamUnavailable(); }
         catch (HttpRequestException) { throw UpstreamUnavailable(); }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw UpstreamUnavailable(); }
+    }
+
+    internal static async Task<SocialIdentity> VerifyGoogleAsync(string token, string audience)
+    {
+        var payload = await GoogleJsonWebSignature.ValidateAsync(token,
+            new GoogleJsonWebSignature.ValidationSettings { Audience = [audience] });
+        if (string.IsNullOrWhiteSpace(payload.Subject) || payload.Subject.Length > 255)
+            throw InvalidToken();
+        return new("google", payload.Subject);
+    }
+
+    internal static async Task<SocialIdentity> VerifyKakaoAsync(
+        HttpClient http, string token, long expectedAppId, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            "https://kapi.kakao.com/v1/user/access_token_info");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var response = await http.SendAsync(request, ct);
+        if ((int)response.StatusCode >= 500) throw UpstreamUnavailable();
+        if (!response.IsSuccessStatusCode) throw InvalidToken();
+        using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+        var root = body.RootElement;
+        if (!ReadLong(root, "app_id", out var appId) || appId != expectedAppId
+            || !ReadLong(root, "expires_in", out var seconds) || seconds <= 0
+            || !ReadLong(root, "id", out var subject) || subject <= 0)
+            throw InvalidToken();
+        return new("kakao", subject.ToString(CultureInfo.InvariantCulture));
     }
 
     private static bool ReadLong(JsonElement root, string name, out long value)

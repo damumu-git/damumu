@@ -185,12 +185,12 @@ if [[ -n "$api_container" ]]; then
 fi
 
 available_kb="$(df -Pk "$REPO_ROOT" | awk 'NR == 2 {print $4}')"
-if ((available_kb < 6291456)); then
-  printf 'WARNING: less than 6 GiB is available on the deployment filesystem.\n' >&2
+if ((available_kb < 2097152)); then
+  printf 'WARNING: less than 2 GiB is available on the deployment filesystem.\n' >&2
   df -h "$REPO_ROOT" >&2
 fi
 
-log "Building the Flutter Web image"
+log "Building the standalone web app image"
 compose build --pull app-web
 
 log "Building site, API, and Admin images"

@@ -1,5 +1,7 @@
 # DAMUMU 当前项目状态
 
+- 2026-11-10 app.damumu.com 改为独立响应式网站，支持访客浏览、邮箱及网页 OAuth 登录、活动报名、发布与记录。网页 OAuth 需要服务器凭据和提供方回调配置。
+
 - 2026-11-10 `damumu-deploy` 纳入 Flutter Web 的源码镜像构建、回环健康检查和 app.damumu.com HTTPS 检查。现有服务器首次启用需设置 DNS 并扩展证书。
 
 - 2026-11-10 新增 app.damumu.com 网页发布项目，复用 Flutter 用户端与公共 API。首页按宽度切换活动卡片列数，宽屏采用侧边导航。域名 DNS、证书及部署待服务器配置。

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="在搭慕发现韩国本地的线下活动，找到想一起出门的人。"
+    />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>探索活动 · 搭慕 DAMU</title>
+    <link rel="icon" href="/assets/logo.png" />
+    <link rel="stylesheet" href="/site.css" />
+    <script type="module" src="/site.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#gallery">跳到活动</a>
+    <header class="masthead">
+      <a class="brand" href="/" aria-label="搭慕首页"
+        ><img src="/assets/logo.png" alt="" /><span
+          >DAMU<small>搭慕</small></span
+        ></a
+      >
+      <nav aria-label="主导航">
+        <a class="active" href="/">探索活动</a
+        ><button id="mine" class="plain">我的活动</button>
+        <button id="messages" class="plain">消息</button>
+      </nav>
+      <div class="account">
+        <button id="login" class="button ghost">登录</button>
+        <button id="publish" class="button primary">
+          <span aria-hidden="true">＋</span> 发起活动
+        </button>
+      </div>
+    </header>
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-art" aria-hidden="true">
+          <i></i><i></i><i></i><span>OUT<br />TOGETHER<span>.</span></span>
+        </div>
+        <div class="hero-copy">
+          <p class="eyebrow"><span></span> 韩国线下活动社区</p>
+          <h1 id="hero-title">找点想做的，<br />找人一起去<span>。</span></h1>
+          <p class="intro">
+            周末去哪儿？从一场散步、一杯咖啡，或一次新的体验开始。
+          </p>
+          <form id="search" class="search" role="search">
+            <label class="sr-only" for="query">搜索活动</label>
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="10.5" cy="10.5" r="6.5" />
+              <path d="m16 16 4 4" />
+            </svg>
+            <input
+              id="query"
+              type="search"
+              placeholder="搜索活动，例如散步、咖啡、桌游"
+            />
+            <button class="button primary" type="submit">搜索</button>
+          </form>
+        </div>
+      </section>
+      <section id="gallery" class="gallery" aria-labelledby="gallery-title">
+        <div class="toolbar">
+          <div>
+            <p class="eyebrow section-label">EXPLORE / 01</p>
+            <h2 id="gallery-title">发现活动</h2>
+          </div>
+          <div id="filters" class="filters">
+            <label
+              ><span>城市</span
+              ><select id="city">
+                <option value="">全部城市</option>
+              </select></label
+            >
+            <label
+              ><span>地区</span
+              ><select id="district" disabled>
+                <option value="">全部地区</option>
+              </select></label
+            >
+            <label
+              ><span>排序</span
+              ><select id="sort">
+                <option value="recommended">即将开始</option>
+                <option value="">最新发布</option>
+              </select></label
+            >
+          </div>
+        </div>
+        <div id="categories" class="categories" aria-label="活动类别"></div>
+        <p id="status" class="status" role="status"></p>
+        <div id="cards" class="cards"></div>
+        <div class="more">
+          <button id="more" class="button ghost" hidden>加载更多活动</button>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <span><strong>DAMU</strong> 搭慕 · 韩国线下活动社区</span
+      ><a href="https://www.damumu.com/privacy.html">隐私政策</a>
+    </footer>
+    <dialog id="dialog" aria-labelledby="dialog-title">
+      <button id="close" class="close" aria-label="关闭">×</button>
+      <div id="panel"></div>
+    </dialog>
+  </body>
+</html>

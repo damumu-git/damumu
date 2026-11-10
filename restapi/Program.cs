@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Activity = System.Diagnostics.Activity;
 using Muda.Api;
 using Muda.Api.Endpoints;
@@ -24,6 +25,12 @@ builder.Services.AddHostedService(services => services.GetRequiredService<EventL
 builder.Services.AddSingleton<MediaStorage>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<SocialAccountService>();
+// The OAuth callback query and authorization redirect contain one-time credentials.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Http.Result.RedirectResult", LogLevel.Warning);
+builder.Services.AddDataProtection();
+builder.Services.AddHttpClient(nameof(WebAuthEndpoints), client => client.Timeout = TimeSpan.FromSeconds(10))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHttpClient<ISocialIdentityVerifier, SocialIdentityVerifier>(client =>
     client.Timeout = TimeSpan.FromSeconds(10))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
@@ -160,6 +167,7 @@ api.MapCatalogEndpoints();
 api.MapEmojiAssetEndpoints();
 api.MapUserEndpoints();
 api.MapSocialAuthEndpoints();
+api.MapWebAuthEndpoints();
 api.MapEventEndpoints();
 api.MapActivityEndpoints();
 api.MapSocialEndpoints();

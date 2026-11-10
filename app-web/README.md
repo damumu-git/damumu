@@ -1,32 +1,30 @@
 # 搭慕网页版
 
-`app.damumu.com` 从仓库中的 `app/` 构建，复用 Flutter 页面、登录和公共 API。手机与窄窗口用底部导航，900 像素及以上的窗口用侧边导航；首页按内容宽度显示一到四列活动卡片，保留搜索和筛选；网页支持横屏，桌面内容宽度上限为 1200 像素。浏览活动前仍需按现有流程登录。
+`app.damumu.com` 使用独立 HTML、CSS 和 JavaScript。活动、分类、地区和账号数据来自搭慕公共 API；网页版与 Android / iOS 使用相同账号及活动。访客可直接搜索、筛选和查看活动。登录后可报名、退出、发布和查看活动记录，也可读取会话及发送文字消息。聊天附件和原生推送仍通过移动 App 使用。
 
-## 本地开发
+## 本机预览
 
 从仓库根目录运行：
 
 ```sh
-cd app
-flutter run -d chrome --dart-define=API_BASE_URL=https://api.damumu.com/api/v1
+docker compose -f app-web/compose.yaml up --build
 ```
 
-Chrome 的设备模拟模式可用于检查手机、平板和桌面窗口。网页使用浏览器支持的登录方式；原生 Google / Kakao 登录、原生推送和权限能力受平台限制。
+浏览器打开 http://127.0.0.1:8083。本地容器可访问公开活动和邮箱登录；注册和网页 OAuth 使用生产同源代理。
 
 ## 服务器部署
 
-日常发布从 `main` 运行 `damumu-deploy`。它会从 Flutter 源码构建容器并启动服务。
-首次启用域名或从独立容器迁移，见 [服务器部署指南](../deploy/README.md#已有服务器首次启用-appdamumucom)。
+从 `main` 运行 `damumu-deploy`。它会构建独立网站镜像、部署 API 和其它服务并检查健康状态。首次配置域名或从旧容器迁移，见 [服务器部署指南](../deploy/README.md)。
 
-## 手动静态构建
+## 网页 Google 和 Kakao 登录
 
-在安装 Flutter 的机器上运行：
+提供方回调地址必须精确匹配：
 
-```sh
-cd app
-flutter build web --release --no-web-resources-cdn --dart-define=API_BASE_URL=https://api.damumu.com/api/v1 --output "$(cd ../app-web && pwd)/dist"
-```
+| 提供方 | 回调地址 | 服务器 `deploy/.env` |
+| --- | --- | --- |
+| Google | `https://app.damumu.com/api/v1/auth/web/google/callback` | `GOOGLE_WEB_CLIENT_ID`、`GOOGLE_WEB_CLIENT_SECRET` |
+| Kakao | `https://app.damumu.com/api/v1/auth/web/kakao/callback` | `KAKAO_WEB_REST_KEY`、`KAKAO_WEB_CLIENT_SECRET`、`KAKAO_APP_ID` |
 
-在 PowerShell 中将 `--output` 的值替换成 `app-web/dist` 的绝对路径。
+在 Google Cloud 建立 Web application 类型的 OAuth 客户端，加入对应回调地址。Kakao 在现有原生登录使用的同一 Kakao 应用内启用登录，将对应回调加到使用的 REST API key，并启用该 key 的 Client secret。两种密钥都只填写在服务器配置。配置完成后运行 `damumu-deploy`，分别用提供方测试账号验证首次注册和再次登录。
 
-`app-web/dist/` 是独立的静态部署产物，部署时将它和 `app-web/` 配置放到服务器的同一目录结构。也可把 `dist/` 作为支持单页应用回退的静态站点根目录。
+第三方首次登录沿用搭慕已有账号规则，需确认年龄和隐私政策。网页不触发定位、相机或通知授权。

@@ -7,6 +7,11 @@ using Muda.Api.Infrastructure;
 CancellationChecks.ValidateReasons();
 FeedbackChecks.Validate();
 PrivacyChecks.ValidateRegistration();
+if (args.FirstOrDefault() == "--web-auth-check")
+{
+    await WebAuthChecks.RunAsync();
+    return;
+}
 if (args.FirstOrDefault() == "--social-check")
 {
     await SocialLoginChecks.VerifyTokens();

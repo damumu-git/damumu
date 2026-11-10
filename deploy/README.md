@@ -3,8 +3,7 @@
 本目录用于 Ubuntu 24.04 Lightsail 单机测试环境。公网只访问宿主机 Nginx；
 API、产品主页、Admin 和网页版分别绑定回环端口 `8080`、`8081`、`8082`、`8083`。
 宿主机 Nginx 按域名转发，`damumu.com` 跳转到 `www.damumu.com`。
-`damumu-deploy` 从同一个 `main` 构建并发布四项服务。Flutter 在 Docker 构建阶段运行，
-服务器无需安装 Flutter 或预先上传 `app-web/dist`。
+`damumu-deploy` 从同一个 `main` 构建并发布四项服务。网页版镜像直接包含 `app-web/site/` 的静态页面与活动封面。Google／Kakao 网页授权的配置见 [网页版说明](../app-web/README.md#网页-google-和-kakao-登录)。
 
 ## Ubuntu 目录与图片访问
 

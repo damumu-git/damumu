@@ -1,6 +1,8 @@
 services:
   app-web:
-    build: .
+    build:
+      context: ..
+      dockerfile: app-web/Dockerfile.source
     restart: unless-stopped
     ports:
       - "127.0.0.1:${APP_WEB_PORT:-8083}:80"

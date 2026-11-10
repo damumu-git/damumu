@@ -1,0 +1,9 @@
+// Retire the previous Flutter cache when a returning browser updates its worker.
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (event) => {
+  event.waitUntil((async () => {
+    await Promise.all(["flutter-app-cache", "flutter-temp-cache", "flutter-app-manifest"]
+      .map((name) => caches.delete(name)));
+    await self.registration.unregister();
+  })());
+});
