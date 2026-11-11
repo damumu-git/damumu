@@ -4,4 +4,7 @@ COPY app-web/site/ /usr/share/nginx/html/
 COPY app/web/logo.png /usr/share/nginx/html/assets/logo.png
 COPY app/assets/activity-covers/*.webp /usr/share/nginx/html/assets/covers/
 COPY app/assets/activity-covers/sub/ /usr/share/nginx/html/assets/covers/sub/
+# Keep the public files readable by Nginx workers regardless of checkout permissions.
+RUN find /usr/share/nginx/html -type d -exec chmod 0755 {} + \
+ && find /usr/share/nginx/html -type f -exec chmod 0644 {} +
 EXPOSE 80
