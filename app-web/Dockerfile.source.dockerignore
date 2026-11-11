@@ -1,4 +1,14 @@
 *
+!admin/
+!admin/src/
+!admin/src/fonts.css
+!admin/src/assets/
+!admin/src/assets/fonts/
+!admin/src/assets/fonts/*.woff2
+!admin/public/
+!admin/public/licenses/
+!admin/public/licenses/fonts/
+!admin/public/licenses/fonts/*.txt
 !app/
 !app/web/
 !app/web/logo.png
