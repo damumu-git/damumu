@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.DataProtection;
+using System.Globalization;
+using System.Threading.RateLimiting;
 using Activity = System.Diagnostics.Activity;
 using Muda.Api;
 using Muda.Api.Endpoints;
@@ -47,7 +49,22 @@ builder.Services.AddOpenApi();
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod().WithExposedHeaders("Retry-After"));
+});
+builder.Services.AddRateLimiter(options =>
+{
+    options.GlobalLimiter = AccountRateLimits.Create();
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (rejection, _) =>
+    {
+        var context = rejection.HttpContext;
+        var seconds = rejection.Lease.TryGetMetadata(MetadataName.RetryAfter, out var delay)
+            ? Math.Max(1, Math.Ceiling(delay.TotalSeconds)) : 1;
+        context.Response.Headers.RetryAfter = seconds.ToString(CultureInfo.InvariantCulture);
+        context.Response.Headers.CacheControl = "no-store";
+        await WriteError(context, Activity.Current?.Id ?? context.TraceIdentifier,
+            StatusCodes.Status429TooManyRequests, "rate_limited", "操作过于频繁，请稍后再试");
+    };
 });
 
 var app = builder.Build();
@@ -65,7 +82,7 @@ app.Use(async (context, next) =>
     {
         await next();
         var status = context.Response.StatusCode;
-        if (status >= 500 || (status is >= 400 and < 500 && context.GetEndpoint() is RouteEndpoint &&
+        if (status >= 500 || (status is >= 400 and < 500 and not 429 && context.GetEndpoint() is RouteEndpoint &&
             context.Request.Path.StartsWithSegments("/api/v1")))
             eventLog.RecordRequest(context, traceId, status, $"http_{status}");
     }
@@ -102,43 +119,31 @@ app.Use(async (context, next) =>
     }
 });
 
+app.UseRouting();
+app.UseCors();
+app.UseRateLimiter();
 app.Use(async (context, next) =>
 {
-    var authorization = context.Request.Headers.Authorization.FirstOrDefault();
-    var token = authorization?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) == true
-        ? authorization[7..].Trim()
-        : null;
-    if (token is not null)
+    if (ApiSupport.GetBearerUserId(context) is { } userId)
     {
-        var auth = context.RequestServices.GetRequiredService<AuthService>();
-        if (auth.TryValidateToken(token, out var userId))
+        var db = context.RequestServices.GetRequiredService<Db>();
+        var active = await db.ScalarAsync<int>(
+            """
+            SELECT count(*) FROM app_user
+            WHERE id=@userId AND status='active' AND deleted_at IS NULL
+            """,
+            new { userId },
+            context.RequestAborted);
+        if (active == 0)
         {
-            var db = context.RequestServices.GetRequiredService<Db>();
-            var active = await db.ScalarAsync<int>(
-                """
-                SELECT count(*) FROM app_user
-                WHERE id=@userId AND status='active' AND deleted_at IS NULL
-                """,
-                new { userId },
-                context.RequestAborted);
-            if (active == 0)
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    data = (object?)null,
-                    meta = (object?)null,
-                    error = new { code = "account_unavailable", message = "账号已注销或不可用" },
-                    traceId = Activity.Current?.Id ?? context.TraceIdentifier
-                }, context.RequestAborted);
-                return;
-            }
+            await WriteError(context, Activity.Current?.Id ?? context.TraceIdentifier,
+                StatusCodes.Status401Unauthorized, "account_unavailable", "账号已注销或不可用");
+            return;
         }
     }
     await next();
 });
 
-app.UseCors();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 app.UseMiddleware<PrivateMediaMiddleware>();
 app.UseStaticFiles(new StaticFileOptions

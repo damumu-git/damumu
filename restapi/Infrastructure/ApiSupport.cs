@@ -5,28 +5,16 @@ namespace Muda.Api;
 
 public static class ApiSupport
 {
+    private static readonly object BearerUserKey = new();
+
     public static IResult Ok(object? data, object? meta = null) =>
         new MediaJsonResult(new { data, meta, error = (object?)null, traceId = Activity.Current?.Id });
 
     public static IResult Created(string uri, object? data) =>
         new MediaJsonResult(new { data, meta = (object?)null, error = (object?)null, traceId = Activity.Current?.Id }, uri);
 
-    public static Guid RequireUserId(HttpContext context)
-    {
-        var environment = context.RequestServices.GetRequiredService<IWebHostEnvironment>();
-        var raw = context.Request.Headers["X-User-Id"].FirstOrDefault();
-        if (environment.IsDevelopment() && Guid.TryParse(raw, out var developmentUserId))
-            return developmentUserId;
-
-        var authorization = context.Request.Headers.Authorization.FirstOrDefault();
-        var token = authorization?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) == true
-            ? authorization[7..].Trim()
-            : null;
-        var auth = context.RequestServices.GetRequiredService<AuthService>();
-        if (token is null || !auth.TryValidateToken(token, out var userId))
-            throw new ApiException(401, "unauthorized", "登录已失效，请重新登录");
-        return userId;
-    }
+    public static Guid RequireUserId(HttpContext context) => GetOptionalUserId(context)
+        ?? throw new ApiException(401, "unauthorized", "登录已失效，请重新登录");
 
     public static Guid? GetOptionalUserId(HttpContext context)
     {
@@ -35,13 +23,21 @@ public static class ApiSupport
         if (environment.IsDevelopment() && Guid.TryParse(raw, out var developmentUserId))
             return developmentUserId;
 
+        return GetBearerUserId(context);
+    }
+
+    internal static Guid? GetBearerUserId(HttpContext context)
+    {
+        if (context.Items.TryGetValue(BearerUserKey, out var cached)) return (Guid?)cached;
         var authorization = context.Request.Headers.Authorization.FirstOrDefault();
         var token = authorization?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) == true
             ? authorization[7..].Trim()
             : null;
         if (token is null) return null;
         var auth = context.RequestServices.GetRequiredService<AuthService>();
-        return auth.TryValidateToken(token, out var userId) ? userId : null;
+        Guid? account = auth.TryValidateToken(token, out var userId) ? userId : null;
+        context.Items[BearerUserKey] = account;
+        return account;
     }
 
     public static RouteGroupBuilder RequireAdmin(this RouteGroupBuilder group) =>

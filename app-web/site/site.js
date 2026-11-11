@@ -57,6 +57,13 @@ async function request(
     body: isForm ? data : data === undefined ? undefined : JSON.stringify(data),
   });
   if (response.status === 204) return null;
+  if (response.status === 429) {
+    const retryAfter = response.headers.get("Retry-After");
+    const seconds = /^\d+$/.test(retryAfter ?? "") ? Number(retryAfter) : 0;
+    throw new Error(seconds > 0
+      ? `操作过于频繁，请在 ${seconds} 秒后再试。`
+      : "操作过于频繁，请稍后再试。");
+  }
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload || payload.error) {
     if (
@@ -390,6 +397,7 @@ function handleForm(form, content, action) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const submit = $('button[type="submit"]', form);
+    if (submit.disabled) return;
     submit.disabled = true;
     $(".form-error", content)?.remove();
     try {
