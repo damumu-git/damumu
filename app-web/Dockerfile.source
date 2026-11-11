@@ -1,6 +1,9 @@
 FROM nginx:1.29-alpine
 COPY app-web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY app-web/site/ /usr/share/nginx/html/
+COPY admin/src/fonts.css /usr/share/nginx/html/fonts.css
+COPY admin/src/assets/fonts/*.woff2 /usr/share/nginx/html/assets/fonts/
+COPY admin/public/licenses/fonts/ /usr/share/nginx/html/licenses/fonts/
 COPY app/web/logo.png /usr/share/nginx/html/assets/logo.png
 COPY app/assets/activity-covers/*.webp /usr/share/nginx/html/assets/covers/
 COPY app/assets/activity-covers/sub/ /usr/share/nginx/html/assets/covers/sub/

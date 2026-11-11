@@ -1,11 +1,14 @@
 :root {
   font-family:
-    Inter,
-    system-ui,
-    -apple-system,
     "Noto Sans SC",
+    "Noto Sans KR",
+    "Segoe UI",
     "Microsoft YaHei",
+    system-ui,
     sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
   color: #14171f;
   background: #fff;
   --ink: #14171f;
