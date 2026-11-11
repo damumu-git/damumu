@@ -36,6 +36,10 @@ function params(values) {
 }
 
 export const api = {
+  webGuides: () => request('/admin/guides'),
+  saveWebGuide: (slug, body) => request('/admin/guides/' + encodeURIComponent(slug), {
+    method: 'PUT', body: JSON.stringify(body),
+  }),
   emojiAssets: () => request('/emoji-assets'),
   adminEmojiAssets: () => request('/admin/emoji-assets'),
   uploadEmojiAsset: (form) => request('/admin/emoji-assets', { method: 'POST', body: form }),

@@ -62,6 +62,12 @@ public sealed class AccountDeletionService(
             VALUES ('avatars/' || replace(CAST(@userId AS text),'-',''),true)
             ON CONFLICT (storage_key) DO UPDATE SET is_directory=true;
 
+            DELETE FROM web_intent_vote WHERE user_id=@userId;
+            DELETE FROM web_intent WHERE owner_id=@userId;
+            DELETE FROM web_group_member WHERE user_id=@userId;
+            DELETE FROM web_group WHERE owner_id=@userId;
+            DELETE FROM web_follow WHERE user_id=@userId OR target_id=@userId;
+            DELETE FROM web_bookmark WHERE user_id=@userId;
             DELETE FROM push_device WHERE user_id=@userId;
             DELETE FROM user_external_identity WHERE user_id=@userId;
             DELETE FROM user_credential WHERE user_id=@userId;
@@ -80,6 +86,7 @@ public sealed class AccountDeletionService(
             SET nickname='注销用户_' || nextval('muda_deleted_user_number'),
                 avatar_url=NULL,
                 bio=NULL,
+                web_public_bio=NULL,
                 city_code=NULL,
                 district_code=NULL,
                 languages=ARRAY[]::varchar[],

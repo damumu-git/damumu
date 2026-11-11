@@ -1,3 +1,5 @@
+import { createCommunityPages } from "/community-pages.js";
+import { createMemberPages } from "/member-pages.js";
 const apiRoot = "https://api.damumu.com";
 const oauth = "/api/v1/auth/web";
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -43,15 +45,18 @@ async function request(
   { data, signal, auth = false, sameOrigin = false, method } = {},
 ) {
   const headers = {};
-  if (data !== undefined) headers["Content-Type"] = "application/json";
+  const isForm = data instanceof FormData;
+  if (data !== undefined && !isForm)
+    headers["Content-Type"] = "application/json";
   if (auth && session?.accessToken)
     headers.Authorization = "Bearer " + session.accessToken;
   const response = await fetch((sameOrigin ? "" : apiRoot + "/api/v1") + path, {
     headers,
     signal,
     method: method ?? (data === undefined ? "GET" : "POST"),
-    body: data === undefined ? undefined : JSON.stringify(data),
+    body: isForm ? data : data === undefined ? undefined : JSON.stringify(data),
   });
+  if (response.status === 204) return null;
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload || payload.error) {
     if (
@@ -272,6 +277,8 @@ async function loadFeed(append = false) {
     cursor: append ? cursor : null,
   }))
     if (value) params.set(key, value);
+  const maxPrice = $("#max-price").value;
+  if (maxPrice) params.set("maxPrice", maxPrice);
   const day = $("#day").value;
   if (day) {
     params.set("from", new Date(day + "T00:00:00+09:00").toISOString());
@@ -615,6 +622,21 @@ async function showActivity(id) {
         }),
       );
     }
+    if (!owns)
+      actions.append(
+        button(
+          "举报活动",
+          () =>
+            requireLogin(() =>
+              showReport("activity", id, item.organizer_user_id ?? null),
+            ),
+          "text-button",
+        ),
+      );
+    actions.append(
+      memberPages.bookmark("activity", id),
+      actionLink("活动后评价", eventLink(id) + "/feedback", "text-button"),
+    );
     details.append(actions);
   } catch (error) {
     if (marker === dialogRequest) {
@@ -646,13 +668,40 @@ function showJoin(id) {
 async function showMine() {
   const content = show("我的活动", "workspace-page");
   const marker = dialogRequest;
+  const statuses = {
+    all: "全部",
+    upcoming: "进行中与待开始",
+    ended: "已结束",
+    cancelled: "已取消",
+  };
+  const requestedStatus = new URLSearchParams(location.search).get("status");
+  const status = Object.hasOwn(statuses, requestedStatus) ? requestedStatus : "all";
+  const filters = node("nav", null, "activity-status-filters");
+  filters.setAttribute("aria-label", "活动状态");
+  for (const [value, label] of Object.entries(statuses)) {
+    const link = actionLink(
+      label,
+      value === "all" ? location.pathname : `${location.pathname}?status=${value}`,
+      value === status ? "button primary" : "button ghost",
+    );
+    if (value === status) link.setAttribute("aria-current", "page");
+    filters.append(link);
+  }
+  content.append(filters);
   try {
     const activities = await request("/me/activities", { auth: true });
     if (marker !== dialogRequest) return;
+    const now = Date.now();
+    const filtered = activities.filter((item) => {
+      if (status === "all") return true;
+      if (item.event_status === "cancelled") return status === "cancelled";
+      const ended = item.ends_at && Date.parse(item.ends_at) <= now;
+      return status === (ended ? "ended" : "upcoming");
+    });
     for (const own of [false, true]) {
       content.append(node("h2", own ? "我发起的" : "我报名的"));
       const list = node("ul", null, "detail-list");
-      for (const item of activities.filter(
+      for (const item of filtered.filter(
         (entry) => (entry.organizer_user_id === session.user.id) === own,
       )) {
         const entry = node("li");
@@ -775,6 +824,36 @@ async function showConversation(conversation, conversations) {
             "detail-copy",
           ),
         );
+        if (
+          message.sender_user_id &&
+          message.sender_user_id !== session.user.id &&
+          !message.recalled_at
+        ) {
+          entry.append(
+            button(
+              "举报消息",
+              () =>
+                reasonDialog("举报消息", async (description) => {
+                  await request(
+                    base +
+                      "/messages/" +
+                      encodeURIComponent(message.id) +
+                      "/report",
+                    {
+                      auth: true,
+                      data: {
+                        categoryCode: "inappropriate_content",
+                        description,
+                      },
+                    },
+                  );
+                  dialog.close();
+                  thread.append(node("p", "举报已提交。", "notice"));
+                }),
+              "text-button",
+            ),
+          );
+        }
         return entry;
       });
       if (prepend) messages.prepend(...entries);
@@ -816,10 +895,50 @@ async function showConversation(conversation, conversations) {
   await loadMessages();
 }
 
-function showPublish() {
+async function uploadCover(file) {
+  if (!file?.size) return null;
+  if (file.size > 15 * 1024 * 1024)
+    throw new Error("请选择小于 15 MB 的图片。");
+  const bitmap = await createImageBitmap(file);
+  const canvas = node("canvas");
+  canvas.width = 1280;
+  canvas.height = 960;
+  try {
+    const context = canvas.getContext("2d", { alpha: false });
+    const scale = Math.max(
+      canvas.width / bitmap.width,
+      canvas.height / bitmap.height,
+    );
+    const width = bitmap.width * scale;
+    const height = bitmap.height * scale;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(
+      bitmap,
+      (canvas.width - width) / 2,
+      (canvas.height - height) / 2,
+      width,
+      height,
+    );
+  } finally {
+    bitmap.close();
+  }
+  const jpeg = await new Promise((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", 0.82),
+  );
+  if (!jpeg || jpeg.size > 1536000)
+    throw new Error("图片压缩后仍超过 1.5 MB。");
+  const form = new FormData();
+  form.append("cover", jpeg, "cover.jpg");
+  return (await request("/events/covers", { auth: true, data: form }))
+    .coverMediaId;
+}
+
+function showPublish(template) {
   const content = show("发起活动", "editor-page");
   const form = node("form", null, "form");
   form.innerHTML = `
+    <label>活动封面（选填，发布后审核）<input name="cover" type="file" accept="image/jpeg,image/png,image/webp"></label>
     <label>活动名称<input name="title" required maxlength="80"></label>
     <label>活动介绍<textarea name="description" required maxlength="3000"></textarea></label>
     <div class="form-row"><label>活动分类<select name="categoryId" required></select></label><label id="custom-label" hidden>自定义分类<input name="customSubcategory" maxlength="15"></label></div>
@@ -830,7 +949,44 @@ function showPublish() {
     <label>集合点（报名通过后可见）<input name="place" required maxlength="100"></label>
     <label>报名方式<select name="approvalMode"><option value="manual">组织者审核</option><option value="auto">直接加入</option></select></label>
     <button class="button primary" type="submit">发布活动</button>`;
-  content.append(form);
+  const layout = node("div", null, "publish-layout");
+  const preview = node("aside", null, "invitation-summary");
+  const previewTitle = node("h2", "活动卡片预览");
+  const previewCover = cover({}, "detail-cover");
+  const previewMeta = node("p", "选择分类与地区后显示在这里。", "meta");
+  preview.append(previewCover, previewTitle, previewMeta);
+  layout.append(form, preview);
+  content.append(layout);
+  let objectUrl;
+  function updatePreview() {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    const picture = form.elements.cover.files[0];
+    objectUrl = picture ? URL.createObjectURL(picture) : null;
+    const selected = categories.find(
+      (item) => item.id === form.elements.categoryId.value,
+    );
+    const code = selected?.code;
+    previewCover.src =
+      objectUrl ||
+      (code && /^[a-z0-9_]+$/.test(code)
+        ? "/assets/covers/sub/" + code + ".webp"
+        : "/assets/covers/other.webp");
+    previewTitle.textContent =
+      form.elements.title.value.trim() || "活动卡片预览";
+    previewMeta.textContent = [
+      selected?.name_zh_cn,
+      region(form.elements.cityCode.value)?.name_zh_cn,
+      cost({ price_amount: Number(form.elements.price.value) }),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  previewCover.addEventListener("error", () => {
+    if (!previewCover.src.endsWith("/assets/covers/other.webp"))
+      previewCover.src = "/assets/covers/other.webp";
+  });
+  form.addEventListener("input", updatePreview);
+  form.addEventListener("change", updatePreview);
   const publishCity = $('[name="cityCode"]', form);
   const publishDistrict = $('[name="districtCode"]', form);
   const publishWard = $('[name="wardCode"]', form);
@@ -877,34 +1033,62 @@ function showPublish() {
       "不指定下辖区",
     );
   });
+  if (template) {
+    form.elements.title.value = template.title;
+    form.elements.description.value = template.description;
+    form.elements.capacity.value = template.capacity;
+    form.elements.price.value = template.price_amount ?? 0;
+    form.elements.approvalMode.value = template.approval_mode;
+    publishCategory.value = template.category_id;
+    publishCategory.dispatchEvent(new Event("change"));
+    custom.value = template.custom_subcategory ?? "";
+    publishCity.value = template.city_code;
+    publishCity.dispatchEvent(new Event("change"));
+    publishDistrict.value = template.municipality_code ?? template.district_code;
+    publishDistrict.dispatchEvent(new Event("change"));
+    if (template.municipality_code) publishWard.value = template.district_code;
+    updatePreview();
+  }
   handleForm(form, content, async (values) => {
     const startsAt = new Date(values.startsAt + ":00+09:00");
     const endsAt = new Date(values.endsAt + ":00+09:00");
     if (endsAt <= startsAt) throw new Error("结束时间必须晚于开始时间。");
     const amount = Number(values.price);
-    const item = await request("/events", {
-      auth: true,
-      data: {
-        categoryId: values.categoryId,
-        title: values.title.trim(),
-        description: values.description.trim(),
-        cityCode: values.cityCode,
-        districtCode: values.wardCode || values.districtCode,
-        startsAt: startsAt.toISOString(),
-        endsAt: endsAt.toISOString(),
-        minParticipants: 2,
-        capacity: Number(values.capacity),
-        approvalMode: values.approvalMode,
-        visibility: "public",
-        priceMin: amount,
-        priceMax: amount,
-        priceCurrency: "KRW",
-        beginnerFriendly: false,
-        place: { name: values.place.trim() },
-        customSubcategory: values.customSubcategory.trim() || null,
-        languageCodes: ["zh"],
-      },
-    });
+    const coverMediaId = await uploadCover(values.cover);
+    let item;
+    try {
+      item = await request("/events", {
+        auth: true,
+        data: {
+          categoryId: values.categoryId,
+          title: values.title.trim(),
+          description: values.description.trim(),
+          cityCode: values.cityCode,
+          districtCode: values.wardCode || values.districtCode,
+          startsAt: startsAt.toISOString(),
+          endsAt: endsAt.toISOString(),
+          minParticipants: 2,
+          capacity: Number(values.capacity),
+          approvalMode: values.approvalMode,
+          visibility: "public",
+          priceMin: amount,
+          priceMax: amount,
+          priceCurrency: "KRW",
+          beginnerFriendly: false,
+          coverMediaId,
+          place: { name: values.place.trim() },
+          customSubcategory: values.customSubcategory.trim() || null,
+          languageCodes: ["zh"],
+        },
+      });
+    } catch (error) {
+      if (coverMediaId)
+        await request("/events/covers/" + coverMediaId, {
+          auth: true,
+          method: "DELETE",
+        }).catch(() => {});
+      throw error;
+    }
     location.assign(eventLink(item.id));
   });
 }
@@ -954,6 +1138,7 @@ async function showOrganizer(id) {
       node("h2", event.item.title),
       actionLink("查看活动", eventLink(id)),
       actionLink("编辑活动", "/organizer/activities/" + id + "/edit"),
+      actionLink("活动签到", "/organizer/activities/" + id + "/check-in"),
     );
     const list = node("ul", null, "detail-list");
     for (const member of members.filter(
@@ -1078,9 +1263,23 @@ async function showEdit(id) {
 }
 async function showSettings() {
   const content = show("个人设置", "account-page");
+  content.append(memberPages.accountLinks());
   const form = node("form", null, "form");
   form.innerHTML =
     '<label>昵称<input name="nickname" required minlength="2" maxlength="30"></label><button type="submit" class="button primary">保存昵称</button>';
+  const profile = await request(
+    "/users/" + encodeURIComponent(session.user.id) + "/public-profile",
+    { auth: true },
+  ).catch(() => null);
+  if (profile) {
+    const label = node("label", "公开简介");
+    const input = node("textarea");
+    input.name = "bio";
+    input.maxLength = 300;
+    input.value = profile.bio ?? "";
+    label.append(input);
+    form.insertBefore(label, $('button[type="submit"]', form));
+  }
   form.elements.nickname.value = session.user.nickname ?? "";
   content.append(
     form,
@@ -1096,6 +1295,12 @@ async function showSettings() {
       auth: true,
       data: { nickname: values.nickname.trim() },
     });
+    if (values.bio !== undefined)
+      await request("/me/web-bio", {
+        method: "PUT",
+        auth: true,
+        data: { bio: values.bio },
+      });
     setSession({
       ...session,
       user: { ...session.user, nickname: updated.nickname },
@@ -1123,82 +1328,159 @@ async function showPerson(id) {
       content.prepend(avatar);
     }
     content.append(node("p", "获赞 " + (user.like_count ?? 0), "meta"));
+    if (user.bio) content.append(node("p", user.bio, "detail-copy"));
+    const tags = node("div", null, "profile-tags");
+    for (const tag of user.positive_tags ?? []) {
+      const label = {
+        reliable: "值得信赖",
+        friendly: "友善",
+        respectful: "尊重他人",
+        helpful: "乐于助人",
+        newcomer_friendly: "新手友好",
+        well_organized: "组织有序",
+        clear_communication: "沟通清晰",
+      }[tag.tag_code];
+      if (label) tags.append(node("span", label + " ×" + tag.count));
+    }
+    if (tags.children.length) content.append(tags);
+    if (id !== session?.user.id)
+      content.append(communityPages.followButton(id));
+    if (id !== session?.user.id)
+      content.append(
+        button(
+          "屏蔽用户",
+          () =>
+            requireLogin(async () => {
+              try {
+                await request("/blocks/" + encodeURIComponent(id), {
+                  auth: true,
+                  data: { reasonCode: "user_requested" },
+                });
+                content.append(
+                  node("p", "已屏蔽，可在隐私设置中解除。", "notice"),
+                );
+              } catch (error) {
+                showError(content, error);
+              }
+            }),
+          "text-button",
+        ),
+      );
+    if (id !== session?.user.id)
+      content.append(
+        button(
+          "举报用户",
+          () => requireLogin(() => showReport("user", id, id)),
+          "text-button",
+        ),
+      );
+    if (user.activities?.length) {
+      content.append(node("h2", "公开发起的活动"));
+      const grid = node("div", null, "cards");
+      grid.append(...user.activities.map(card));
+      content.append(grid);
+    }
   } catch (error) {
     if (marker === dialogRequest) showError(content, error);
   }
 }
 
-const guides = [
-  {
-    slug: "river-walk",
-    kind: "outdoors",
-    title: "把周末留一段给散步",
-    lead: "一场不赶时间的汉江散步，适合一个人出门，也适合和新朋友见面。",
-    steps: [
-      "选一个双方都熟悉的公共入口，约定出发时间。",
-      "先走一小段，走累了就休息，不必把路线排满。",
-      "出发前核对天气和交通，遇到大雨就改约室内。",
-    ],
-  },
-  {
-    slug: "coffee-meet",
-    kind: "food",
-    title: "第一次咖啡局，怎么开场",
-    lead: "想认识新朋友，可以从一杯咖啡和一个简单话题开始。",
-    steps: [
-      "约定各自消费，提前说明预算和聚会时长。",
-      "选公共场所，把场馆和无障碍需求考虑进去。",
-      "准备一个轻松话题，例如最近想去的地方。",
-    ],
-  },
-  {
-    slug: "photo-walk",
-    kind: "culture",
-    title: "在熟悉的街区做一次观察练习",
-    lead: "给自己定一个小主题，带着手机在附近走走。",
-    steps: [
-      "从颜色、店招或街角光影里选一个主题。",
-      "拍摄人物前先征得同意，避免打扰他人。",
-      "回家选三张照片，写下你为什么停下来。",
-    ],
-  },
-];
-function showGuides(slug) {
-  const guide = guides.find((entry) => entry.slug === slug);
-  if (slug && !guide) return showNotFound();
+function guideCard(guide) {
+  const item = node("article", null, "card");
+  const href = "/guides/" + encodeURIComponent(guide.slug);
+  const picture = actionLink("", href, "cover");
+  picture.setAttribute("aria-label", guide.title);
+  picture.append(cover({ cover_category_code: guide.cover_category }));
+  item.append(
+    picture,
+    actionLink(guide.title, href, "guide-title"),
+    node("p", guide.summary, "meta"),
+  );
+  return item;
+}
+async function loadGuideCards(content, featured, filters = {}) {
+  const grid = node("div", null, "cards guide-grid");
+  content.append(grid);
+  try {
+    const entries = await request(
+      "/guides?" +
+        new URLSearchParams({ featured: String(featured), ...filters }),
+    );
+    grid.replaceChildren(...entries.map(guideCard));
+    if (!entries.length) grid.append(node("p", "暂无已发布指南。", "meta"));
+  } catch (error) {
+    showError(grid, error);
+  }
+}
+async function showGuides(slug) {
   const content = show(
-    guide?.title ?? "周末指南",
-    guide ? "guide-article" : "workspace-page",
+    slug ? "周末指南 · 阅读" : "周末指南",
+    slug ? "guide-article" : "workspace-page",
   );
-  content.append(
-    node("p", guide?.lead ?? "搭慕编辑部 · 给想出门的人一些灵感。", "meta"),
-  );
-  if (guide) {
-    content.append(cover({ cover_category_code: guide.kind }, "detail-cover"));
-    const list = node("ol", null, "guide-steps");
-    for (const step of guide.steps) list.append(node("li", step));
+  if (!slug) {
+    content.append(node("p", "搭慕编辑部 · 给想出门的人一些灵感。", "meta"));
+    return loadGuideCards(content, false);
+  }
+  try {
+    const guide = await request("/guides/" + encodeURIComponent(slug));
+    $("h1", content).textContent = guide.title;
+    document.title = guide.title + " · 搭慕 DAMU";
     content.append(
-      list,
+      node("p", guide.summary, "meta"),
+      cover({ cover_category_code: guide.cover_category }, "detail-cover"),
+    );
+    for (const paragraph of guide.body
+      .split(/\r?\n/)
+      .filter((line) => line.trim())) {
+      content.append(node("p", paragraph, "detail-copy"));
+    }
+    if (guide.source_url) {
+      const source = actionLink(
+        "查看原始来源",
+        guide.source_url,
+        "text-button",
+      );
+      source.rel = "noopener noreferrer";
+      source.target = "_blank";
+      content.append(source);
+    }
+    content.append(
+      memberPages.bookmark("guide", guide.slug),
       actionLink("发现活动", "/explore"),
       actionLink("返回指南", "/guides", "text-button"),
     );
-  } else {
-    const grid = node("div", null, "cards guide-grid");
-    for (const entry of guides) {
-      const item = node("article", null, "card");
-      const picture = actionLink("", "/guides/" + entry.slug, "cover");
-      picture.setAttribute("aria-label", entry.title);
-      picture.append(cover({ cover_category_code: entry.kind }));
-      item.append(
-        picture,
-        actionLink(entry.title, "/guides/" + entry.slug, "guide-title"),
-        node("p", entry.lead, "meta"),
-      );
-      grid.append(item);
-    }
-    content.append(grid);
+  } catch (error) {
+    showError(content, error);
+    content.append(actionLink("返回指南", "/guides"));
   }
 }
+
+function showReport(targetType, targetId, reportedUserId) {
+  const content = show(
+    "举报" + (targetType === "activity" ? "活动" : "用户"),
+    "reading",
+    true,
+  );
+  const form = node("form", null, "form");
+  form.innerHTML =
+    '<label>原因<select name="categoryCode" required><option value="">请选择</option><option value="misleading">信息不实</option><option value="harassment">骚扰</option><option value="unsafe">安全问题</option><option value="other">其他</option></select></label><label>说明<textarea name="description" maxlength="500" required></textarea></label><button type="submit" class="button primary">提交举报</button>';
+  content.append(form);
+  handleForm(form, content, async (values) => {
+    if (!values.description.trim()) throw new Error("请填写说明。");
+    await request("/reports", {
+      auth: true,
+      data: {
+        targetType,
+        targetId,
+        reportedUserId,
+        categoryCode: values.categoryCode,
+        description: values.description.trim(),
+      },
+    });
+    form.replaceWith(node("p", "举报已提交。", "notice"));
+  });
+}
+
 function showNotFound() {
   const content = show("没有找到这个页面");
   content.append(actionLink("返回发现活动", "/explore"));
@@ -1239,10 +1521,24 @@ async function route() {
         actionLink("浏览周末指南", "/guides"),
       );
       browse.append(preview);
+      loadGuideCards(preview, true);
     }
     await setupFeed();
     return;
   }
+  const community = communityPages.route(path);
+  if (community !== null) return community;
+  if (memberPages.pages.has(path)) return memberPages.pages.get(path)();
+  const checkIn = /^\/organizer\/activities\/([0-9a-f-]{36})\/check-in$/i.exec(
+    path,
+  );
+  if (checkIn) return memberPages.checkIn(checkIn[1]);
+  const feedback = /^\/activities\/([0-9a-f-]{36})\/feedback$/i.exec(path);
+  if (feedback) return memberPages.activityFeedback(feedback[1]);
+  const topic = /^\/(places|categories)\/([a-z0-9_-]+)$/i.exec(path);
+  if (topic) return memberPages.topic(topic[1], topic[2]);
+  if (path === "/places" || path === "/categories")
+    return memberPages.topic(path.slice(1));
   const activity = /^\/activities\/([0-9a-f-]{36})$/i.exec(path);
   if (activity) return showActivity(activity[1]);
   if (path === "/login" || path === "/register")
@@ -1253,11 +1549,19 @@ async function route() {
   if (path === "/activities/new")
     return requireLogin(async () => {
       try {
-        [regions, categories] = await Promise.all([
+        const copy = new URLSearchParams(location.search).get("copy");
+        const [areaCatalog, categoryCatalog, source] = await Promise.all([
           request("/regions"),
           request("/categories"),
+          copy
+            ? request("/events/" + encodeURIComponent(copy), { auth: true })
+            : null,
         ]);
-        showPublish();
+        if (source && source.item.organizer_user_id !== session.user.id)
+          throw new Error("只能复办自己发起的活动。");
+        regions = areaCatalog;
+        categories = categoryCatalog;
+        showPublish(source?.item);
       } catch (error) {
         showError(show("发起活动"), error);
       }
@@ -1279,6 +1583,36 @@ async function route() {
         help ? "查看见面安全" : "查看使用帮助",
         help ? "/safety" : "/help",
       ),
+    );
+    return;
+  }
+  if (path === "/terms") {
+    const content = show("社区规则");
+    content.append(
+      node(
+        "p",
+        "搭慕用于发现和组织线下活动。请准确填写活动内容、报名条件和预计线下人均费用。",
+        "detail-copy",
+      ),
+      node(
+        "p",
+        "尊重参与者的意愿和隐私。未经允许，不公开他人的联系方式、集合信息或照片。遇到骚扰、虚假活动或安全问题，可在对应页面举报。",
+        "detail-copy",
+      ),
+      node(
+        "p",
+        "费用由参与者线下处理。搭慕不代收活动费、不提供转账或资金担保。",
+        "detail-copy",
+      ),
+      actionLink("阅读隐私政策", "/privacy"),
+    );
+    return;
+  }
+  if (path === "/unavailable") {
+    const content = show("服务暂不可用");
+    content.append(
+      node("p", "请稍后重试。", "meta"),
+      actionLink("回到首页", "/"),
     );
     return;
   }
@@ -1315,6 +1649,7 @@ function syncFilters() {
     district: district.value,
     ward: ward.value,
     day: $("#day").value,
+    maxPrice: $("#max-price").value,
     category,
     sort: $("#sort").value,
   }))
@@ -1340,6 +1675,7 @@ async function setupFeed() {
   category = params.get("category") ?? "";
   $("#query").value = query;
   $("#day").value = params.get("day") ?? "";
+  $("#max-price").value = params.get("maxPrice") ?? "";
   $("#sort").value = params.get("sort") ?? "recommended";
   const [regionData, categoryData] = await Promise.allSettled([
     request("/regions"),
@@ -1383,7 +1719,39 @@ district.addEventListener("change", () => {
 ward.addEventListener("change", refreshFeed);
 $("#sort").addEventListener("change", refreshFeed);
 $("#day").addEventListener("change", refreshFeed);
+$("#max-price").addEventListener("change", refreshFeed);
 more.addEventListener("click", () => loadFeed(true));
 $("#close").addEventListener("click", () => dialog.close());
+const memberPages = createMemberPages({
+  show,
+  node,
+  button,
+  actionLink,
+  showError,
+  handleForm,
+  request,
+  requireLogin,
+  eventLink,
+  time,
+  card,
+  setSession,
+  session: () => session,
+  reasonDialog,
+  loadGuideCards,
+});
+const communityPages = createCommunityPages({
+  show,
+  node,
+  button,
+  actionLink,
+  showError,
+  handleForm,
+  request,
+  requireLogin,
+  eventLink,
+  time,
+  card,
+  session: () => session,
+});
 setSession(session);
 route();

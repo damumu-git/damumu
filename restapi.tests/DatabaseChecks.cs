@@ -56,6 +56,7 @@ internal static class DatabaseChecks
             await using var command = new NpgsqlCommand(ActivityQueries.List, connection, transaction);
             foreach (var name in new[] { "city", "q" }) command.Parameters.Add(name, NpgsqlDbType.Text).Value = DBNull.Value;
             command.Parameters.Add("district", NpgsqlDbType.Text).Value = (object?)district ?? DBNull.Value;
+            command.Parameters.Add("maxPrice", NpgsqlDbType.Numeric).Value = DBNull.Value;
             command.Parameters.Add("categoryId", NpgsqlDbType.Uuid).Value = DBNull.Value;
             foreach (var name in new[] { "from", "to" }) command.Parameters.Add(name, NpgsqlDbType.TimestampTz).Value = DBNull.Value;
             command.Parameters.AddWithValue("hasGeo", false);

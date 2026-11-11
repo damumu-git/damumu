@@ -774,3 +774,10 @@ ADR-007关于只展示Emoji、不读取插画的决定由本条取代；ADR-006�
 - `restapi/Endpoints/AdminEndpoints.cs`
 - `restapi/Endpoints/EventEndpoints.cs`
 - `app/lib/main.dart`
+
+
+## ADR-032：独立网页内容和社区数据
+
+状态：已采用
+
+指南、小组、意向、收藏与关注保存在主 API 的 PostgreSQL 数据库。网页与原生端继续使用同一账号和活动。意向关联到正式公开活动前只收集时段，收藏和关注使用幂等写入，账号注销清除网页新增个人关联。公开简介使用独立主动公开字段。地图仅返回行政区外接范围，活动的准确集合点权限沿用现有 API。

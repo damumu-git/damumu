@@ -324,6 +324,10 @@ public static class UserEndpoints
                        e.cover_media_id, e.cover_review_status, e.cover_review_reason,
                        e.city_code, e.district_code, e.approval_mode,
                        e.capacity, e.approved_count, e.price_amount, e.price_currency,
+                       CASE WHEN e.organizer_user_id=@userId THEN (
+                           SELECT count(*) FROM event_member applicant
+                           WHERE applicant.event_id=e.id AND applicant.status='applied' AND applicant.left_at IS NULL
+                       ) END AS pending_count,
                        em.status AS membership_status, em.member_role, em.checked_in_at,
                        s.starts_at, s.ends_at,
                        COALESCE(s.ends_at <= now(), false)

@@ -20,8 +20,10 @@ public static class ActivityEndpoints
             int? limit,
             string? cursor,
             string? sort,
+            decimal? maxPrice,
             CancellationToken ct) =>
         {
+            if (maxPrice < 0) throw new ApiException(400, "price_invalid", "预算不能小于零");
             var take = Math.Clamp(limit ?? 20, 1, 100);
             var position = ActivityCursor.Decode(cursor);
             var recommended = position?.Recommended ?? (sort == "recommended");
@@ -34,6 +36,7 @@ public static class ActivityEndpoints
                     city,
                     district,
                     categoryId,
+                    maxPrice,
                     q,
                     from,
                     to,

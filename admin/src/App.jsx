@@ -1,3 +1,4 @@
+import WebGuides from './WebGuides.jsx'
 import AdminNavIcon from './AdminNavIcon.jsx'
 import { FilePicker } from './AdminControls.jsx'
 import { useAdminDialog } from './admin-dialog-context'
@@ -12,6 +13,7 @@ const navigation = [
   { id: 'dashboard', label: '运营概览' },
   { id: 'users', label: '用户管理' },
   { id: 'events', label: '活动管理' },
+  { id: 'web-guides', label: '周末指南' },
   { id: 'messages', label: '消息管理' },
   { id: 'reports', label: '举报治理' },
   { id: 'safety', label: '安全警报' },
@@ -1276,7 +1278,7 @@ function Settings() {
   )
 }
 
-const pages = { 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, messages: Messages, reports: Reports, safety: Safety, suggestions: Suggestions, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
+const pages = { 'web-guides': WebGuides, 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, messages: Messages, reports: Reports, safety: Safety, suggestions: Suggestions, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
 
 function AnnouncementDialog({ onClose }) {
   const [title, setTitle] = useState('')

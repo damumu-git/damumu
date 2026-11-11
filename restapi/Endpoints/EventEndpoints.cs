@@ -263,7 +263,7 @@ public static class EventEndpoints
             var viewerId = ApiSupport.GetOptionalUserId(context);
             var profile = await db.QueryOneAsync(
                 """
-                SELECT u.id, COALESCE(up.nickname, '用户') AS nickname, COALESCE(member_avatar.image_url, up.avatar_url) AS avatar_url,
+                SELECT u.id, COALESCE(up.nickname, '用户') AS nickname, COALESCE(member_avatar.image_url, up.avatar_url) AS avatar_url, up.web_public_bio AS bio,
                        (SELECT count(*) FROM endorsement en WHERE en.target_user_id=u.id) AS like_count
                 FROM app_user u
                 LEFT JOIN user_profile up ON up.user_id=u.id
@@ -280,6 +280,16 @@ public static class EventEndpoints
                 GROUP BY tag_code
                 ORDER BY count(*) DESC, tag_code
                 LIMIT 3
+                """, new { id }, ct);
+            profile["activities"] = await db.QueryAsync("""
+                SELECT e.id,e.title,e.description,e.price_amount, c.name_zh_cn AS category_name,
+                       COALESCE(parent.code,c.code) AS cover_category_code, c.code AS cover_subcategory_code,
+                       (SELECT min(starts_at) FROM event_schedule s WHERE s.event_id=e.id AND s.status='scheduled') AS starts_at
+                FROM event e JOIN category c ON c.id=e.category_id
+                LEFT JOIN category parent ON parent.id=c.parent_id
+                WHERE e.organizer_user_id=@id AND e.visibility='public' AND e.deleted_at IS NULL
+                  AND e.status IN ('published','full','completed')
+                ORDER BY starts_at DESC NULLS LAST, e.id LIMIT 12
                 """, new { id }, ct);
             profile["positive_tags"] = positiveTags;
             if (viewerId.HasValue && eventId.HasValue)
