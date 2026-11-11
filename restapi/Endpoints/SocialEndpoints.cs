@@ -92,7 +92,7 @@ public static class SocialEndpoints
 
         api.MapGet("/conversations/{id:guid}/messages", async (
             Guid id, HttpContext context, Db db, string? cursor, DateTime? before,
-            int? limit, CancellationToken ct) =>
+            int? limit, int? recentDays, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var member = await db.ScalarAsync<long>(
@@ -133,15 +133,21 @@ public static class SocialEndpoints
                     cursorMessageId = position?.MessageId ?? Guid.Empty,
                     limit = take + 1
                 }, ct);
+            DateTime? recentFrom = recentDays.HasValue && cursor is null && before is null
+                ? DateTime.UtcNow.AddDays(-Math.Clamp(recentDays.Value, 1, 90))
+                : null;
             var hasMore = rows.Count > take;
-            if (hasMore) rows.RemoveAt(rows.Count - 1);
+            if (recentFrom is { } cutoff)
+                hasMore |= rows.RemoveAll(row => (DateTime)row["created_at"]! < cutoff) > 0;
+            if (rows.Count > take) rows.RemoveAt(rows.Count - 1);
             string? nextCursor = null;
             if (hasMore && rows.Count > 0)
             {
                 var last = rows[^1];
                 nextCursor = MessageCursor.Encode((DateTime)last["created_at"]!, (Guid)last["id"]!);
             }
-            return ApiSupport.Ok(new { items = rows, nextCursor, hasMore });
+            var historyBefore = hasMore && rows.Count == 0 ? recentFrom : null;
+            return ApiSupport.Ok(new { items = rows, nextCursor, hasMore, historyBefore });
         });
 
         api.MapPost("/conversations/{id:guid}/media", async (

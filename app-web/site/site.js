@@ -1,5 +1,6 @@
 import { createCommunityPages } from "/community-pages.js";
 import { createMemberPages } from "/member-pages.js";
+import { createChatPage } from "/chat-page.js";
 const apiRoot = "https://api.damumu.com";
 const oauth = "/api/v1/auth/web";
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -750,7 +751,7 @@ async function showMessages() {
   const content = show("消息", "workspace-page");
   const marker = dialogRequest;
   try {
-    const conversations = await request("/conversations", { auth: true });
+    const conversations = await request("/conversations?limit=100", { auth: true });
     if (marker !== dialogRequest) return;
     const list = node("ul", null, "detail-list");
     for (const conversation of conversations) {
@@ -759,10 +760,9 @@ async function showMessages() {
         ? " · " + conversation.unread_count + " 条未读"
         : "";
       entry.append(
-        button(
+        actionLink(
           conversation.display_title + unread,
-          () =>
-            location.assign("/messages/" + encodeURIComponent(conversation.id)),
+          "/messages/" + encodeURIComponent(conversation.id),
           "text-button",
         ),
         node("p", conversation.last_message_body || "暂无文字消息", "meta"),
@@ -775,132 +775,6 @@ async function showMessages() {
   } catch (error) {
     if (marker === dialogRequest) showError(content, error);
   }
-}
-
-async function showConversation(conversation, conversations) {
-  const content = show(conversation.display_title, "chat-page");
-  const layout = node("div", null, "chat-layout");
-  const inbox = node("nav", null, "chat-sidebar");
-  inbox.setAttribute("aria-label", "会话列表");
-  for (const item of conversations) {
-    const link = actionLink(
-      item.display_title,
-      "/messages/" + item.id,
-      "text-button",
-    );
-    if (item.id === conversation.id) link.setAttribute("aria-current", "page");
-    inbox.append(link);
-  }
-  const thread = node("div", null, "chat-thread");
-  layout.append(inbox, thread);
-  content.append(layout);
-  const marker = dialogRequest;
-  const base = "/conversations/" + encodeURIComponent(conversation.id);
-  const messages = node("ol", null, "detail-list");
-  const older = button("加载更早消息", () => loadMessages(true));
-  older.hidden = true;
-  thread.append(
-    actionLink("返回消息", "/messages", "text-button"),
-    older,
-    messages,
-  );
-  let nextCursor;
-  async function loadMessages(prepend = false) {
-    older.disabled = true;
-    try {
-      const params =
-        prepend && nextCursor
-          ? "?cursor=" + encodeURIComponent(nextCursor)
-          : "";
-      const page = await request(base + "/messages" + params, { auth: true });
-      if (marker !== dialogRequest) return;
-      const entries = [...page.items].reverse().map((message) => {
-        const entry = node("li");
-        entry.append(
-          node(
-            "p",
-            [message.sender_name, time(message.created_at)]
-              .filter(Boolean)
-              .join(" · "),
-            "meta",
-          ),
-          node(
-            "p",
-            message.recalled_at
-              ? "消息已撤回"
-              : message.body || "附件请在搭慕 App 内查看",
-            "detail-copy",
-          ),
-        );
-        if (
-          message.sender_user_id &&
-          message.sender_user_id !== session.user.id &&
-          !message.recalled_at
-        ) {
-          entry.append(
-            button(
-              "举报消息",
-              () =>
-                reasonDialog("举报消息", async (description) => {
-                  await request(
-                    base +
-                      "/messages/" +
-                      encodeURIComponent(message.id) +
-                      "/report",
-                    {
-                      auth: true,
-                      data: {
-                        categoryCode: "inappropriate_content",
-                        description,
-                      },
-                    },
-                  );
-                  dialog.close();
-                  thread.append(node("p", "举报已提交。", "notice"));
-                }),
-              "text-button",
-            ),
-          );
-        }
-        return entry;
-      });
-      if (prepend) messages.prepend(...entries);
-      else messages.replaceChildren(...entries);
-      nextCursor = page.hasMore ? page.nextCursor : null;
-      older.hidden = !nextCursor;
-      if (!prepend && page.items[0]) {
-        await request(base + "/read", {
-          auth: true,
-          data: { messageId: page.items[0].id },
-        });
-      }
-    } catch (error) {
-      if (marker === dialogRequest) showError(content, error);
-    } finally {
-      older.disabled = false;
-    }
-  }
-  if (conversation.status === "active") {
-    const form = node("form", null, "form");
-    form.innerHTML =
-      '<label>发送文字消息<textarea name="body" maxlength="4000" required></textarea></label><button class="button primary" type="submit">发送</button>';
-    thread.append(form);
-    handleForm(form, content, async (values) => {
-      const body = values.body.trim();
-      if (!body) throw new Error("请输入消息。");
-      await request(base + "/messages", {
-        auth: true,
-        data: {
-          messageType: "text",
-          body,
-          clientMessageId: crypto.randomUUID(),
-        },
-      });
-      form.reset();
-      await loadMessages();
-    });
-  }
-  await loadMessages();
 }
 
 async function uploadCover(file) {
@@ -1636,7 +1510,7 @@ async function route() {
   if (conversation)
     return requireLogin(async () => {
       try {
-        const list = await request("/conversations", { auth: true });
+        const list = await request("/conversations?limit=100", { auth: true });
         const item = list.find((entry) => entry.id === conversation[1]);
         if (item) showConversation(item, list);
         else showNotFound();
@@ -1760,6 +1634,18 @@ const communityPages = createCommunityPages({
   time,
   card,
   session: () => session,
+});
+const showConversation = createChatPage({
+  show,
+  node,
+  button,
+  actionLink,
+  handleForm,
+  request,
+  reasonDialog,
+  dialog,
+  session: () => session,
+  time,
 });
 setSession(session);
 route();
