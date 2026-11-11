@@ -1,0 +1,368 @@
+/* The WenKai Medium web subset uses GB2312 and punctuation from the app's font.
+   The Korean WOFF2 files come from LINE's official LINE Seed KR release. */
+@font-face {
+  font-family: "LXGW WenKai Lite";
+  src: url("/assets/fonts/LXGWWenKaiLite-Medium.woff") format("woff");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "LINE Seed KR";
+  src: url("/assets/fonts/LINESeedKR-Rg.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7FF;
+}
+@font-face {
+  font-family: "LINE Seed KR";
+  src: url("/assets/fonts/LINESeedKR-Bd.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7FF;
+}
+:root {
+  --web-font: "LINE Seed KR", "Noto Sans SC", "Noto Sans KR", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-family: var(--web-font);
+  --filter-line: #dce2ec;
+  --filter-paper: #fafaf7;
+}
+.hero:not(.explore-hero) h1,
+.guide-page > h1,
+.guide-title,
+.home-guides h2 {
+  font-family: "LINE Seed KR", "LXGW WenKai Lite", var(--web-font);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.hero:not(.explore-hero) h1 {
+  line-height: 1.3;
+}
+
+.filters,
+#date-filters,
+.popular-regions,
+.agenda-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+.filters {
+  margin: 1rem 0 0;
+}
+.filters > .text-button {
+  margin-inline: 0.35rem;
+  font-size: 0.82rem;
+}
+.filter-trigger,
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  min-height: 39px;
+  padding: 0.5rem 0.76rem;
+  border: 1px solid var(--filter-line);
+  border-radius: 99px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.87rem;
+  line-height: 1.3;
+}
+.filter-trigger:hover,
+.filter-pill:hover,
+.filter-option:hover {
+  background: #f1f5fc;
+}
+.filter-trigger.is-selected,
+.filter-pill[aria-pressed="true"],
+.filter-pill[aria-current="page"] {
+  border-color: #b9c8ff;
+  background: var(--accent-tint);
+  color: #253fab;
+  font-weight: 700;
+}
+.filter-trigger:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.region-trigger::before {
+  content: "地区";
+  color: var(--muted);
+  font-size: 0.75rem;
+  flex: none;
+}
+.filter-select {
+  position: relative;
+}
+.filter-select summary {
+  cursor: pointer;
+  list-style: none;
+}
+.filter-select summary::-webkit-details-marker {
+  display: none;
+}
+.filter-select summary small {
+  color: var(--muted);
+}
+.filter-select summary::after {
+  content: "";
+  width: 0.38rem;
+  height: 0.38rem;
+  border: solid var(--muted);
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-0.1rem) rotate(45deg);
+}
+.filter-menu {
+  position: absolute;
+  z-index: 4;
+  inset-block-start: calc(100% + 0.4rem);
+  inset-inline-start: 0;
+  min-width: max(100%, 9.5rem);
+  padding: 0.35rem;
+  border: 1px solid var(--filter-line);
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 12px 35px #28335224;
+}
+.filter-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  width: 100%;
+  min-height: 37px;
+  padding: 0.42rem 0.65rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.88rem;
+  text-align: start;
+}
+.filter-option[aria-pressed="true"] {
+  background: var(--accent-tint);
+  color: #253fab;
+  font-weight: 700;
+}
+.filter-option[aria-pressed="true"]::after {
+  content: "✓";
+}
+.filter-option:focus-visible {
+  outline-offset: -2px;
+}
+
+.browse-dialog {
+  width: min(45rem, calc(100% - 2rem));
+  max-height: min(41rem, calc(100dvh - 2rem));
+}
+.browse-dialog[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.browse-dialog-header,
+.browse-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.85rem 1.1rem;
+}
+.browse-dialog-header {
+  border-bottom: 1px solid var(--filter-line);
+}
+.browse-dialog-header h3 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+.browse-close,
+.date-arrow {
+  width: 37px;
+  height: 37px;
+  border: 1px solid var(--filter-line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  font-size: 1.2rem;
+}
+.browse-dialog-body {
+  padding: 1rem 1.1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.browse-dialog-actions {
+  border-top: 1px solid var(--filter-line);
+  font-size: 0.88rem;
+}
+.popular-regions {
+  margin-bottom: 0.85rem;
+}
+.popular-regions:empty {
+  display: none;
+}
+.region-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 0.65rem;
+}
+.region-column {
+  min-width: 0;
+  padding: 0.55rem;
+  border: 1px solid var(--filter-line);
+  border-radius: 12px;
+  background: var(--filter-paper);
+}
+.region-column h4 {
+  margin: 0.2rem 0.55rem 0.45rem;
+  font-size: 0.8rem;
+}
+.region-options {
+  max-height: 13.5rem;
+  overflow-y: auto;
+}
+.region-options > p {
+  margin-inline: 0.55rem;
+}
+.date-dialog {
+  width: min(24rem, calc(100% - 2rem));
+}
+.date-picker-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.7rem;
+}
+.date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.2rem;
+  text-align: center;
+}
+.date-picker-grid > span {
+  min-height: 1.55rem;
+  align-content: center;
+}
+.date-choice {
+  min-height: 37px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.date-choice:hover {
+  background: var(--accent-tint);
+}
+.date-choice[aria-current="date"] {
+  border-color: #8b9be8;
+}
+.date-choice[aria-pressed="true"] {
+  background: var(--blue);
+  color: #fff;
+}
+
+.agenda-page {
+  max-width: 960px;
+}
+.agenda-filters {
+  margin-bottom: 1rem;
+}
+.agenda-month {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+.agenda-results {
+  margin-block: 1.15rem;
+}
+.agenda-day {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 8rem) minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1.15rem 0;
+  border-top: 1px solid var(--filter-line);
+  scroll-margin-top: 110px;
+}
+.agenda-day .agenda-day-heading {
+  display: grid;
+  align-content: start;
+  gap: 0.2rem;
+  margin: 0;
+  padding-top: 0.35rem;
+  font-size: 1.12rem;
+  letter-spacing: 0;
+}
+.agenda-day-heading small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+.agenda-events {
+  display: grid;
+  gap: 0.65rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.agenda-event {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.55rem;
+  border: 1px solid var(--filter-line);
+  border-radius: 13px;
+  background: #fff;
+}
+.agenda-event:hover {
+  border-color: #a7b8ee;
+}
+.agenda-event img.agenda-cover {
+  display: block;
+  width: 4.5rem;
+  height: 3.5rem;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.agenda-event-copy {
+  display: grid;
+  gap: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 580px) {
+  .filters > #region-filter,
+  #date-filters {
+    flex-basis: 100%;
+  }
+  .filter-select:nth-of-type(2) .filter-menu {
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+  }
+  .browse-dialog {
+    inset: auto 0 0;
+    width: 100%;
+    max-width: none;
+    max-height: 85dvh;
+    margin: 0;
+    border-radius: 20px 20px 0 0;
+  }
+  .browse-dialog-actions {
+    padding-bottom: max(0.85rem, env(safe-area-inset-bottom));
+  }
+  .region-columns,
+  .agenda-day {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.55rem;
+  }
+  .region-options {
+    max-height: 8.5rem;
+  }
+  .agenda-day .agenda-day-heading {
+    display: flex;
+    align-items: baseline;
+  }
+}

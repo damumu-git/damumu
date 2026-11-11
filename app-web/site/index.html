@@ -12,6 +12,7 @@
     <link rel="icon" href="/assets/logo.png" />
     <link rel="stylesheet" href="/fonts.css" />
     <link rel="stylesheet" href="/site.css" />
+    <link rel="stylesheet" href="/neighborhood.css" />
     <script type="module" src="/site.js"></script>
   </head>
   <body>
@@ -66,46 +67,22 @@
         <section id="gallery" class="gallery" aria-labelledby="gallery-title">
           <div class="toolbar">
             <div>
-              <p class="eyebrow section-label">EXPLORE / 01</p>
-              <h2 id="gallery-title">发现活动</h2>
+              <h2 id="gallery-title">活动列表</h2>
             </div>
-            <div id="filters" class="filters">
-              <label
-                ><span>市／道</span
-                ><select id="city">
-                  <option value="">全部市／道</option>
-                </select></label
-              >
-              <label
-                ><span>市／郡／区</span
-                ><select id="district" disabled>
-                  <option value="">全部地区</option>
-                </select></label
-              >
-              <label id="ward-filter" hidden>
-                <span>下辖区</span>
-                <select id="ward" disabled>
-                  <option value="">全部下辖区</option>
-                </select>
-              </label>
-              <label><span>日期</span><input id="day" type="date" /></label>
-              <label
-                ><span>预算</span
-                ><select id="max-price">
-                  <option value="">不限</option>
-                  <option value="0">免费</option>
-                  <option value="10000">₩10,000 以内</option>
-                  <option value="30000">₩30,000 以内</option>
-                </select></label
-              >
-              <label
-                ><span>排序</span
-                ><select id="sort">
-                  <option value="recommended">即将开始</option>
-                  <option value="newest">最新发布</option>
-                </select></label
-              >
-            </div>
+          </div>
+          <div id="filters" class="filters" role="group" aria-label="活动筛选">
+            <div id="region-filter"></div>
+            <div id="date-filters" role="group" aria-label="日期筛选"></div>
+            <select id="max-price" data-label="预算" hidden>
+              <option value="">不限</option>
+              <option value="0">免费</option>
+              <option value="10000">₩10,000 以内</option>
+              <option value="30000">₩30,000 以内</option>
+            </select>
+            <select id="sort" data-label="排序" hidden>
+              <option value="recommended">即将开始</option>
+              <option value="newest">最新发布</option>
+            </select>
           </div>
           <div id="categories" class="categories" aria-label="活动类别"></div>
           <p id="status" class="status" role="status"></p>

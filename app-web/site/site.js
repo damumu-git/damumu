@@ -1,6 +1,8 @@
 import { createCommunityPages } from "/community-pages.js";
 import { createMemberPages } from "/member-pages.js";
 import { createChatPage } from "/chat-page.js";
+import { createBrowseFilters } from "/browse-filters.js";
+import { dateQuery } from "/seoul-dates.js";
 const apiRoot = "https://api.damumu.com";
 const oauth = "/api/v1/auth/web";
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -10,9 +12,6 @@ const page = $("#page");
 const browse = $("#browse");
 const cards = $("#cards");
 const status = $("#status");
-const city = $("#city");
-const district = $("#district");
-const ward = $("#ward");
 const more = $("#more");
 let regions = [],
   categories = [],
@@ -261,7 +260,7 @@ function renderCategories() {
       const item = button(entry.name_zh_cn, () => {
         category = entry.id;
         renderCategories();
-        loadFeed();
+        refreshFeed();
       });
       item.setAttribute("aria-pressed", String(category === entry.id));
       return item;
@@ -276,22 +275,20 @@ async function loadFeed(append = false) {
   const params = new URLSearchParams({
     limit: location.pathname === "/" ? "8" : "20",
   });
+  const { city, district, ward } = browseFilters.values();
+  const range = browseFilters.range();
   for (const [key, value] of Object.entries({
-    city: city.value,
-    district: ward.value || district.value,
+    city,
+    district: ward || district,
     sort: $("#sort").value,
     q: query,
     categoryId: category,
     cursor: append ? cursor : null,
+    ...(range ? dateQuery(range) : {}),
   }))
     if (value) params.set(key, value);
   const maxPrice = $("#max-price").value;
   if (maxPrice) params.set("maxPrice", maxPrice);
-  const day = $("#day").value;
-  if (day) {
-    params.set("from", new Date(day + "T00:00:00+09:00").toISOString());
-    params.set("to", new Date(day + "T23:59:59.999+09:00").toISOString());
-  }
   if (!append) {
     cards.replaceChildren();
     cursor = null;
@@ -1299,6 +1296,7 @@ async function showGuides(slug) {
     slug ? "周末指南 · 阅读" : "周末指南",
     slug ? "guide-article" : "workspace-page",
   );
+  content.classList.add("guide-page");
   if (!slug) {
     content.append(node("p", "搭慕编辑部 · 给想出门的人一些灵感。", "meta"));
     return loadGuideCards(content, false);
@@ -1386,6 +1384,7 @@ async function route() {
     browse.hidden = false;
     if (path === "/explore") {
       $("#filters").append(actionLink("清除筛选", "/explore", "text-button"));
+      $(".toolbar").append(actionLink("活动日历", "/calendar"));
       $(".hero-art").hidden = true;
       $(".hero").classList.add("explore-hero");
       $("#hero-title").textContent = "发现活动";
@@ -1527,10 +1526,7 @@ function syncFilters() {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries({
     q: query,
-    city: city.value,
-    district: district.value,
-    ward: ward.value,
-    day: $("#day").value,
+    ...browseFilters.values(),
     maxPrice: $("#max-price").value,
     category,
     sort: $("#sort").value,
@@ -1546,37 +1542,19 @@ function refreshFeed() {
   syncFilters();
   loadFeed();
 }
-function loadDistricts() {
-  district.value = "";
-  fillSelect(district, regionChildren(city.value, 2), "全部地区", "code");
-  district.disabled = !city.value;
-}
 async function setupFeed() {
   const params = new URLSearchParams(location.search);
   query = params.get("q") ?? "";
   category = params.get("category") ?? "";
   $("#query").value = query;
-  $("#day").value = params.get("day") ?? "";
   $("#max-price").value = params.get("maxPrice") ?? "";
   $("#sort").value = params.get("sort") ?? "recommended";
   const [regionData, categoryData] = await Promise.allSettled([
     request("/regions"),
     request("/categories"),
   ]);
-  if (regionData.status === "fulfilled") {
-    regions = regionData.value;
-    fillSelect(
-      city,
-      regions.filter((entry) => entry.level === 1),
-      "全部市／道",
-      "code",
-    );
-    city.value = params.get("city") ?? "";
-    loadDistricts();
-    district.value = params.get("district") ?? "";
-    updateWard(ward, $("#ward-filter"), district.value);
-    ward.value = params.get("ward") ?? "";
-  }
+  if (regionData.status === "fulfilled") regions = regionData.value;
+  browseFilters.restore(params, regions);
   if (categoryData.status === "fulfilled") categories = categoryData.value;
   renderCategories();
   loadFeed();
@@ -1589,19 +1567,7 @@ $("#search").addEventListener("submit", (event) => {
     return location.assign("/explore?" + new URLSearchParams({ q: query }));
   refreshFeed();
 });
-city.addEventListener("change", () => {
-  loadDistricts();
-  updateWard(ward, $("#ward-filter"), "");
-  refreshFeed();
-});
-district.addEventListener("change", () => {
-  updateWard(ward, $("#ward-filter"), district.value);
-  refreshFeed();
-});
-ward.addEventListener("change", refreshFeed);
-$("#sort").addEventListener("change", refreshFeed);
-$("#day").addEventListener("change", refreshFeed);
-$("#max-price").addEventListener("change", refreshFeed);
+const browseFilters = createBrowseFilters({ node, button, changed: refreshFeed });
 more.addEventListener("click", () => loadFeed(true));
 $("#close").addEventListener("click", () => dialog.close());
 const memberPages = createMemberPages({
@@ -1633,6 +1599,8 @@ const communityPages = createCommunityPages({
   eventLink,
   time,
   card,
+  area,
+  cover,
   session: () => session,
 });
 const showConversation = createChatPage({

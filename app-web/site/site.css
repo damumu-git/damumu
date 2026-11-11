@@ -295,40 +295,10 @@ textarea:focus-visible {
   align-items: end;
   flex-wrap: wrap;
 }
-.section-label {
-  color: var(--muted);
-}
 h2 {
   font-size: clamp(1.7rem, 3vw, 2.6rem);
   letter-spacing: -0.06em;
   margin: 0.25rem 0 0;
-}
-.filters {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-.filters label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  padding: 0.48rem 0.65rem;
-  font-size: 0.8rem;
-}
-.filters label span {
-  color: var(--muted);
-  white-space: nowrap;
-}
-.filters select {
-  background: transparent;
-  border: 0;
-  color: var(--ink);
-  max-width: 9rem;
-}
-.filters select:disabled {
-  opacity: 0.55;
 }
 .categories {
   display: flex;
@@ -647,16 +617,6 @@ dialog .close {
   .card .host {
     flex-wrap: wrap;
   }
-  .filters {
-    gap: 0.3rem;
-  }
-  .filters label {
-    gap: 0.2rem;
-    padding: 0.43rem;
-  }
-  .filters select {
-    max-width: 6.5rem;
-  }
   .form-row {
     grid-template-columns: 1fr;
   }
@@ -780,12 +740,6 @@ dialog .close {
   border-radius: 50%;
   object-fit: cover;
 }
-.filters label {
-  background: white;
-  border-radius: 99px;
-  padding-inline: 0.85rem;
-}
-.filters select,
 .form select {
   appearance: none;
   padding-right: 1.7rem;
@@ -1038,13 +992,6 @@ dialog .close {
   }
 }
 
-.filters input[type="date"] {
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  min-width: 0;
-}
-
 .profile-tags {
   display: flex;
   gap: 0.5rem;
@@ -1109,38 +1056,6 @@ dialog .close {
   }
 }
 
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
-  margin-block: 1rem;
-}
-.calendar-label {
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-.calendar-day {
-  display: grid;
-  min-height: 48px;
-  align-content: center;
-  text-align: center;
-  padding: 0.25rem;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  font-weight: 700;
-}
-.calendar-day.has-events {
-  background: var(--accent-tint);
-  color: var(--blue);
-}
-.calendar-day small {
-  font-size: 0.65rem;
-}
-[id^="calendar-"] {
-  scroll-margin-top: 110px;
-}
 .activity-status-filters {
   display: flex;
   flex-wrap: wrap;

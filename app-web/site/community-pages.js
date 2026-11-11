@@ -1,3 +1,5 @@
+import { datePresets, dateQuery, dateRange, dayInSeoul, shiftDay } from "/seoul-dates.js";
+
 export function createCommunityPages(ui) {
   const {
     show,
@@ -10,6 +12,8 @@ export function createCommunityPages(ui) {
     requireLogin,
     eventLink,
     card,
+    area,
+    cover,
     time,
     session,
   } = ui;
@@ -346,128 +350,105 @@ export function createCommunityPages(ui) {
   }
 
   async function calendar() {
-    const content = show("活动日历", "workspace-page");
+    const content = show("活动日历", "agenda-page");
     const params = new URLSearchParams(location.search);
-    const current = new Intl.DateTimeFormat("sv-SE", {
-      timeZone: "Asia/Seoul",
-      year: "numeric",
-      month: "2-digit",
-    }).format();
+    const today = dayInSeoul();
     const selected = params.get("month");
-    const month = /^20[0-9]{2}-(0[1-9]|1[0-2])$/.test(selected)
-      ? selected
-      : current;
-    const [year, number] = month.split("-").map(Number);
-    const adjacent = (offset) =>
-      new Date(Date.UTC(year, number - 1 + offset, 1))
-        .toISOString()
-        .slice(0, 7);
-    const controls = node("div", null, "section-nav");
-    controls.append(
-      actionLink("上个月", "/calendar?month=" + adjacent(-1)),
-      node("strong", year + " 年 " + number + " 月"),
-      actionLink("下个月", "/calendar?month=" + adjacent(1)),
-    );
-    content.append(controls, node("p", "以韩国时间显示。", "meta"));
-    try {
-      const from = new Date(month + "-01T00:00:00+09:00");
-      const next = new Date(adjacent(1) + "-01T00:00:00+09:00");
-      const query = new URLSearchParams({
-        from: from.toISOString(),
-        to: new Date(next.valueOf() - 1).toISOString(),
-        sort: "recommended",
-        limit: "60",
-      });
-      const dates = new Map();
-      const dayKey = new Intl.DateTimeFormat("sv-SE", {
-        timeZone: "Asia/Seoul",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      });
-      const formatter = new Intl.DateTimeFormat("zh-CN", {
-        timeZone: "Asia/Seoul",
-        month: "long",
-        day: "numeric",
-        weekday: "long",
-      });
-      const monthGrid = node("div", null, "calendar-grid");
-      const results = node("div");
-      content.append(monthGrid, results);
-      function renderMonth() {
-        monthGrid.replaceChildren(
-          ...["一", "二", "三", "四", "五", "六", "日"].map((day) =>
-            node("strong", day, "calendar-label"),
-          ),
-        );
-        const leading =
-          (new Date(Date.UTC(year, number - 1, 1)).getUTCDay() + 6) % 7;
-        for (let i = 0; i < leading; i++)
-          monthGrid.append(node("span", null, "calendar-empty"));
-        const days = new Date(Date.UTC(year, number, 0)).getUTCDate();
-        for (let day = 1; day <= days; day++) {
-          const key = month + "-" + String(day).padStart(2, "0");
-          const count = dates.get(key)?.length ?? 0;
-          const cell = count
-            ? actionLink(
-                String(day),
-                "#calendar-" + key,
-                "calendar-day has-events",
-              )
-            : node("span", day, "calendar-day");
-          if (count) cell.append(node("small", count + " 场"));
-          monthGrid.append(cell);
-        }
-      }
-      async function load(cursor) {
-        if (cursor) query.set("cursor", cursor);
-        const page = await request("/activities?" + query);
-        for (const event of page.items) {
-          const date = dayKey.format(new Date(event.starts_at));
-          if (!dates.has(date)) dates.set(date, []);
-          dates.get(date).push(event);
-        }
-        renderMonth();
-        results.replaceChildren();
-        for (const [date, events] of dates) {
-          const heading = node(
-            "h2",
-            formatter.format(new Date(events[0].starts_at)),
-          );
-          heading.id = "calendar-" + date;
-          results.append(heading);
-          list(
-            results,
-            events,
-            (row, event) =>
-              row.append(
-                actionLink(event.title, eventLink(event.id), "text-button"),
-                node("p", time(event.starts_at), "meta"),
-              ),
-            "",
-          );
-        }
-        if (!dates.size)
-          results.append(node("p", "本月暂无可报名活动。", "meta"));
-        if (page.hasMore && page.nextCursor)
-          results.append(
-            button("加载更多", async (event) => {
-              const trigger = event.currentTarget;
-              trigger.disabled = true;
-              try {
-                await load(page.nextCursor);
-              } catch (error) {
-                showError(content, error);
-              } finally {
-                trigger.disabled = false;
-              }
-            }),
-          );
-      }
-      await load();
-    } catch (error) {
-      showError(content, error);
+    const month = /^20\d{2}-(0[1-9]|1[0-2])$/.test(selected) ? selected : null;
+    const preset = params.get("when");
+    let range = dateRange(preset, today) ?? [today, shiftDay(today, 29)];
+    const filters = node("nav", null, "agenda-filters");
+    filters.setAttribute("aria-label", "日历日期");
+    for (const [key, label] of [["", "未来 30 天"], ...Object.entries(datePresets)]) {
+      const link = actionLink(label, key ? "/calendar?when=" + key : "/calendar", "filter-pill");
+      if (!month && (key ? key === preset : !Object.hasOwn(datePresets, preset)))
+        link.setAttribute("aria-current", "page");
+      filters.append(link);
     }
+    const monthLink = actionLink("按月查看", "/calendar?month=" + (month || today.slice(0, 7)), "filter-trigger");
+    if (month) {
+      monthLink.classList.add("is-selected");
+      monthLink.setAttribute("aria-current", "page");
+    }
+    filters.append(monthLink);
+    content.append(filters);
+
+    if (month) {
+      const [year, number] = month.split("-").map(Number);
+      const adjacent = (offset) => new Date(Date.UTC(year, number - 1 + offset, 1)).toISOString().slice(0, 7);
+      range = [month + "-01", shiftDay(adjacent(1) + "-01", -1)];
+      const controls = node("div", null, "agenda-month");
+      controls.append(
+        actionLink("上个月", "/calendar?month=" + adjacent(-1)),
+        node("strong", `${year} 年 ${number} 月`),
+        actionLink("下个月", "/calendar?month=" + adjacent(1)),
+      );
+      content.append(controls);
+    }
+
+    const dayNumber = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Seoul", month: "long", day: "numeric" });
+    const weekday = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Seoul", weekday: "long" });
+    const hour = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    const results = node("div", null, "agenda-results");
+    const state = node("p", "正在查找活动…", "meta");
+    state.setAttribute("role", "status");
+    const dates = new Map();
+    const seen = new Set();
+    let cursor;
+    const more = button("加载更多活动", () => load(cursor));
+    more.hidden = true;
+    content.append(state, results, more);
+
+    async function load(position) {
+      more.disabled = true;
+      state.textContent = "正在查找活动…";
+      try {
+        const query = new URLSearchParams({ ...dateQuery(range), sort: "recommended", limit: "30" });
+        if (position) query.set("cursor", position);
+        const page = await request("/activities?" + query);
+        if (!content.isConnected) return;
+        for (const event of page.items) {
+          const start = new Date(event.starts_at);
+          if (!event.starts_at || !Number.isFinite(start.valueOf()) || seen.has(event.id)) continue;
+          seen.add(event.id);
+          const key = dayInSeoul(start);
+          if (!dates.has(key)) {
+            const group = node("section", null, "agenda-day");
+            group.id = "calendar-" + key;
+            const heading = node("h2", null, "agenda-day-heading");
+            heading.append(
+              node("span", dayNumber.format(start)),
+              node("small", key === today ? "今天 · " + weekday.format(start) : weekday.format(start)),
+            );
+            const entries = node("ul", null, "agenda-events");
+            group.append(heading, entries);
+            results.append(group);
+            dates.set(key, entries);
+          }
+          const item = node("li");
+          const link = actionLink("", eventLink(event.id), "agenda-event");
+          const copy = node("div", null, "agenda-event-copy");
+          copy.append(
+            node("strong", event.title),
+            node("span", [hour.format(start), area(event)].filter(Boolean).join(" · "), "meta"),
+          );
+          const image = cover(event, "agenda-cover");
+          image.alt = "";
+          link.append(image, copy);
+          item.append(link);
+          dates.get(key).append(item);
+        }
+        cursor = page.hasMore ? page.nextCursor : null;
+        more.hidden = !cursor;
+        state.textContent = seen.size ? "活动时间按韩国时间显示" : "这段时间还没有公开活动。";
+      } catch (error) {
+        if (!content.isConnected) return;
+        state.replaceChildren(node("span", error.message + " "), button("重试", () => load(position), "text-button"));
+      } finally {
+        more.disabled = false;
+      }
+    }
+    await load();
   }
 
   async function mapPage() {
