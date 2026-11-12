@@ -2,6 +2,12 @@ const recentDays = 7;
 const pageSize = 40;
 const historyEdge = 64;
 export const conversationRoute = /^\/messages\/([0-9a-f-]{36})$/i;
+const messageGroups = [
+  ["event", "活动消息", "activity_message_count"],
+  ["direct", "一般消息", "general_message_count"],
+  ["announcement", "公告", "announcement_count"],
+];
+const groupHref = (group) => group === "event" ? "/messages" : "/messages?type=" + group;
 const listDate = new Intl.DateTimeFormat("zh-CN", {
   timeZone: "Asia/Seoul", month: "numeric", day: "numeric",
   hour: "2-digit", minute: "2-digit", hourCycle: "h23",
@@ -23,6 +29,9 @@ export function createChatPage({
   dialog,
   session,
   time,
+  renderAvatar,
+  renderMessageCount,
+  refreshUnread,
 }) {
   return async function showMessages() {
     const content = show("消息", "chat-page");
@@ -31,54 +40,93 @@ export function createChatPage({
     sidebar.setAttribute("aria-label", "消息列表");
     const heading = node("h2", "消息列表", "chat-list-heading");
     heading.tabIndex = -1;
+    const groups = node("div", null, "chat-groups");
+    const groupLinks = new Map();
+    for (const [group, label] of messageGroups) {
+      const link = actionLink(label, groupHref(group), "chat-group");
+      const badge = node("span", null, "message-count");
+      badge.hidden = true;
+      link.append(badge);
+      link.addEventListener("click", (event) => navigate(event, groupHref(group)));
+      groupLinks.set(group, { link, badge });
+      groups.append(link);
+    }
     const choices = node("ul", null, "chat-choices");
     const listStatus = node("p", "正在加载会话…", "chat-list-status meta");
     listStatus.setAttribute("role", "status");
-    sidebar.append(heading, choices, listStatus);
+    sidebar.append(heading, groups, listStatus, choices);
     const panel = node("div", null, "chat-panel");
     const placeholder = node("div", null, "chat-placeholder");
     const prompt = node("p", "选择一个会话查看消息。");
     const back = actionLink("‹ 消息列表", "/messages", "chat-back text-button");
-    back.addEventListener("click", (event) => navigate(event, back.pathname));
     placeholder.append(back, prompt);
     panel.append(placeholder);
     layout.append(sidebar, panel);
     content.append(layout);
 
     const rows = new Map();
-    let activeId = null;
+    const errors = new Map();
+    let activeId;
     let threadRequest;
+    let listVersion = 0;
+    let previousCounts;
 
     function navigate(event, href) {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
-      if (location.pathname === href) return;
+      if (location.pathname + location.search === href) return;
       history.pushState(null, "", href);
       selectFromLocation(true);
     }
 
     function selectFromLocation(focus = false) {
-      const id = conversationRoute.exec(location.pathname)?.[1].toLowerCase() ?? null;
-      if (id === activeId) return;
+      const params = new URLSearchParams(location.search);
+      const conversation = conversationRoute.exec(location.pathname)?.[1].toLowerCase();
+      const announcement = params.get("announcement");
+      const id = conversation ?? (params.get("type") === "announcement" && announcement
+        ? "announcement:" + announcement : null);
+      const selected = rows.get(id);
+      const requested = params.get("type");
+      const group = selected?.group ?? (groupLinks.has(requested) ? requested : "event");
+      for (const [key, { link }] of groupLinks) {
+        if (key === group) link.setAttribute("aria-current", "page");
+        else link.removeAttribute("aria-current");
+      }
+      let visibleCount = 0;
+      for (const row of rows.values()) {
+        row.entry.hidden = row.group !== group;
+        if (!row.entry.hidden) visibleCount++;
+      }
+      listStatus.hidden = visibleCount > 0;
+      listStatus.textContent = errors.get(group) ?? "暂无" + messageGroups.find(([key]) => key === group)[1] + "。";
+      if (id === activeId && (id === null || selected?.link.hasAttribute("aria-current"))) return;
       const previous = rows.get(activeId);
       previous?.link.removeAttribute("aria-current");
       threadRequest?.abort();
       activeId = id;
-      const selected = rows.get(id);
       layout.classList.toggle("has-thread", Boolean(id));
       document.title = selected ? selected.item.display_title + " · 消息 · 搭慕 DAMU" : "消息 · 搭慕 DAMU";
       if (!selected) {
-        prompt.textContent = id ? "找不到这个会话。" : rows.size ? "选择一个会话查看消息。" : "";
+        prompt.textContent = id ? "找不到这条消息。" : "选择左侧一项查看详情。";
         panel.replaceChildren(placeholder);
         if (focus) (previous?.link ?? heading).focus({ preventScroll: true });
         return;
       }
       selected.link.setAttribute("aria-current", "page");
-      threadRequest = new AbortController();
       const threadBack = back.cloneNode(true);
-      threadBack.addEventListener("click", (event) => navigate(event, threadBack.pathname));
+      threadBack.href = groupHref(group);
+      threadBack.addEventListener("click", (event) => navigate(event, groupHref(group)));
+      if (group === "announcement") {
+        const title = showAnnouncement(selected, threadBack);
+        if (focus) title.focus({ preventScroll: true });
+        return;
+      }
+      threadRequest = new AbortController();
       const threadTitle = renderConversation(selected.item, panel, threadBack, threadRequest.signal, {
-        read() { selected.unread.hidden = true; },
+        read() {
+          renderMessageCount(selected.unread, 0);
+          refreshUnread();
+        },
         sent(message) {
           selected.preview.textContent = message.body || "暂无文字消息";
           selected.date.textContent = previewTime(message.created_at);
@@ -88,40 +136,101 @@ export function createChatPage({
       if (focus) threadTitle.focus({ preventScroll: true });
     }
 
-    try {
-      const conversations = await request("/conversations?limit=100", { auth: true });
-      if (!content.isConnected) return;
-      for (const item of conversations) {
-        const entry = node("li");
-        const link = actionLink("", "/messages/" + encodeURIComponent(item.id), "chat-choice");
-        const isGroup = item.conversation_type === "event";
-        const avatar = node("span", isGroup ? "群" : Array.from(item.display_title)[0] || "聊", isGroup ? "chat-avatar group" : "chat-avatar");
-        avatar.setAttribute("aria-hidden", "true");
-        const label = node("span", null, "chat-choice-label");
-        const preview = node("span", item.last_message_body || "暂无文字消息", "chat-choice-preview");
-        label.append(node("strong", item.display_title), preview);
-        const meta = node("span", null, "chat-choice-meta");
-        const date = node("small", previewTime(item.last_message_at));
-        const unread = node("small", item.unread_count ? item.unread_count + " 条未读" : "", "chat-unread");
-        unread.hidden = !item.unread_count;
-        meta.append(date, unread);
-        link.append(avatar, label, meta);
-        link.addEventListener("click", (event) => navigate(event, link.pathname));
-        entry.append(link);
-        choices.append(entry);
-        rows.set(item.id, { item, link, entry, preview, date, unread });
+    function addRow(item, group) {
+      const isAnnouncement = group === "announcement";
+      const id = isAnnouncement ? "announcement:" + item.id : item.id.toLowerCase();
+      const count = isAnnouncement ? Number(!item.read_at) : item.unread_count ?? 0;
+      const snippet = (isAnnouncement ? item.body : item.last_message_body) || "暂无文字消息";
+      const timestamp = previewTime(isAnnouncement ? item.created_at : item.last_message_at);
+      const existing = rows.get(id);
+      if (existing) {
+        renderMessageCount(existing.unread, count);
+        existing.preview.textContent = snippet;
+        existing.date.textContent = timestamp;
+        choices.append(existing.entry);
+        return;
       }
-      listStatus.hidden = rows.size > 0;
-      listStatus.textContent = "还没有会话。";
-      if (!rows.size) prompt.textContent = "";
-      selectFromLocation();
-      window.addEventListener("popstate", () => {
-        if (content.isConnected) selectFromLocation(true);
-      });
-    } catch (error) {
-      listStatus.textContent = error.message;
-      prompt.textContent = "暂时无法加载会话。";
+      const href = isAnnouncement
+        ? groupHref(group) + "&announcement=" + encodeURIComponent(item.id)
+        : "/messages/" + encodeURIComponent(item.id);
+      const title = (group === "event" ? item.event_title : group === "direct" ? item.peer_nickname : item.title)
+        || item.display_title || "会话";
+      const entry = node("li");
+      const link = actionLink("", href, "chat-choice");
+      const avatar = node("span", group === "event" ? "群" : "告", "chat-avatar " + group);
+      avatar.setAttribute("aria-hidden", "true");
+      if (group === "direct") renderAvatar(avatar, { nickname: title, avatarImageUrl: item.peer_avatar });
+      const label = node("span", null, "chat-choice-label");
+      const preview = node("span", snippet, "chat-choice-preview");
+      label.append(node("strong", title));
+      if (group === "event") label.append(node("span", time(item.event_starts_at), "chat-choice-preview"));
+      label.append(preview);
+      const meta = node("span", null, "chat-choice-meta");
+      const date = node("small", timestamp);
+      const unread = node("span", null, "message-count");
+      renderMessageCount(unread, count);
+      meta.append(date, unread);
+      link.append(avatar, label, meta);
+      link.addEventListener("click", (event) => navigate(event, href));
+      entry.append(link);
+      choices.append(entry);
+      rows.set(id, { item: { ...item, display_title: title }, link, entry, preview, date, unread, group });
     }
+
+    function showAnnouncement(row, threadBack) {
+      const article = node("article", null, "chat-announcement");
+      const title = node("h2", row.item.title);
+      title.tabIndex = -1;
+      const feedback = node("p", null, "meta");
+      feedback.setAttribute("role", "status");
+      article.append(threadBack, title, node("p", time(row.item.created_at), "meta"),
+        node("p", row.item.body, "detail-copy"), feedback);
+      panel.replaceChildren(article);
+      if (!row.unread.hidden) {
+        request("/me/notifications/" + encodeURIComponent(row.item.id) + "/read", { auth: true, method: "POST" })
+          .then(() => {
+            renderMessageCount(row.unread, 0);
+            refreshUnread();
+          })
+          .catch((error) => { feedback.textContent = error.message; });
+      }
+      return title;
+    }
+
+    document.addEventListener("damu-unread", (event) => {
+      if (!content.isConnected) return;
+      const counts = messageGroups.map(([, , field]) => event.detail?.[field] ?? 0);
+      for (const [index, [group]] of messageGroups.entries())
+        renderMessageCount(groupLinks.get(group).badge, counts[index]);
+      const nextCounts = counts.join(":");
+      if (previousCounts !== undefined && previousCounts !== nextCounts) loadRows();
+      previousCounts = nextCounts;
+    });
+    async function loadRows() {
+      const version = ++listVersion;
+      const [conversations, announcements] = await Promise.allSettled([
+        request("/conversations?limit=100", { auth: true }),
+        request("/me/notifications?announcementsOnly=true&limit=100", { auth: true }),
+      ]);
+      if (!content.isConnected || version !== listVersion) return;
+      if (conversations.status === "fulfilled") {
+        errors.delete("event");
+        errors.delete("direct");
+        for (const item of conversations.value)
+          addRow(item, item.conversation_type === "event" ? "event" : "direct");
+      } else {
+        for (const group of ["event", "direct"]) errors.set(group, conversations.reason.message);
+      }
+      if (announcements.status === "fulfilled") {
+        errors.delete("announcement");
+        for (const item of announcements.value) addRow(item, "announcement");
+      } else errors.set("announcement", announcements.reason.message);
+      selectFromLocation();
+    }
+    window.addEventListener("popstate", () => {
+      if (content.isConnected) selectFromLocation(true);
+    });
+    await loadRows();
   };
 
   function renderConversation(conversation, panel, back, signal, updates) {

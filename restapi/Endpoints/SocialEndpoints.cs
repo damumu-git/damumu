@@ -18,6 +18,9 @@ public static class SocialEndpoints
                        c.status,
                        cm.last_read_at, cm.muted_until,
                        e.title AS event_title,
+                       schedule.event_starts_at,
+                       other_member.nickname AS peer_nickname,
+                       other_member.avatar_url AS peer_avatar,
                        lm.id AS last_message_id, lm.body AS last_message_body,
                        lm.message_type AS last_message_type, lm.created_at AS last_message_at,
                        lm.sender_name AS last_message_sender,
@@ -38,12 +41,17 @@ public static class SocialEndpoints
                 JOIN conversation c ON c.id=cm.conversation_id
                 LEFT JOIN event e ON e.id=c.event_id
                 LEFT JOIN LATERAL (
-                    SELECT up.nickname
+                    SELECT COALESCE(min(starts_at) FILTER (WHERE status='scheduled'), min(starts_at)) AS event_starts_at
+                    FROM event_schedule WHERE event_id=e.id
+                ) schedule ON c.conversation_type='event'
+                LEFT JOIN LATERAL (
+                    SELECT up.nickname, COALESCE(sa.image_url, up.avatar_url) AS avatar_url
                     FROM conversation_member peer
                     JOIN user_profile up ON up.user_id=peer.user_id
+                    LEFT JOIN system_avatar sa ON up.avatar_url='system:'||sa.id::text
                     WHERE peer.conversation_id=c.id AND peer.user_id<>@userId
                     ORDER BY peer.joined_at LIMIT 1
-                ) other_member ON true
+                ) other_member ON c.conversation_type='direct'
                 LEFT JOIN LATERAL (
                     SELECT m.id, m.body, m.message_type, m.created_at,
                            up.nickname AS sender_name
@@ -432,11 +440,10 @@ public static class SocialEndpoints
             var userId = ApiSupport.RequireUserId(context);
             var summary = await db.QueryOneAsync(
                 """
-                SELECT
-                  (SELECT count(*) FROM notification n
-                   WHERE n.user_id=@userId AND n.read_at IS NULL AND n.deleted_at IS NULL) AS notification_count,
-                  (SELECT count(*) FROM message m
+                WITH unread_messages AS (
+                   SELECT c.conversation_type FROM message m
                    JOIN conversation_member cm ON cm.conversation_id=m.conversation_id
+                   JOIN conversation c ON c.id=cm.conversation_id AND c.status<>'archived'
                    WHERE cm.user_id=@userId AND cm.left_at IS NULL AND cm.hidden_at IS NULL
                      AND (cm.last_read_message_id IS NULL OR
                           (m.created_at, m.id) > (
@@ -444,7 +451,18 @@ public static class SocialEndpoints
                                       WHERE marker.id=cm.last_read_message_id), cm.last_read_at, '-infinity'),
                             cm.last_read_message_id))
                      AND m.sender_user_id IS DISTINCT FROM @userId
-                     AND m.deleted_at IS NULL) AS message_count
+                     AND m.deleted_at IS NULL
+                ), unread_notifications AS (
+                   SELECT count(*) AS notification_count,
+                          count(*) FILTER (WHERE notification_type='announcement') AS announcement_count
+                   FROM notification
+                   WHERE user_id=@userId AND read_at IS NULL AND deleted_at IS NULL
+                )
+                SELECT n.notification_count, n.announcement_count,
+                       (SELECT count(*) FROM unread_messages) AS message_count,
+                       (SELECT count(*) FROM unread_messages WHERE conversation_type='event') AS activity_message_count,
+                       (SELECT count(*) FROM unread_messages WHERE conversation_type<>'event') AS general_message_count
+                FROM unread_notifications n
                 """, new { userId }, ct);
             return ApiSupport.Ok(summary);
         });
