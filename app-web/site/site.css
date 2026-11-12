@@ -891,12 +891,86 @@ dialog .close {
   margin: 0;
   overflow-wrap: anywhere;
 }
+.activity-organizer {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.6rem;
+  vertical-align: middle;
+  font-weight: 750;
+}
+a.activity-organizer:hover {
+  color: var(--blue);
+}
+a.activity-organizer::after {
+  content: "";
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-inline: 0.1rem;
+  border-top: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
 .activity-section > p {
   margin-bottom: 0;
 }
-.activity-section .detail-actions {
+.activity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.95rem;
+}
+.activity-actions .activity-action {
+  display: inline-flex;
   align-items: center;
-  margin-top: 0.85rem;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0.55rem 0.85rem;
+  border-radius: 12px;
+  text-align: center;
+  white-space: normal;
+}
+.activity-action svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.activity-action-bookmark[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+.activity-actions .activity-action-feedback {
+  color: #19594f;
+  background: #edf7f4;
+  border-color: #d4e9e3;
+}
+.activity-actions .activity-action-feedback:hover {
+  background: #dcefe8;
+}
+.activity-actions .activity-action-report,
+.activity-actions .activity-action-leave {
+  color: #a13240;
+  background: #fff4f4;
+  border-color: #f2d8db;
+}
+.activity-actions .activity-action-report:hover,
+.activity-actions .activity-action-leave:hover {
+  background: #ffe8ea;
+}
+@media (max-width: 540px) {
+  .activity-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .activity-actions .activity-action {
+    padding-inline: 0.45rem;
+  }
 }
 .personal-card {
   margin-top: 1rem;

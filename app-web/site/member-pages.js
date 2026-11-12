@@ -50,13 +50,14 @@ export function createMemberPages(ui) {
   function bookmark(kind, target) {
     const path = "/me/saved/" + kind + "/" + encodeURIComponent(target);
     let saved = null;
+    const label = node("span", "收藏");
     function update(value) {
       saved = value;
       trigger.setAttribute("aria-pressed", String(saved));
-      trigger.textContent = saved ? "已收藏" : "收藏";
+      label.textContent = saved ? "已收藏" : "收藏";
       trigger.title = saved ? "取消收藏" : "收藏";
     }
-    const trigger = button("收藏", () =>
+    const trigger = button(null, () =>
       requireLogin(async () => {
         trigger.disabled = true;
         try {
@@ -73,6 +74,7 @@ export function createMemberPages(ui) {
         }
       }),
     );
+    trigger.append(label);
     trigger.classList.add("bookmark-button");
     trigger.setAttribute("aria-pressed", "false");
     if (session()) {

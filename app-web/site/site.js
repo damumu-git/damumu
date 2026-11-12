@@ -603,6 +603,29 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
   });
 }
 
+const activityActionIcons = {
+  join: "M12 5v14M5 12h14",
+  manage: "M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1",
+  leave: "M10 5H5v14h5m3-11 4 4-4 4m-4-4h8",
+  bookmark: "M6 4h12v16l-6-4-6 4z",
+  feedback: "m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.4l6.1-.9z",
+  report: "M5 21V4m0 1c4-4 7 3 13 0v10c-6 3-9-4-13 0",
+};
+
+function activityAction(control, kind) {
+  const namespace = "http://www.w3.org/2000/svg";
+  const icon = document.createElementNS(namespace, "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("aria-hidden", "true");
+  icon.setAttribute("focusable", "false");
+  const path = document.createElementNS(namespace, "path");
+  path.setAttribute("d", activityActionIcons[kind]);
+  icon.append(path);
+  control.classList.add("activity-action", "activity-action-" + kind);
+  control.prepend(icon);
+  return control;
+}
+
 async function showActivity(id) {
   const content = show("活动详情", "activity-page");
   const marker = dialogRequest;
@@ -640,16 +663,21 @@ async function showActivity(id) {
     addFact("时间", [starts, ends].filter(Boolean).join(" 至 "));
     addFact("地区", area(item));
     addFact("人均费用", cost(item));
-    addFact(
-      "组织者",
-      item.organizer_user_id
-        ? actionLink(
-            organizer,
-            "/people/" + item.organizer_user_id,
-            "text-button",
-          )
-        : organizer,
-    );
+    const identity = item.organizer_user_id
+      ? actionLink(
+          "",
+          "/people/" + encodeURIComponent(item.organizer_user_id),
+          "activity-organizer",
+        )
+      : node("span", null, "activity-organizer");
+    const organizerAvatar = node("span", null, "account-avatar");
+    organizerAvatar.setAttribute("aria-hidden", "true");
+    renderAvatar(organizerAvatar, {
+      nickname: organizer,
+      avatarImageUrl: item.organizer_avatar,
+    });
+    identity.append(organizerAvatar, node("span", organizer));
+    addFact("组织者", identity);
     details.append(node("h2", "活动信息"), facts);
     const membership = item.viewer_membership_status;
     const owns = session?.user.id === item.organizer_user_id;
@@ -695,59 +723,56 @@ async function showActivity(id) {
     const active =
       ["published", "full"].includes(item.status) &&
       (!schedule?.ends_at || Date.parse(schedule.ends_at) > Date.now());
-    const actions = node("div", null, "detail-actions");
-    if (owns)
-      actions.append(
-        actionLink("管理报名", "/organizer/activities/" + id, "button primary"),
+    const actions = node("div", null, "activity-actions");
+    if (owns) {
+      const manage = actionLink(
+        "管理报名", "/organizer/activities/" + id, "button primary",
       );
+      actions.append(activityAction(manage, "manage"));
+    }
     if (active && !owns && !membership) {
-      actions.append(
-        button(
-          item.approval_mode === "manual" ? "申请参加" : "报名参加",
-          () => requireLogin(() => showJoin(id)),
-          "button primary",
-        ),
+      const join = button(
+        item.approval_mode === "manual" ? "申请参加" : "报名参加",
+        () => requireLogin(() => showJoin(id)),
+        "button primary",
       );
+      actions.append(activityAction(join, "join"));
     }
     if (
       active &&
       !owns &&
       ["approved", "applied", "waitlisted"].includes(membership)
     ) {
-      actions.append(
-        button("退出活动", async (event) => {
-          if (!window.confirm("确定退出这个活动？")) return;
-          const action = event.currentTarget;
-          action.disabled = true;
-          try {
-            await request("/events/" + encodeURIComponent(id) + "/leave", {
-              method: "POST",
-              auth: true,
-            });
-            showActivity(id);
-          } catch (error) {
-            showError(content, error);
-          } finally {
-            action.disabled = false;
-          }
-        }),
-      );
+      const leave = button("退出活动", async (event) => {
+        if (!window.confirm("确定退出这个活动？")) return;
+        const action = event.currentTarget;
+        action.disabled = true;
+        try {
+          await request("/events/" + encodeURIComponent(id) + "/leave", {
+            method: "POST",
+            auth: true,
+          });
+          showActivity(id);
+        } catch (error) {
+          showError(content, error);
+        } finally {
+          action.disabled = false;
+        }
+      });
+      actions.append(activityAction(leave, "leave"));
     }
-    if (!owns)
-      actions.append(
-        button(
-          "举报活动",
-          () =>
-            requireLogin(() =>
-              showReport("activity", id, item.organizer_user_id ?? null),
-            ),
-          "text-button",
+    actions.append(
+      activityAction(memberPages.bookmark("activity", id), "bookmark"),
+      activityAction(actionLink("活动后评价", eventLink(id) + "/feedback"), "feedback"),
+    );
+    if (!owns) {
+      const report = button("举报活动", () =>
+        requireLogin(() =>
+          showReport("activity", id, item.organizer_user_id ?? null),
         ),
       );
-    actions.append(
-      memberPages.bookmark("activity", id),
-      actionLink("活动后评价", eventLink(id) + "/feedback", "text-button"),
-    );
+      actions.append(activityAction(report, "report"));
+    }
     participation.append(actions);
     layout.append(participation);
   } catch (error) {
