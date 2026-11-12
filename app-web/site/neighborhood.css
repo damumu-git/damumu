@@ -1,28 +1,4 @@
-/* The WenKai Medium web subset uses GB2312 and punctuation from the app's font.
-   The Korean WOFF2 files come from LINE's official LINE Seed KR release. */
-@font-face {
-  font-family: "LXGW WenKai Lite";
-  src: url("/assets/fonts/LXGWWenKaiLite-Medium.woff") format("woff");
-  font-weight: 500;
-  font-display: swap;
-}
-@font-face {
-  font-family: "LINE Seed KR";
-  src: url("/assets/fonts/LINESeedKR-Rg.woff2") format("woff2");
-  font-weight: 400;
-  font-display: swap;
-  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7FF;
-}
-@font-face {
-  font-family: "LINE Seed KR";
-  src: url("/assets/fonts/LINESeedKR-Bd.woff2") format("woff2");
-  font-weight: 700;
-  font-display: swap;
-  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7FF;
-}
 :root {
-  --web-font: "LINE Seed KR", "Noto Sans SC", "Noto Sans KR", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
-  font-family: var(--web-font);
   --filter-line: #dce2ec;
   --filter-paper: #fafaf7;
 }
@@ -30,7 +6,6 @@
 .guide-page > h1,
 .guide-title,
 .home-guides h2 {
-  font-family: "LINE Seed KR", "LXGW WenKai Lite", var(--web-font);
   font-weight: 500;
   letter-spacing: -0.025em;
 }
