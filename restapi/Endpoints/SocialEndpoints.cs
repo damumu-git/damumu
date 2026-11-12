@@ -21,6 +21,12 @@ public static class SocialEndpoints
                        cm.last_read_at, cm.muted_until,
                        e.title AS event_title,
                        schedule.event_starts_at,
+                       major.name_zh_cn AS event_major_category,
+                       major.name_en_us AS event_major_category_en,
+                       major.name_ko_kr AS event_major_category_ko,
+                       COALESCE(e.custom_subcategory,leaf.name_zh_cn) AS event_minor_category,
+                       COALESCE(e.custom_subcategory,leaf.name_en_us) AS event_minor_category_en,
+                       COALESCE(e.custom_subcategory,leaf.name_ko_kr) AS event_minor_category_ko,
                        COALESCE(event_avatar.image_url,organizer.avatar_url) AS event_avatar,
                        other_member.nickname AS peer_nickname,
                        other_member.avatar_url AS peer_avatar,
@@ -43,6 +49,8 @@ public static class SocialEndpoints
                 FROM conversation_member cm
                 JOIN conversation c ON c.id=cm.conversation_id
                 LEFT JOIN event e ON e.id=c.event_id
+                LEFT JOIN category leaf ON leaf.id=e.category_id
+                LEFT JOIN category major ON major.id=leaf.parent_id
                 LEFT JOIN user_profile organizer ON organizer.user_id=e.organizer_user_id
                 LEFT JOIN system_avatar event_avatar ON organizer.avatar_url='system:'||event_avatar.id::text
                 LEFT JOIN LATERAL (
@@ -110,13 +118,14 @@ public static class SocialEndpoints
                 SELECT m.id, m.sender_user_id, m.message_type, m.body, m.media_asset_id,
                        m.reply_to_message_id, m.client_message_id,
                        m.edited_at, m.recalled_at, m.created_at,
-                       up.nickname AS sender_name, up.avatar_url AS sender_avatar,
+                       up.nickname AS sender_name, COALESCE(sa.image_url,up.avatar_url) AS sender_avatar,
                        reply.body AS reply_to_body, reply.recalled_at AS reply_to_recalled_at,
                        CASE WHEN ma.id IS NULL THEN NULL ELSE '/uploads/' || ma.storage_key END AS media_url,
                        CASE WHEN ma.id IS NULL THEN NULL ELSE '/uploads/' || COALESCE(ma.thumbnail_storage_key, ma.storage_key) END AS media_thumbnail_url,
                        ma.mime_type AS media_mime_type
                 FROM message m
                 LEFT JOIN user_profile up ON up.user_id=m.sender_user_id
+                LEFT JOIN system_avatar sa ON up.avatar_url='system:'||sa.id::text
                 LEFT JOIN message reply ON reply.id=m.reply_to_message_id
                     AND reply.created_at > now()-interval '3 months'
                 LEFT JOIN media_asset ma ON ma.id=m.media_asset_id AND ma.deleted_at IS NULL

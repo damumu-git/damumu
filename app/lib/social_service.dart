@@ -33,6 +33,8 @@ class ConversationItem {
     this.lastMessageAt,
     this.lastMessageType,
     this.avatarUrl,
+    this.eventStartsAt,
+    this.eventCategories = const {},
   });
 
   final String id;
@@ -47,24 +49,37 @@ class ConversationItem {
   final DateTime? lastMessageAt;
   final String? lastMessageType;
   final String? avatarUrl;
+  final DateTime? eventStartsAt;
+  final Map<String, List<String>> eventCategories;
 
-  factory ConversationItem.fromJson(Map<String, dynamic> json) =>
-      ConversationItem(
-        id: '${json['id']}',
-        type: '${json['conversation_type']}',
-        title: '${json['display_title'] ?? json['event_title'] ?? '会话'}',
-        unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
-        memberCount: (json['member_count'] as num?)?.toInt() ?? 0,
-        status: '${json['status'] ?? 'active'}',
-        avatarUrl: (json['peer_avatar'] ?? json['event_avatar']) as String?,
-        lastMessageId: json['last_message_id']?.toString(),
-        lastMessageBody: json['last_message_body'] as String?,
-        lastMessageType: json['last_message_type'] as String?,
-        lastMessageSender: json['last_message_sender'] as String?,
-        lastMessageAt: DateTime.tryParse(
-          '${json['last_message_at'] ?? ''}',
-        )?.toLocal(),
-      );
+  factory ConversationItem.fromJson(
+    Map<String, dynamic> json,
+  ) => ConversationItem(
+    id: '${json['id']}',
+    type: '${json['conversation_type']}',
+    title: '${json['display_title'] ?? json['event_title'] ?? '会话'}',
+    unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
+    memberCount: (json['member_count'] as num?)?.toInt() ?? 0,
+    status: '${json['status'] ?? 'active'}',
+    avatarUrl: json['peer_avatar'] as String?,
+    eventStartsAt: DateTime.tryParse('${json['event_starts_at'] ?? ''}'),
+    eventCategories: {
+      for (final locale in ['zh', 'en', 'ko'])
+        locale: [
+          for (final level in ['major', 'minor'])
+            (json['event_${level}_category${locale == 'zh' ? '' : '_$locale'}'] ??
+                    json['event_${level}_category'])
+                as String?,
+        ].whereType<String>().toList(),
+    },
+    lastMessageId: json['last_message_id']?.toString(),
+    lastMessageBody: json['last_message_body'] as String?,
+    lastMessageType: json['last_message_type'] as String?,
+    lastMessageSender: json['last_message_sender'] as String?,
+    lastMessageAt: DateTime.tryParse(
+      '${json['last_message_at'] ?? ''}',
+    )?.toLocal(),
+  );
 }
 
 class ChatMessage {
@@ -74,6 +89,7 @@ class ChatMessage {
     required this.body,
     required this.createdAt,
     this.senderName,
+    this.senderAvatar,
     this.messageType = 'text',
     this.replyToMessageId,
     this.replyToBody,
@@ -90,6 +106,7 @@ class ChatMessage {
   final String? senderUserId;
   final String body;
   final String? senderName;
+  final String? senderAvatar;
   final String messageType;
   final DateTime createdAt;
   final String? replyToMessageId;
@@ -109,6 +126,7 @@ class ChatMessage {
     body: body,
     createdAt: createdAt,
     senderName: senderName,
+    senderAvatar: senderAvatar,
     messageType: messageType,
     replyToMessageId: replyToMessageId,
     replyToBody: replyToBody,
@@ -127,6 +145,7 @@ class ChatMessage {
     'sender_user_id': senderUserId,
     'body': body,
     'sender_name': senderName,
+    'sender_avatar': senderAvatar,
     'message_type': messageType,
     'created_at': createdAt.toUtc().toIso8601String(),
     'reply_to_message_id': replyToMessageId,
@@ -144,6 +163,7 @@ class ChatMessage {
     senderUserId: json['sender_user_id']?.toString(),
     body: '${json['body'] ?? ''}',
     senderName: json['sender_name'] as String?,
+    senderAvatar: json['sender_avatar'] as String?,
     messageType: '${json['message_type'] ?? 'text'}',
     createdAt: DateTime.parse('${json['created_at']}').toLocal(),
     replyToMessageId: json['reply_to_message_id']?.toString(),

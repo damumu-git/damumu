@@ -162,23 +162,28 @@ export function createChatPage({
       const title = (group === "event" ? item.event_title : group === "direct" ? item.peer_nickname : item.title)
         || item.display_title || "会话";
       const entry = node("li");
-      const link = actionLink("", href, "chat-choice");
-      const avatar = node("span", group === "event" ? "群" : "告", "chat-avatar " + group);
-      avatar.setAttribute("aria-hidden", "true");
-      if (group === "direct") renderAvatar(avatar, { nickname: title, avatarImageUrl: item.peer_avatar });
-      if (group === "event" && item.event_avatar)
-        renderAvatar(avatar, { nickname: title, avatarImageUrl: item.event_avatar });
+      const link = actionLink("", href, "chat-choice " + group);
+      if (group !== "event") {
+        const avatar = node("span", "告", "chat-avatar " + group);
+        avatar.setAttribute("aria-hidden", "true");
+        if (group === "direct") renderAvatar(avatar, { nickname: title, avatarImageUrl: item.peer_avatar });
+        link.append(avatar);
+      }
       const label = node("span", null, "chat-choice-label");
       const preview = node("span", snippet, "chat-choice-preview");
       label.append(node("strong", title));
-      if (group === "event") label.append(node("span", time(item.event_starts_at), "chat-choice-preview"));
+      if (group === "event") {
+        label.append(node("span", time(item.event_starts_at), "chat-choice-preview"));
+        const category = [item.event_major_category, item.event_minor_category].filter(Boolean).join(" / ");
+        if (category) label.append(node("span", category, "chat-choice-preview"));
+      }
       label.append(preview);
       const meta = node("span", null, "chat-choice-meta");
       const date = node("small", timestamp);
       const unread = node("span", null, "message-count");
       renderMessageCount(unread, count);
       meta.append(date, unread);
-      link.append(avatar, label, meta);
+      link.append(label, meta);
       link.addEventListener("click", (event) => navigate(event, href));
       entry.append(link);
       choices.append(entry);
@@ -292,13 +297,26 @@ export function createChatPage({
       const own = message.sender_user_id === viewer.id;
       const entry = node("li", null, own ? "chat-message own" : "chat-message");
       visible.set(message.id, entry);
-      const metadata = [message.sender_name || (own ? viewer.nickname : ""), time(message.created_at)];
-      entry.append(
+      const senderName = message.sender_name || (own ? viewer.nickname : "");
+      const metadata = [senderName, time(message.created_at)];
+      const body = node("div", null, "chat-message-body");
+      if (conversation.conversation_type === "event" && message.sender_user_id &&
+          message.message_type !== "event_cancelled") {
+        entry.classList.add("with-avatar");
+        const avatar = node("span", null, "account-avatar chat-sender-avatar");
+        avatar.setAttribute("aria-hidden", "true");
+        renderAvatar(avatar, {
+          nickname: senderName,
+          avatarImageUrl: message.sender_avatar || (own ? viewer.avatarImageUrl || viewer.avatarUrl : null),
+        });
+        entry.append(avatar);
+      }
+      body.append(
         node("p", metadata.filter(Boolean).join(" · "), "meta"),
         node("p", message.recalled_at ? "消息已撤回" : message.body || "附件请在搭慕 App 内查看", "chat-bubble"),
       );
       if (message.sender_user_id && !own && !message.recalled_at) {
-        entry.append(button("举报消息", () => reasonDialog("举报消息", async (description) => {
+        body.append(button("举报消息", () => reasonDialog("举报消息", async (description) => {
           await request(base + "/messages/" + encodeURIComponent(message.id) + "/report", {
             auth: true,
             data: { categoryCode: "inappropriate_content", description },
@@ -307,6 +325,7 @@ export function createChatPage({
           feedback.textContent = "举报已提交。";
         }), "chat-report"));
       }
+      entry.append(body);
       return entry;
     }
 

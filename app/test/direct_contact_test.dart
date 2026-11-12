@@ -69,18 +69,38 @@ void main() {
     }, () => client);
   });
 
-  test('conversation rows use the API avatar for both conversation types', () {
-    final event = ConversationItem.fromJson({
-      'id': 'event',
-      'conversation_type': 'event',
-      'event_avatar': '/uploads/host.jpg',
-    });
-    final direct = ConversationItem.fromJson({
-      'id': 'direct',
-      'conversation_type': 'direct',
-      'peer_avatar': '/uploads/peer.jpg',
-    });
-    expect(event.avatarUrl, '/uploads/host.jpg');
-    expect(direct.avatarUrl, '/uploads/peer.jpg');
-  });
+  test(
+    'group rows use activity categories and message avatars are retained',
+    () {
+      final event = ConversationItem.fromJson({
+        'id': 'event',
+        'conversation_type': 'event',
+        'event_avatar': '/uploads/host.jpg',
+        'event_starts_at': '2030-03-01T09:00:00Z',
+        'event_major_category': '运动',
+        'event_minor_category': '足球',
+        'event_major_category_en': 'Sports',
+      });
+      final direct = ConversationItem.fromJson({
+        'id': 'direct',
+        'conversation_type': 'direct',
+        'peer_avatar': '/uploads/peer.jpg',
+      });
+      final message = ChatMessage.fromJson({
+        'id': 'message',
+        'sender_user_id': 'sender',
+        'sender_avatar': '/uploads/sender.jpg',
+        'created_at': '2030-03-01T09:00:00Z',
+      });
+      expect(event.avatarUrl, isNull);
+      expect(event.eventStartsAt?.isUtc, isTrue);
+      expect(event.eventCategories['zh'], ['运动', '足球']);
+      expect(event.eventCategories['en'], ['Sports', '足球']);
+      expect(
+        ChatMessage.fromJson(message.toJson()).senderAvatar,
+        '/uploads/sender.jpg',
+      );
+      expect(direct.avatarUrl, '/uploads/peer.jpg');
+    },
+  );
 }

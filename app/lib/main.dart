@@ -5385,10 +5385,16 @@ class _MessagesPageState extends State<MessagesPage> {
                 ],
               ),
               child: _ChatTile(
-                emoji: item.type == 'event' ? '👥' : '💬',
                 avatarUrl: item.avatarUrl,
-                showNameAvatar: item.type == 'direct',
+                showAvatar: item.type != 'event',
                 title: item.title,
+                details: [
+                  if (item.eventStartsAt != null)
+                    activityTime(context, item.eventStartsAt!),
+                  ...?item.eventCategories[Localizations.localeOf(
+                    context,
+                  ).languageCode],
+                ].join(' · '),
                 message: item.lastMessageType == 'event_cancelled'
                     ? '${context.tr('eventCancelled')} · ${context.tr('cancellationReason')}：${item.lastMessageBody ?? ''}'
                     : item.lastMessageBody ?? context.tr('chatCreated'),
@@ -5638,23 +5644,23 @@ String _notificationTime(DateTime value) {
 
 class _ChatTile extends StatelessWidget {
   const _ChatTile({
-    required this.emoji,
     required this.title,
     required this.message,
     required this.time,
     required this.onTap,
     this.unread = 0,
     this.avatarUrl,
-    this.showNameAvatar = false,
+    this.showAvatar = true,
+    this.details = '',
   });
-  final String emoji;
   final String title;
   final String message;
   final String time;
   final VoidCallback onTap;
   final int unread;
   final String? avatarUrl;
-  final bool showNameAvatar;
+  final bool showAvatar;
+  final String details;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -5664,15 +5670,19 @@ class _ChatTile extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       onTap: onTap,
-      leading: avatarUrl == null && !showNameAvatar
-          ? CircleAvatar(
-              radius: 26,
-              backgroundColor: _mint,
-              child: EmojiPicture(emoji),
-            )
-          : UserAvatarImage(nickname: title, radius: 26, avatarUrl: avatarUrl),
+      leading: showAvatar
+          ? UserAvatarImage(nickname: title, radius: 26, avatarUrl: avatarUrl)
+          : null,
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-      subtitle: Text(message, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: details.isEmpty
+          ? Text(message, maxLines: 1, overflow: TextOverflow.ellipsis)
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(details, maxLines: 2, overflow: TextOverflow.ellipsis),
+                Text(message, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ],
+            ),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -5907,13 +5917,13 @@ class _ChatPageState extends State<ChatPage> {
                     if (message.messageType == 'event_cancelled') {
                       return EventCancellationNotice(reason: message.body);
                     }
-                    return _Bubble(
+                    final viewer = AuthScope.of(context).user;
+                    final mine = message.senderUserId == viewer?.id;
+                    final bubble = _Bubble(
                       text: message.recalledAt == null
                           ? message.body
                           : context.tr('messageRecalled'),
-                      mine:
-                          message.senderUserId ==
-                          AuthScope.of(context).user?.id,
+                      mine: mine,
                       sender: message.senderName,
                       pending: message.pending,
                       failed: message.failed,
@@ -5927,6 +5937,35 @@ class _ChatPageState extends State<ChatPage> {
                       onLongPress: message.pending
                           ? () => _deliverPending(message)
                           : () => _showMessageActions(message),
+                    );
+                    if (widget.conversation.type != 'event' ||
+                        message.senderUserId == null) {
+                      return bubble;
+                    }
+                    return Align(
+                      alignment: mine
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          UserAvatarImage(
+                            nickname:
+                                message.senderName ??
+                                (mine ? viewer?.nickname ?? '' : ''),
+                            radius: 17,
+                            avatarUrl:
+                                message.senderAvatar ??
+                                (mine
+                                    ? viewer?.avatarImageUrl ??
+                                          viewer?.avatarUrl
+                                    : null),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(child: bubble),
+                        ],
+                      ),
                     );
                   },
                 ),
