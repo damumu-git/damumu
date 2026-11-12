@@ -52,9 +52,14 @@ export function createChatPage({
       groups.append(link);
     }
     const choices = node("ul", null, "chat-choices");
+    const requestsLink = actionLink("联系请求", "/messages/requests", "chat-group chat-requests-link");
+    const requestsBadge = node("span", null, "message-count");
+    requestsBadge.hidden = true;
+    requestsLink.hidden = true;
+    requestsLink.append(requestsBadge);
     const listStatus = node("p", "正在加载会话…", "chat-list-status meta");
     listStatus.setAttribute("role", "status");
-    sidebar.append(heading, groups, listStatus, choices);
+    sidebar.append(heading, groups, requestsLink, listStatus, choices);
     const panel = node("div", null, "chat-panel");
     const placeholder = node("div", null, "chat-placeholder");
     const prompt = node("p", "选择一个会话查看消息。");
@@ -88,6 +93,7 @@ export function createChatPage({
       const selected = rows.get(id);
       const requested = params.get("type");
       const group = selected?.group ?? (groupLinks.has(requested) ? requested : "event");
+      requestsLink.hidden = group !== "direct";
       for (const [key, { link }] of groupLinks) {
         if (key === group) link.setAttribute("aria-current", "page");
         else link.removeAttribute("aria-current");
@@ -160,6 +166,8 @@ export function createChatPage({
       const avatar = node("span", group === "event" ? "群" : "告", "chat-avatar " + group);
       avatar.setAttribute("aria-hidden", "true");
       if (group === "direct") renderAvatar(avatar, { nickname: title, avatarImageUrl: item.peer_avatar });
+      if (group === "event" && item.event_avatar)
+        renderAvatar(avatar, { nickname: title, avatarImageUrl: item.event_avatar });
       const label = node("span", null, "chat-choice-label");
       const preview = node("span", snippet, "chat-choice-preview");
       label.append(node("strong", title));
@@ -200,6 +208,9 @@ export function createChatPage({
     document.addEventListener("damu-unread", (event) => {
       if (!content.isConnected) return;
       const counts = messageGroups.map(([, , field]) => event.detail?.[field] ?? 0);
+      const pendingRequests = event.detail?.contact_request_count ?? 0;
+      counts[1] += pendingRequests;
+      renderMessageCount(requestsBadge, pendingRequests);
       for (const [index, [group]] of messageGroups.entries())
         renderMessageCount(groupLinks.get(group).badge, counts[index]);
       const nextCounts = counts.join(":");
@@ -208,8 +219,11 @@ export function createChatPage({
     });
     async function loadRows() {
       const version = ++listVersion;
+      const params = new URLSearchParams({ limit: 100 });
+      const selectedId = conversationRoute.exec(location.pathname)?.[1];
+      if (selectedId) params.set("includeId", selectedId);
       const [conversations, announcements] = await Promise.allSettled([
-        request("/conversations?limit=100", { auth: true }),
+        request("/conversations?" + params, { auth: true }),
         request("/me/notifications?announcementsOnly=true&limit=100", { auth: true }),
       ]);
       if (!content.isConnected || version !== listVersion) return;

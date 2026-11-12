@@ -8,7 +8,7 @@ public sealed class MediaStorage
     private static readonly HashSet<string> UrlFields = new(StringComparer.OrdinalIgnoreCase)
     {
         "imageUrl", "image_url", "avatarUrl", "avatar_url", "avatarImageUrl",
-        "organizer_avatar", "sender_avatar", "peer_avatar", "coverUrl", "cover_url",
+        "organizer_avatar", "sender_avatar", "peer_avatar", "event_avatar", "coverUrl", "cover_url",
         "coverOriginalUrl", "cover_original_url", "mediaUrl", "media_url",
         "mediaThumbnailUrl", "media_thumbnail_url", "icon_url", "category_icon_url"
     };

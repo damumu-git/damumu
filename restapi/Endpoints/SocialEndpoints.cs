@@ -7,7 +7,7 @@ public static class SocialEndpoints
     public static RouteGroupBuilder MapSocialEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/conversations", async (
-            HttpContext context, Db db, int? limit, CancellationToken ct) =>
+            HttpContext context, Db db, int? limit, Guid? includeId, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var take = Math.Clamp(limit ?? 30, 1, 100);
@@ -15,10 +15,13 @@ public static class SocialEndpoints
                 """
                 SELECT c.id, c.conversation_type, c.event_id,
                        COALESCE(c.title, e.title, other_member.nickname, '会话') AS display_title,
-                       c.status,
+                       CASE WHEN c.status='active' AND c.conversation_type='direct'
+                                 AND NOT COALESCE(direct_chat_allowed(@userId,other_member.user_id),false)
+                            THEN 'read_only' ELSE c.status END AS status,
                        cm.last_read_at, cm.muted_until,
                        e.title AS event_title,
                        schedule.event_starts_at,
+                       COALESCE(event_avatar.image_url,organizer.avatar_url) AS event_avatar,
                        other_member.nickname AS peer_nickname,
                        other_member.avatar_url AS peer_avatar,
                        lm.id AS last_message_id, lm.body AS last_message_body,
@@ -40,14 +43,16 @@ public static class SocialEndpoints
                 FROM conversation_member cm
                 JOIN conversation c ON c.id=cm.conversation_id
                 LEFT JOIN event e ON e.id=c.event_id
+                LEFT JOIN user_profile organizer ON organizer.user_id=e.organizer_user_id
+                LEFT JOIN system_avatar event_avatar ON organizer.avatar_url='system:'||event_avatar.id::text
                 LEFT JOIN LATERAL (
                     SELECT COALESCE(min(starts_at) FILTER (WHERE status='scheduled'), min(starts_at)) AS event_starts_at
                     FROM event_schedule WHERE event_id=e.id
                 ) schedule ON c.conversation_type='event'
                 LEFT JOIN LATERAL (
-                    SELECT up.nickname, COALESCE(sa.image_url, up.avatar_url) AS avatar_url
+                    SELECT peer.user_id, up.nickname, COALESCE(sa.image_url, up.avatar_url) AS avatar_url
                     FROM conversation_member peer
-                    JOIN user_profile up ON up.user_id=peer.user_id
+                    LEFT JOIN user_profile up ON up.user_id=peer.user_id
                     LEFT JOIN system_avatar sa ON up.avatar_url='system:'||sa.id::text
                     WHERE peer.conversation_id=c.id AND peer.user_id<>@userId
                     ORDER BY peer.joined_at LIMIT 1
@@ -62,9 +67,10 @@ public static class SocialEndpoints
                 ) lm ON true
                 WHERE cm.user_id=@userId AND cm.left_at IS NULL AND cm.hidden_at IS NULL
                   AND c.status<>'archived'
-                ORDER BY lm.created_at DESC NULLS LAST, c.updated_at DESC
+                ORDER BY (c.id IS NOT DISTINCT FROM @includeId) DESC,
+                         lm.created_at DESC NULLS LAST, c.updated_at DESC
                 LIMIT @limit
-                """, new { userId, limit = take }, ct));
+                """, new { userId, limit = take, includeId }, ct));
         });
 
         api.MapPost("/conversations/direct", async (
@@ -74,27 +80,15 @@ public static class SocialEndpoints
             if (userId == request.OtherUserId)
                 throw new ApiException(400, "invalid_recipient", "不能与自己创建私信");
 
-            var ids = new[] { userId, request.OtherUserId }.Order().ToArray();
-            var directKey = $"{ids[0]:N}:{ids[1]:N}";
-            var conversation = await db.QueryOneAsync(
-                """
-                INSERT INTO conversation (conversation_type, direct_key)
-                VALUES ('direct', @directKey)
-                ON CONFLICT (direct_key) WHERE conversation_type='direct'
-                DO UPDATE SET updated_at=now()
-                RETURNING id, conversation_type, status, created_at
-                """, new { directKey }, ct)
-                ?? throw new ApiException(500, "conversation_failed", "创建会话失败");
-            var conversationId = (Guid)conversation["id"]!;
-
-            foreach (var memberId in ids)
-                await db.ExecuteAsync(
-                    """
-                    INSERT INTO conversation_member (conversation_id, user_id)
-                    VALUES (@conversationId, @memberId)
-                    ON CONFLICT (conversation_id, user_id)
-                    DO UPDATE SET left_at=NULL, hidden_at=NULL
-                    """, new { conversationId, memberId }, ct);
+            var conversationId = await db.ScalarAsync<Guid>("""
+                SELECT open_direct_contact(@userId,@peer)
+                WHERE direct_chat_allowed(@userId,@peer)
+                """, new { userId, peer = request.OtherUserId }, ct);
+            if (conversationId == Guid.Empty)
+                throw new ApiException(403, "direct_consent_required", "互相关注或接受联系请求后才能私聊");
+            var conversation = await db.QueryOneAsync("""
+                SELECT id,conversation_type,status,created_at FROM conversation WHERE id=@conversationId
+                """, new { conversationId }, ct);
             return ApiSupport.Created($"/api/v1/conversations/{conversationId}", conversation);
         });
 
@@ -338,6 +332,15 @@ public static class SocialEndpoints
                   AND m.created_at >= now() - interval '15 minutes'
                   AND EXISTS (SELECT 1 FROM conversation_member cm
                               WHERE cm.conversation_id=@id AND cm.user_id=@userId AND cm.left_at IS NULL)
+                  AND EXISTS (
+                      SELECT 1 FROM conversation c WHERE c.id=@id AND (
+                          c.conversation_type<>'direct' OR EXISTS (
+                              SELECT 1 FROM conversation_member peer WHERE peer.conversation_id=c.id
+                                AND peer.user_id<>@userId AND peer.left_at IS NULL
+                                AND direct_chat_allowed(@userId,peer.user_id)
+                          )
+                      )
+                  )
                 RETURNING id, conversation_id, sender_user_id, message_type, body,
                           reply_to_message_id, client_message_id, edited_at, recalled_at, created_at
                 """, new { id, messageId, userId, body }, ct);
@@ -459,6 +462,9 @@ public static class SocialEndpoints
                    WHERE user_id=@userId AND read_at IS NULL AND deleted_at IS NULL
                 )
                 SELECT n.notification_count, n.announcement_count,
+                       (SELECT count(*) FROM direct_contact_request
+                        WHERE recipient_id=@userId AND status='pending'
+                          AND direct_contact_visible(sender_id,recipient_id)) AS contact_request_count,
                        (SELECT count(*) FROM unread_messages) AS message_count,
                        (SELECT count(*) FROM unread_messages WHERE conversation_type='event') AS activity_message_count,
                        (SELECT count(*) FROM unread_messages WHERE conversation_type<>'event') AS general_message_count

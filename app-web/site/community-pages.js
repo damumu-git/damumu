@@ -303,7 +303,7 @@ export function createCommunityPages(ui) {
     }
   }
 
-  function followButton(id) {
+  function followButton(id, onChange) {
     let following = false;
     const trigger = button("关注组织者", () =>
       requireLogin(async () => {
@@ -314,6 +314,7 @@ export function createCommunityPages(ui) {
             auth: true,
           });
           update(state.following);
+          onChange?.();
         } catch (error) {
           showError(trigger.closest("section"), error);
         } finally {

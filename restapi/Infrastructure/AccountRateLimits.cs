@@ -10,6 +10,7 @@ internal static class AccountRateLimits
     private static readonly Policy Publishing = new("publishing", 4, TimeSpan.FromMinutes(3));
     private static readonly Policy Uploads = new("uploads", 8, TimeSpan.FromSeconds(15));
     private static readonly Policy Reports = new("reports", 6, TimeSpan.FromMinutes(1));
+    private static readonly Policy ContactRequests = new("contact-requests", 3, TimeSpan.FromMinutes(10));
 
     public static PartitionedRateLimiter<HttpContext> Create() =>
         PartitionedRateLimiter.CreateChained(CreatePartition(useSpecificPolicy: true), CreatePartition(useSpecificPolicy: false));
@@ -42,6 +43,7 @@ internal static class AccountRateLimits
 
     private static Policy? SpecificPolicy(string route) => route switch
     {
+        "/api/v1/contact-requests" => ContactRequests,
         "/api/v1/conversations/direct" or "/api/v1/conversations/{id:guid}/messages" or
             "/api/v1/conversations/{id:guid}/messages/{messageId:guid}" => Messages,
         "/api/v1/events" or "/api/v1/events/{id:guid}/publish" or

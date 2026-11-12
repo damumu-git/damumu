@@ -22,6 +22,7 @@ import 'category_service.dart';
 import 'emoji_picture.dart';
 import 'chat_image.dart';
 import 'event_service.dart';
+import 'direct_contact.dart';
 import 'feedback.dart';
 import 'feedback_model.dart';
 import 'l10n.dart';
@@ -2926,6 +2927,24 @@ class _EventDetailPageState extends State<EventDetailPage> {
                         : null,
                     trailing: const Icon(Icons.chevron_right),
                   ),
+                  if (_detail?['visibility'] == 'public' &&
+                      ['published', 'full'].contains(_detail?['status']) &&
+                      !e.isOwned &&
+                      !e.isPast &&
+                      e.apiId != null)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.chat_bubble_outline),
+                        label: Text(context.tr('contactInquiry')),
+                        onPressed: () {
+                          final token = AuthScope.of(context).token;
+                          if (token != null) {
+                            composeContact(context, token, 'inquiry', e.apiId!);
+                          }
+                        },
+                      ),
+                    ),
                   const SizedBox(height: 20),
                   Text(
                     context.tr('activityDescriptionHeading'),
@@ -3422,6 +3441,7 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
             .take(6)
             .toList();
         final avatarUrl = profile['avatar_url'] as String?;
+        final auth = AuthScope.of(context);
         return SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Center(
@@ -3481,6 +3501,13 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                     ],
                   ),
                 ),
+                if (auth.token != null && auth.user?.id != widget.userId)
+                  DirectContactActions(
+                    token: auth.token!,
+                    userId: widget.userId,
+                    nickname: nickname,
+                    onOpen: (id, name) => _openDirectChat(context, id, name),
+                  ),
                 if (widget.eventId != null &&
                     profile['feedback_eligible'] == true)
                   FeedbackActionGrid(
@@ -5308,56 +5335,70 @@ class _MessagesPageState extends State<MessagesPage> {
     if (_segment == 2) return _notices();
     final type = _segment == 0 ? 'event' : 'direct';
     final items = _conversations.where((item) => item.type == type).toList();
-    if (items.isEmpty) {
+    if (items.isEmpty && _segment == 0) {
       return Center(child: Text(context.tr('noConversations')));
     }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        children: items
-            .map(
-              (item) => Slidable(
-                key: ValueKey('conversation-${item.id}'),
-                startActionPane: ActionPane(
-                  motion: const StretchMotion(),
-                  extentRatio: .26,
-                  children: [
-                    SlidableAction(
-                      onPressed: (_) => _markConversationRead(item),
-                      backgroundColor: AppPalette.primary,
-                      foregroundColor: AppPalette.onPrimary,
-                      icon: Icons.done_all,
-                      label: '已读',
-                    ),
-                  ],
-                ),
-                endActionPane: ActionPane(
-                  motion: const StretchMotion(),
-                  extentRatio: .3,
-                  children: [
-                    SlidableAction(
-                      onPressed: (_) => _removeConversation(item),
-                      backgroundColor: _orange,
-                      foregroundColor: Colors.white,
-                      icon: Icons.delete_outline,
-                      label: item.type == 'event' ? '退出群聊' : '删除',
-                    ),
-                  ],
-                ),
-                child: _ChatTile(
-                  emoji: item.type == 'event' ? '👥' : '💬',
-                  title: item.title,
-                  message: item.lastMessageType == 'event_cancelled'
-                      ? '${context.tr('eventCancelled')} · ${context.tr('cancellationReason')}：${item.lastMessageBody ?? ''}'
-                      : item.lastMessageBody ?? context.tr('chatCreated'),
-                  time: _relativeTime(item.lastMessageAt),
-                  unread: item.unreadCount,
-                  onTap: () => _openChat(item),
-                ),
+        children: [
+          if (_segment == 1)
+            ListTile(
+              leading: const Icon(Icons.mark_chat_unread_outlined),
+              title: Text(context.tr('contactRequests')),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _openContactRequests,
+            ),
+          if (items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: Text(context.tr('noConversations'))),
+            ),
+          ...items.map(
+            (item) => Slidable(
+              key: ValueKey('conversation-${item.id}'),
+              startActionPane: ActionPane(
+                motion: const StretchMotion(),
+                extentRatio: .26,
+                children: [
+                  SlidableAction(
+                    onPressed: (_) => _markConversationRead(item),
+                    backgroundColor: AppPalette.primary,
+                    foregroundColor: AppPalette.onPrimary,
+                    icon: Icons.done_all,
+                    label: '已读',
+                  ),
+                ],
               ),
-            )
-            .toList(),
+              endActionPane: ActionPane(
+                motion: const StretchMotion(),
+                extentRatio: .3,
+                children: [
+                  SlidableAction(
+                    onPressed: (_) => _removeConversation(item),
+                    backgroundColor: _orange,
+                    foregroundColor: Colors.white,
+                    icon: Icons.delete_outline,
+                    label: item.type == 'event' ? '退出群聊' : '删除',
+                  ),
+                ],
+              ),
+              child: _ChatTile(
+                emoji: item.type == 'event' ? '👥' : '💬',
+                avatarUrl: item.avatarUrl,
+                showNameAvatar: item.type == 'direct',
+                title: item.title,
+                message: item.lastMessageType == 'event_cancelled'
+                    ? '${context.tr('eventCancelled')} · ${context.tr('cancellationReason')}：${item.lastMessageBody ?? ''}'
+                    : item.lastMessageBody ?? context.tr('chatCreated'),
+                time: _relativeTime(item.lastMessageAt),
+                unread: item.unreadCount,
+                onTap: () => _openChat(item),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -5437,6 +5478,10 @@ class _MessagesPageState extends State<MessagesPage> {
       }
     }
     if (!mounted) return;
+    if (item.type == 'contact_request' || item.type == 'contact_accepted') {
+      await _openContactRequests();
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => item.type == 'suggestion_replied' && token != null
@@ -5498,6 +5543,36 @@ class _MessagesPageState extends State<MessagesPage> {
     ).push(MaterialPageRoute(builder: (_) => ChatPage(conversation: item)));
     await _load();
   }
+
+  Future<void> _openContactRequests() async {
+    final token = AuthScope.of(context).token;
+    if (token == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ContactRequestsPage(
+          token: token,
+          onOpen: (id, name) => _openDirectChat(context, id, name),
+        ),
+      ),
+    );
+    if (mounted) await _load(showProgress: false);
+  }
+}
+
+void _openDirectChat(BuildContext context, String id, String name) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ChatPage(
+        conversation: ConversationItem(
+          id: id,
+          title: name,
+          type: 'direct',
+          unreadCount: 0,
+          memberCount: 2,
+        ),
+      ),
+    ),
+  );
 }
 
 String _relativeTime(DateTime? value) {
@@ -5569,6 +5644,8 @@ class _ChatTile extends StatelessWidget {
     required this.time,
     required this.onTap,
     this.unread = 0,
+    this.avatarUrl,
+    this.showNameAvatar = false,
   });
   final String emoji;
   final String title;
@@ -5576,6 +5653,8 @@ class _ChatTile extends StatelessWidget {
   final String time;
   final VoidCallback onTap;
   final int unread;
+  final String? avatarUrl;
+  final bool showNameAvatar;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -5585,11 +5664,13 @@ class _ChatTile extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       onTap: onTap,
-      leading: CircleAvatar(
-        radius: 26,
-        backgroundColor: _mint,
-        child: EmojiPicture(emoji),
-      ),
+      leading: avatarUrl == null && !showNameAvatar
+          ? CircleAvatar(
+              radius: 26,
+              backgroundColor: _mint,
+              child: EmojiPicture(emoji),
+            )
+          : UserAvatarImage(nickname: title, radius: 26, avatarUrl: avatarUrl),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
       subtitle: Text(message, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: Column(

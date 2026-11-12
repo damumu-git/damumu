@@ -67,6 +67,8 @@ public sealed class AccountDeletionService(
             DELETE FROM web_group_member WHERE user_id=@userId;
             DELETE FROM web_group WHERE owner_id=@userId;
             DELETE FROM web_follow WHERE user_id=@userId OR target_id=@userId;
+            DELETE FROM direct_contact_request WHERE sender_id=@userId OR recipient_id=@userId;
+            DELETE FROM direct_contact_preference WHERE user_id=@userId;
             DELETE FROM web_bookmark WHERE user_id=@userId;
             DELETE FROM push_device WHERE user_id=@userId;
             DELETE FROM user_external_identity WHERE user_id=@userId;

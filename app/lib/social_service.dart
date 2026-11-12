@@ -32,6 +32,7 @@ class ConversationItem {
     this.lastMessageSender,
     this.lastMessageAt,
     this.lastMessageType,
+    this.avatarUrl,
   });
 
   final String id;
@@ -45,6 +46,7 @@ class ConversationItem {
   final String? lastMessageSender;
   final DateTime? lastMessageAt;
   final String? lastMessageType;
+  final String? avatarUrl;
 
   factory ConversationItem.fromJson(Map<String, dynamic> json) =>
       ConversationItem(
@@ -54,6 +56,7 @@ class ConversationItem {
         unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
         memberCount: (json['member_count'] as num?)?.toInt() ?? 0,
         status: '${json['status'] ?? 'active'}',
+        avatarUrl: (json['peer_avatar'] ?? json['event_avatar']) as String?,
         lastMessageId: json['last_message_id']?.toString(),
         lastMessageBody: json['last_message_body'] as String?,
         lastMessageType: json['last_message_type'] as String?,
@@ -286,6 +289,104 @@ class SocialService {
         )
         .toList();
   }
+
+  static Future<Map<String, dynamic>> contactOptions(
+    String token,
+    String userId,
+  ) async =>
+      (await _request(
+                token,
+                '/contact-requests/options?userId=${Uri.encodeQueryComponent(userId)}',
+              )
+              as Map)
+          .cast<String, dynamic>();
+
+  static Future<void> followContact(String token, String userId, bool follow) =>
+      _request(
+        token,
+        '/web/follows/$userId',
+        method: follow ? 'PUT' : 'DELETE',
+      );
+
+  static Future<String> openDirectContact(String token, String userId) async =>
+      (await _request(
+                token,
+                '/conversations/direct',
+                method: 'POST',
+                body: {'otherUserId': userId},
+              )
+              as Map)['id']
+          as String;
+
+  static Future<void> sendContactRequest(
+    String token,
+    String kind,
+    String eventId,
+    String body, {
+    String? userId,
+  }) => _request(
+    token,
+    '/contact-requests',
+    method: 'POST',
+    body: {'kind': kind, 'eventId': eventId, 'userId': userId, 'body': body},
+  );
+
+  static Future<List<Map<String, dynamic>>> contactRequests(
+    String token,
+  ) async => (await _request(token, '/contact-requests') as List)
+      .map((item) => (item as Map).cast<String, dynamic>())
+      .toList();
+
+  static Future<bool> contactPreference(String token) async =>
+      (await _request(token, '/me/contact-preferences')
+          as Map)['allowAttendedRequests'] ==
+      true;
+
+  static Future<void> setContactPreference(String token, bool value) =>
+      _request(
+        token,
+        '/me/contact-preferences',
+        method: 'PUT',
+        body: {'allowAttendedRequests': value},
+      );
+
+  static Future<String?> respondToContact(
+    String token,
+    String id,
+    bool accept,
+  ) async =>
+      (await _request(
+                token,
+                '/contact-requests/$id/respond',
+                method: 'POST',
+                body: {'accept': accept},
+              )
+              as Map)['conversationId']
+          as String?;
+
+  static Future<void> reportContact(
+    String token,
+    String userId,
+    String description,
+  ) => _request(
+    token,
+    '/reports',
+    method: 'POST',
+    body: {
+      'targetType': 'user',
+      'targetId': userId,
+      'reportedUserId': userId,
+      'categoryCode': 'inappropriate_content',
+      'description': description,
+    },
+  );
+
+  static Future<void> blockContact(String token, String userId) => _request(
+    token,
+    '/blocks/$userId',
+    method: 'POST',
+    body: <String, dynamic>{},
+  );
 
   static Future<List<NotificationItem>> notifications(String token) async {
     final data = await _request(token, '/me/notifications?limit=100') as List;

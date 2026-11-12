@@ -4,6 +4,7 @@ import { conversationRoute, createChatPage } from "/chat-page.js";
 import { createBrowseFilters } from "/browse-filters.js";
 import { dateQuery } from "/seoul-dates.js";
 import { setupSchedulePicker } from "/date-picker.js";
+import { createDirectContact } from "/direct-contact.js";
 const apiRoot = "https://api.damumu.com";
 const appStoreLinks = [
   { label: "App Store", url: "" },
@@ -72,7 +73,8 @@ async function refreshUnread() {
   try {
     const summary = await request("/unread-summary", { auth: true, signal: controller.signal });
     if (controller.signal.aborted) return;
-    renderMessageCount(messageCount, (summary?.message_count ?? 0) + (summary?.announcement_count ?? 0));
+    renderMessageCount(messageCount, (summary?.message_count ?? 0) +
+      (summary?.announcement_count ?? 0) + (summary?.contact_request_count ?? 0));
     document.dispatchEvent(new CustomEvent("damu-unread", { detail: summary }));
   } catch {
     // A later refresh can recover without interrupting the page.
@@ -610,6 +612,7 @@ const activityActionIcons = {
   bookmark: "M6 4h12v16l-6-4-6 4z",
   feedback: "m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.4l6.1-.9z",
   report: "M5 21V4m0 1c4-4 7 3 13 0v10c-6 3-9-4-13 0",
+  inquiry: "M4 5h16v12H9l-5 3zM8 9h8m-8 4h5",
 };
 
 function activityAction(control, kind) {
@@ -737,6 +740,9 @@ async function showActivity(id) {
         "button primary",
       );
       actions.append(activityAction(join, "join"));
+    }
+    if (active && !owns && item.visibility === "public") {
+      actions.append(activityAction(button("咨询组织者", () => directContact.compose("inquiry", id)), "inquiry"));
     }
     if (
       active &&
@@ -1426,8 +1432,12 @@ async function showPerson(id) {
       if (label) tags.append(node("span", label + " ×" + tag.count));
     }
     if (tags.children.length) content.append(tags);
-    if (id !== session?.user.id)
-      content.append(communityPages.followButton(id));
+    if (id !== session?.user.id) {
+      const contactActions = node("span", null, "contact-profile-actions");
+      const refresh = () => directContact.profileActions(id, content, contactActions);
+      content.append(communityPages.followButton(id, refresh), contactActions);
+      if (session) refresh();
+    }
     if (id !== session?.user.id)
       content.append(
         button(
@@ -1731,6 +1741,7 @@ async function route() {
   const person = /^\/people\/([0-9a-f-]{36})$/i.exec(path);
   if (person) return showPerson(person[1]);
   if (path === "/me/activities") return requireLogin(showMine);
+  if (path === "/messages/requests") return requireLogin(directContact.showRequests);
   if (path === "/messages" || conversationRoute.test(path))
     return requireLogin(showMessages);
   if (path === "/settings/profile") return requireLogin(showSettings);
@@ -1844,6 +1855,10 @@ const showMessages = createChatPage({
   renderAvatar,
   renderMessageCount,
   refreshUnread,
+});
+const directContact = createDirectContact({
+  show, node, button, actionLink, request, requireLogin, handleForm, showError,
+  showReport, renderAvatar, refreshUnread,
 });
 setSession(session);
 document.addEventListener("visibilitychange", () => {

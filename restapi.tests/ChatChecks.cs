@@ -23,9 +23,12 @@ internal static class ChatChecks
                 CREATE TABLE {quoted}.notification (LIKE public.notification INCLUDING ALL);
                 CREATE TABLE {quoted}.report (LIKE public.report INCLUDING ALL);
                 CREATE TABLE {quoted}.report_evidence (LIKE public.report_evidence INCLUDING ALL);
+                CREATE TABLE {quoted}.user_block (LIKE public.user_block INCLUDING ALL);
+                CREATE TABLE {quoted}.web_follow (LIKE public.web_follow INCLUDING ALL);
+                CREATE TABLE {quoted}.direct_contact_request (LIKE public.direct_contact_request INCLUDING ALL);
                 """, admin)) await setup.ExecuteNonQueryAsync();
 
-            var builder = new NpgsqlConnectionStringBuilder(connectionString) { SearchPath = schema };
+            var builder = new NpgsqlConnectionStringBuilder(connectionString) { SearchPath = $"{schema},public" };
             await using var source = NpgsqlDataSource.Create(builder.ConnectionString);
             var db = new Db(source);
             var sender = Guid.NewGuid();
@@ -37,6 +40,7 @@ internal static class ChatChecks
                 INSERT INTO conversation (id, conversation_type) VALUES (@conversation, 'direct');
                 INSERT INTO conversation_member (conversation_id, user_id)
                 VALUES (@conversation, @sender), (@conversation, @recipient);
+                INSERT INTO web_follow (user_id,target_id) VALUES (@sender,@recipient), (@recipient,@sender);
                 """, new { sender, recipient, conversation });
 
             var clientId = Guid.NewGuid();
@@ -57,6 +61,16 @@ internal static class ChatChecks
                 await db.ScalarAsync<long>("SELECT count(*) FROM report_evidence WHERE report_id=@reportId",
                     new { reportId }) != 1)
                 throw new Exception("Message report evidence snapshot was not stored");
+
+            await db.ExecuteAsync("INSERT INTO user_block (blocker_user_id,blocked_user_id) VALUES (@recipient,@sender)",
+                new { recipient, sender });
+            try
+            {
+                await db.SendMessageAsync(conversation, sender, "text", "blocked", null, null,
+                    Guid.NewGuid(), CancellationToken.None);
+                throw new Exception("Blocked direct conversation accepted a message");
+            }
+            catch (ApiException exception) when (exception.Code == "direct_consent_required") { }
 
             await db.ExecuteAsync("UPDATE conversation SET status='read_only' WHERE id=@conversation",
                 new { conversation });

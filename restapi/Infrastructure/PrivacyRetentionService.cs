@@ -6,6 +6,12 @@ public sealed class PrivacyRetentionService(
     public async Task RunOnceAsync(CancellationToken ct)
     {
         await db.ExecuteAsync("SELECT muda_purge_expired_personal_data()", cancellationToken: ct);
+        await db.ExecuteAsync("""
+            UPDATE direct_contact_request SET body=NULL,
+                status=CASE WHEN status='pending' THEN 'declined' ELSE status END,
+                responded_at=COALESCE(responded_at,now())
+            WHERE body IS NOT NULL AND created_at<=now()-interval '3 months'
+            """, cancellationToken: ct);
         await db.ExecuteAsync(
             "DELETE FROM user_suggestion WHERE COALESCE(replied_at, created_at) <= now()-interval '3 months'",
             cancellationToken: ct);

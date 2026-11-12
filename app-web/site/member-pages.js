@@ -189,7 +189,9 @@ export function createMemberPages(ui) {
         }
         const id = data?.conversationId ?? data?.eventId;
         const href =
-          typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)
+          item.notification_type === "contact_request"
+            ? "/messages/requests"
+            : typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)
             ? data.conversationId
               ? "/messages/" + id
               : eventLink(id)

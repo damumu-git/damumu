@@ -98,7 +98,12 @@ public sealed class Db(NpgsqlDataSource dataSource)
         string conversationType;
         await using (var access = new NpgsqlCommand(
             """
-            SELECT c.conversation_type, c.status
+            SELECT c.conversation_type, c.status,
+                   c.conversation_type<>'direct' OR EXISTS (
+                       SELECT 1 FROM conversation_member peer
+                       WHERE peer.conversation_id=c.id AND peer.user_id<>@userId AND peer.left_at IS NULL
+                         AND direct_chat_allowed(@userId,peer.user_id)
+                   ) AS can_send
             FROM conversation_member cm JOIN conversation c ON c.id=cm.conversation_id
             WHERE cm.conversation_id=@conversationId AND cm.user_id=@userId AND cm.left_at IS NULL
             FOR UPDATE OF c
@@ -112,6 +117,8 @@ public sealed class Db(NpgsqlDataSource dataSource)
             conversationType = reader.GetString(0);
             if (reader.GetString(1) != "active")
                 throw new ApiException(409, "conversation_read_only", "该活动群已结束，只能查看历史消息");
+            if (!reader.GetBoolean(2))
+                throw new ApiException(403, "direct_consent_required", "当前无法发送私信");
         }
 
         if (replyToMessageId is not null)

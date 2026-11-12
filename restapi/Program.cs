@@ -181,6 +181,7 @@ api.MapWebCommunityEndpoints();
 api.MapEventEndpoints();
 api.MapActivityEndpoints();
 api.MapSocialEndpoints();
+api.MapDirectContactEndpoints();
 api.MapSafetyEndpoints();
 api.MapGovernanceEndpoints();
 api.MapFeedbackEndpoints();

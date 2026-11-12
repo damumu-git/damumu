@@ -26,6 +26,7 @@ public sealed partial class ContentFilter(Db db)
             RejectApplicationRequest input => [input.Reason],
             CancelEventRequest input => [input.Reason],
             SendMessageRequest input => [input.Body],
+            ContactRequestInput input => [input.Body],
             EditMessageRequest input => [input.Body],
             CreateReviewRequest input => [input.Comment, ..input.Tags ?? []],
             SuggestionText input => [input.Text],
