@@ -318,10 +318,12 @@ public static class UserEndpoints
         {
             var userId = ApiSupport.RequireUserId(context);
             var rows = await db.QueryAsync(
-                """
+                $"""
                 SELECT e.id, e.organizer_user_id, e.title, e.description,
                        e.status AS event_status, e.cancellation_reason,
                        e.cover_media_id, e.cover_review_status, e.cover_review_reason,
+                       {ActivityQueries.CoverThumbnail},
+                       {ActivityQueries.CoverCategoryCodes},
                        e.city_code, e.district_code, e.approval_mode,
                        e.capacity, e.approved_count, e.price_amount, e.price_currency,
                        CASE WHEN e.organizer_user_id=@userId THEN (
@@ -339,7 +341,7 @@ public static class UserEndpoints
                                WHERE en.context_event_id=e.id AND en.from_user_id=@userId
                                  AND en.target_type='activity' AND en.target_id=e.id
                            ) AS feedback_pending,
-                       c.name_zh_cn AS category_name, c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
+                       COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name, c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
                        city.name_zh_cn AS city_name,
                        city.name_ko_kr AS city_name_ko_kr,
                        city.name_en_us AS city_name_en_us,
@@ -353,6 +355,8 @@ public static class UserEndpoints
                 FROM event_member em
                 JOIN event e ON e.id=em.event_id
                 JOIN category c ON c.id=e.category_id
+                {ActivityQueries.CoverCategoryJoins}
+                {ActivityQueries.CoverMediaJoin}
                 LEFT JOIN administrative_region city ON city.code=e.city_code
                 LEFT JOIN administrative_region district ON district.code=e.district_code
                 LEFT JOIN administrative_region municipality ON district.level=3 AND municipality.code=district.parent_code
@@ -370,7 +374,7 @@ public static class UserEndpoints
         });
 
         api.MapGet("/me/notifications", async (
-            HttpContext context, Db db, bool? unreadOnly, int? limit, CancellationToken ct) =>
+            HttpContext context, Db db, bool? unreadOnly, bool? announcementsOnly, int? limit, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var take = Math.Clamp(limit ?? 30, 1, 100);
@@ -380,9 +384,10 @@ public static class UserEndpoints
                 FROM notification
                 WHERE user_id=@userId AND deleted_at IS NULL
                   AND (NOT @unreadOnly OR read_at IS NULL)
+                  AND (NOT @announcementsOnly OR notification_type='announcement')
                 ORDER BY created_at DESC
                 LIMIT @limit
-                """, new { userId, unreadOnly = unreadOnly ?? false, limit = take }, ct));
+                """, new { userId, unreadOnly = unreadOnly ?? false, announcementsOnly = announcementsOnly ?? false, limit = take }, ct));
         });
 
         api.MapPost("/me/notifications/{id:guid}/read", async (

@@ -15,6 +15,8 @@ const cards = $("#cards");
 const status = $("#status");
 const login = $("#login");
 const myMenu = $("#my-menu");
+const messagesMenu = $("#messages-menu");
+const messageCount = $(".message-count", messagesMenu);
 const more = $("#more");
 let regions = [],
   categories = [],
@@ -34,15 +36,43 @@ function readSession() {
   }
 }
 let session = readSession();
+let unreadRequest;
 
 function setSession(value) {
+  const wasSignedIn = !messagesMenu.hidden;
   session = value;
   if (value) sessionStorage.setItem("damu-session", JSON.stringify(value));
   else sessionStorage.removeItem("damu-session");
   login.hidden = Boolean(value);
   myMenu.hidden = !value;
+  messagesMenu.hidden = !value;
   if (!value) myMenu.open = false;
   renderAvatar($(".account-avatar", myMenu), value?.user);
+  if (!value) {
+    unreadRequest?.abort();
+    renderMessageCount(messageCount, 0);
+  } else if (!wasSignedIn) refreshUnread();
+}
+
+function renderMessageCount(badge, count) {
+  badge.hidden = !count;
+  badge.textContent = count > 99 ? "99+" : String(count);
+  badge.setAttribute("aria-label", count + " 条未读");
+}
+
+async function refreshUnread() {
+  if (!session) return;
+  unreadRequest?.abort();
+  const controller = new AbortController();
+  unreadRequest = controller;
+  try {
+    const summary = await request("/unread-summary", { auth: true, signal: controller.signal });
+    if (controller.signal.aborted) return;
+    renderMessageCount(messageCount, (summary?.message_count ?? 0) + (summary?.announcement_count ?? 0));
+    document.dispatchEvent(new CustomEvent("damu-unread", { detail: summary }));
+  } catch {
+    // A later refresh can recover without interrupting the page.
+  }
 }
 
 async function request(
@@ -214,6 +244,37 @@ function cover(item, className = "") {
   });
   image.src = candidates.shift();
   return image;
+}
+
+function libraryRow(item, { href, categoryName, state, summary, action }) {
+  const entry = node("li", null, "library-row");
+  const link = actionLink("", href, "library-item-link");
+  const thumbnail = node("span", null, "library-thumbnail");
+  thumbnail.append(cover(item));
+  const body = node("div", null, "library-body");
+  const labels = node("div", null, "library-labels");
+  if (categoryName) labels.append(node("span", categoryName, "library-category"));
+  if (state) labels.append(node("span", state, "library-state"));
+  const details = [item.starts_at && time(item.starts_at), area(item)].filter(Boolean);
+  body.append(node("h3", item.title));
+  if (labels.childElementCount) body.prepend(labels);
+  if (details.length) body.append(node("p", details.join(" · "), "library-meta"));
+  if (summary?.trim()) body.append(node("p", summary, "library-summary"));
+  link.append(thumbnail, body);
+  entry.append(link);
+  if (action) {
+    action.classList.add("library-action");
+    entry.append(action);
+  }
+  return entry;
+}
+
+function libraryEventState(item, now = Date.now()) {
+  const status = item.event_status ?? item.status;
+  if (status === "cancelled") return "已取消";
+  if (status === "completed" || Date.parse(item.ends_at) <= now) return "已结束";
+  if (status === "full") return "已满员";
+  return "";
 }
 
 function eventLink(id) {
@@ -713,7 +774,7 @@ function showJoin(id) {
 }
 
 async function showMine() {
-  const content = show("我的活动", "workspace-page");
+  const content = show("我的活动", "workspace-page library-page");
   const marker = dialogRequest;
   const statuses = {
     all: "全部",
@@ -742,43 +803,29 @@ async function showMine() {
     const filtered = activities.filter((item) => {
       if (status === "all") return true;
       if (item.event_status === "cancelled") return status === "cancelled";
-      const ended = item.ends_at && Date.parse(item.ends_at) <= now;
+      const ended = libraryEventState(item, now) === "已结束";
       return status === (ended ? "ended" : "upcoming");
     });
     for (const own of [false, true]) {
-      content.append(node("h2", own ? "我发起的" : "我报名的"));
-      const list = node("ul", null, "detail-list");
+      const section = node("section", null, "library-section");
+      section.append(node("h2", own ? "我发起的" : "我报名的"));
+      const list = node("ul", null, "library-list");
       for (const item of filtered.filter(
         (entry) => (entry.organizer_user_id === session.user.id) === own,
       )) {
-        const entry = node("li");
-        entry.append(
-          actionLink(item.title, eventLink(item.id), "text-button"),
-          node(
-            "p",
-            [
-              time(item.starts_at),
-              area(item),
-              membershipLabel(item.membership_status),
-            ]
-              .filter(Boolean)
-              .join(" · "),
-            "meta",
-          ),
-        );
-        if (own)
-          entry.append(
-            actionLink(
-              "管理活动",
-              "/organizer/activities/" + item.id,
-              "button ghost",
-            ),
-          );
-        list.append(entry);
+        const state = [libraryEventState(item, now), !own && membershipLabel(item.membership_status)]
+          .filter(Boolean).join(" · ");
+        list.append(libraryRow(item, {
+          href: eventLink(item.id),
+          categoryName: item.category_name,
+          state,
+          action: own ? actionLink("管理活动", "/organizer/activities/" + item.id) : null,
+        }));
       }
-      content.append(
+      section.append(
         list.children.length ? list : node("p", "暂无记录。", "meta"),
       );
+      content.append(section);
     }
   } catch (error) {
     if (marker === dialogRequest) showError(content, error);
@@ -1707,6 +1754,8 @@ const memberPages = createMemberPages({
   requireLogin,
   eventLink,
   time,
+  libraryRow,
+  libraryEventState,
   card,
   setSession,
   session: () => session,
@@ -1740,6 +1789,15 @@ const showMessages = createChatPage({
   dialog,
   session: () => session,
   time,
+  renderAvatar,
+  renderMessageCount,
+  refreshUnread,
 });
 setSession(session);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshUnread();
+});
+window.setInterval(() => {
+  if (!document.hidden) refreshUnread();
+}, 45_000);
 route();

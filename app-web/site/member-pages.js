@@ -10,6 +10,8 @@ export function createMemberPages(ui) {
     requireLogin,
     eventLink,
     time,
+    libraryRow,
+    libraryEventState,
     card,
     setSession,
     session,
@@ -96,61 +98,46 @@ export function createMemberPages(ui) {
   }
 
   memberPage("/me/saved", "我的收藏", async (content) => {
+    content.classList.add("library-page");
     const items = await request("/me/saved", { auth: true });
     const kind = new URLSearchParams(location.search).get("kind");
     const navigation = node("nav", null, "section-nav");
+    navigation.setAttribute("aria-label", "收藏类型");
     for (const [label, value] of [["全部", ""], ["活动", "activity"], ["周末指南", "guide"]]) {
       const link = actionLink(label, "/me/saved" + (value ? "?kind=" + value : ""));
       if (value === (kind ?? "")) link.setAttribute("aria-current", "page");
       navigation.append(link);
     }
     content.append(navigation);
-    addList(
-      content,
-      items.filter((item) => !kind || item.kind === kind),
-      (row, item) => {
-        row.append(
-          actionLink(
-            item.title,
-            item.kind === "guide"
-              ? "/guides/" + item.target
-              : eventLink(item.target),
-            "text-button",
-          ),
-        );
-        if (item.summary) row.append(node("p", item.summary, "saved-summary"));
-        const label =
-          item.kind === "guide"
-            ? "周末指南"
-            : item.status === "cancelled"
-              ? "已取消"
-              : item.status === "completed" ||
-                  Date.parse(item.ends_at) < Date.now()
-                ? "已结束"
-                : time(item.starts_at);
-        row.append(node("p", label, "meta"));
-        row.append(
-          button("取消收藏", async (event) => {
-            const trigger = event.currentTarget;
-            trigger.disabled = true;
-            try {
-              await request(
-                "/me/saved/" +
-                  item.kind +
-                  "/" +
-                  encodeURIComponent(item.target),
-                { method: "DELETE", auth: true },
-              );
-              pages.get("/me/saved")();
-            } catch (error) {
-              showError(content, error);
-              trigger.disabled = false;
-            }
-          }),
-        );
-      },
-      "还没有收藏。",
-    );
+    const list = node("ul", null, "library-list");
+    for (const item of items.filter((entry) => !kind || entry.kind === kind)) {
+      const guide = item.kind === "guide";
+      const action = button("取消收藏", async (event) => {
+        const trigger = event.currentTarget;
+        trigger.disabled = true;
+        try {
+          await request(
+            "/me/saved/" + item.kind + "/" + encodeURIComponent(item.target),
+            { method: "DELETE", auth: true },
+          );
+          pages.get("/me/saved")();
+        } catch (error) {
+          showError(content, error);
+          trigger.disabled = false;
+        }
+      });
+      list.append(libraryRow(
+        guide ? { ...item, cover_category_code: item.guide_cover_category } : item,
+        {
+          href: guide ? "/guides/" + encodeURIComponent(item.target) : eventLink(item.target),
+          categoryName: guide ? "周末指南" : item.category_name,
+          state: guide ? "" : libraryEventState(item),
+          summary: item.summary,
+          action,
+        },
+      ));
+    }
+    content.append(list.children.length ? list : node("p", "还没有收藏。", "meta"));
   });
 
   function preferenceKey() {

@@ -143,6 +143,24 @@ textarea:focus-visible {
 .masthead nav .active {
   box-shadow: inset 0 -3px var(--blue);
 }
+#messages-menu {
+  gap: 0.35rem;
+}
+.message-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  min-height: 1.15rem;
+  padding: 0 0.26rem;
+  border-radius: 999px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .account {
   margin-left: auto;
   display: flex;
@@ -939,11 +957,104 @@ dialog .close {
   padding: 0;
   margin-bottom: 0;
 }
-.saved-summary {
+.library-page {
+  max-width: 960px;
+}
+.library-section + .library-section {
+  margin-top: 1.8rem;
+}
+.library-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.library-row {
+  --thumbnail-width: clamp(86px, 14vw, 144px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+}
+.library-row:hover,
+.library-row:focus-within {
+  border-color: #b9c6f7;
+}
+.library-item-link {
+  display: grid;
+  grid-template-columns: var(--thumbnail-width) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(0.65rem, 2vw, 1.1rem);
+  border-radius: 10px;
+}
+.library-item-link:hover h3 {
+  color: var(--blue);
+}
+.library-thumbnail {
+  display: block;
+  aspect-ratio: 4 / 3;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--accent-tint);
+}
+.library-thumbnail img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.library-body {
+  display: grid;
+  gap: 0.25rem;
+  overflow-wrap: anywhere;
+}
+.library-body h3 {
+  margin: 0;
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  line-height: 1.35;
+}
+.library-labels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+}
+.library-category {
+  color: var(--blue);
+  font-weight: 700;
+}
+.library-state {
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: #f0f2f8;
+  color: var(--muted);
+}
+.library-meta,
+.library-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+.library-summary {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+}
+.library-action {
+  justify-self: end;
+  padding: 0.48rem 0.8rem;
+}
+@media (max-width: 580px) {
+  .library-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .invitation-summary {
   position: sticky;
@@ -1044,6 +1155,30 @@ dialog .close {
   margin: 0;
   padding: 1rem;
 }
+.chat-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.chat-group {
+  display: inline-flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22rem;
+  padding: 0.35rem 0.25rem;
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+.chat-group:hover,
+.chat-group[aria-current="page"] {
+  background: var(--accent-tint);
+  color: var(--blue);
+}
 .chat-choices {
   flex: 1 1 auto;
   min-height: 0;
@@ -1071,6 +1206,7 @@ dialog .close {
   outline-offset: -3px;
 }
 .chat-avatar {
+  position: relative;
   display: grid;
   place-items: center;
   width: 2.4rem;
@@ -1079,8 +1215,19 @@ dialog .close {
   background: #e4ebff;
   color: #2644b3;
   font-weight: 750;
+  overflow: hidden;
 }
-.chat-avatar.group {
+.chat-avatar.direct {
+  border-radius: 50%;
+}
+.chat-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.chat-avatar.event {
   background: #e0efeb;
   color: #285d52;
 }
@@ -1106,12 +1253,11 @@ dialog .close {
 .chat-choice-meta {
   justify-items: end;
 }
-.chat-unread {
-  padding: 0.15rem 0.4rem;
-  border-radius: 99px;
-  background: var(--blue);
-  color: #fff;
-  white-space: nowrap;
+.chat-announcement {
+  min-width: 0;
+  overflow: auto;
+  padding: clamp(1rem, 4vw, 2rem);
+  overflow-wrap: anywhere;
 }
 .chat-panel,
 .chat-thread {

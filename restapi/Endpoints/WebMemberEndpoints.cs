@@ -9,9 +9,15 @@ public static class WebMemberEndpoints
         api.MapGet("/me/saved", async (HttpContext context, Db db, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
-            return ApiSupport.Ok(await db.QueryAsync("""
+            return ApiSupport.Ok(await db.QueryAsync($"""
                 SELECT b.kind,b.target,b.created_at, COALESCE(g.title,e.title) AS title,
                        COALESCE(g.summary,e.description) AS summary, e.status,
+                       g.cover_category AS guide_cover_category,
+                       {ActivityQueries.CoverThumbnail},
+                       {ActivityQueries.CoverCategoryCodes},
+                       COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
+                       city.name_zh_cn AS city_name, district.name_zh_cn AS district_name,
+                       municipality.name_zh_cn AS municipality_name,
                        (SELECT min(starts_at) FROM event_schedule s WHERE s.event_id=e.id AND s.status='scheduled') AS starts_at,
                        (SELECT max(ends_at) FROM event_schedule s WHERE s.event_id=e.id AND s.status='scheduled') AS ends_at
                 FROM web_bookmark b
@@ -19,6 +25,12 @@ public static class WebMemberEndpoints
                 LEFT JOIN event e ON e.id::text=b.target AND b.kind='activity'
                     AND e.deleted_at IS NULL AND e.visibility='public'
                     AND e.status IN ('published','full','completed','cancelled')
+                LEFT JOIN category c ON c.id=e.category_id
+                {ActivityQueries.CoverCategoryJoins}
+                {ActivityQueries.CoverMediaJoin}
+                LEFT JOIN administrative_region city ON city.code=e.city_code
+                LEFT JOIN administrative_region district ON district.code=e.district_code
+                LEFT JOIN administrative_region municipality ON district.level=3 AND municipality.code=district.parent_code
                 WHERE b.user_id=@userId AND (g.slug IS NOT NULL OR e.id IS NOT NULL)
                 ORDER BY b.created_at DESC,b.kind,b.target LIMIT 100
                 """, new { userId }, ct));
