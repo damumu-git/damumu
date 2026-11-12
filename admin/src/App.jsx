@@ -1,4 +1,5 @@
 import WebGuides from './WebGuides.jsx'
+import ContentFilterPage from './ContentFilterPage.jsx'
 import AdminNavIcon from './AdminNavIcon.jsx'
 import { FilePicker } from './AdminControls.jsx'
 import { useAdminDialog } from './admin-dialog-context'
@@ -16,6 +17,7 @@ const navigation = [
   { id: 'web-guides', label: '周末指南' },
   { id: 'messages', label: '消息管理' },
   { id: 'reports', label: '举报治理' },
+  { id: 'content-filter', label: '敏感词管理' },
   { id: 'safety', label: '安全警报' },
   { id: 'suggestions', label: '用户建议' },
   { id: 'categories', label: '分类配置' },
@@ -1278,7 +1280,7 @@ function Settings() {
   )
 }
 
-const pages = { 'web-guides': WebGuides, 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, messages: Messages, reports: Reports, safety: Safety, suggestions: Suggestions, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
+const pages = { 'web-guides': WebGuides, 'content-filter': ContentFilterPage, 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, messages: Messages, reports: Reports, safety: Safety, suggestions: Suggestions, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
 
 function AnnouncementDialog({ onClose }) {
   const [title, setTitle] = useState('')
@@ -1350,7 +1352,7 @@ function App() {
           {item.id === 'users' && <div className="nav-section-label">业务管理</div>}
           {item.id === 'categories' && <div className="nav-section-label">系统配置</div>}
           <button aria-current={active === item.id ? 'page' : undefined} className={active === item.id ? 'active' : ''} onClick={() => { if (item.id === 'messages') setMessageEventFilter(null); setActive(item.id); setMobileNav(false) }}>
-            <AdminNavIcon name={item.id === 'suggestions' ? 'reports' : item.id} /><span>{item.label}</span>
+            <AdminNavIcon name={['suggestions', 'content-filter'].includes(item.id) ? 'reports' : item.id} /><span>{item.label}</span>
             {item.id === 'events' && pendingCovers > 0 && <span className="cover-review-count" aria-label={`${pendingCovers} 张图片待审`}>{pendingCovers}</span>}
           </button>
           </Fragment>

@@ -29,7 +29,15 @@ public static class FeedbackEndpoints
             var targetType = request.TargetType?.Trim().ToLowerInvariant() ?? "";
             var feedbackType = request.FeedbackType?.Trim().ToLowerInvariant() ?? "";
             var tagCode = request.TagCode?.Trim() ?? "";
-            FeedbackPolicy.Validate(targetType, feedbackType, tagCode, request.Description);
+            string[]? customTags = null;
+            if (request.CustomTags is not null)
+            {
+                if (targetType != "activity" || feedbackType != "like")
+                    throw new ApiException(400, "custom_feedback_not_supported", "仅活动评价支持自定义标签");
+                customTags = FeedbackPolicy.ValidateCustomTags(request.CustomTags);
+            }
+            var customOnly = tagCode.Length == 0 && customTags is { Length: > 0 };
+            FeedbackPolicy.Validate(targetType, feedbackType, tagCode, request.Description, customTags is { Length: > 0 });
             var eligibility = await FeedbackPolicy.ResolveAsync(
                 db, request.EventId, viewerId, targetType, request.TargetUserId, ct);
             if (!eligibility.Eligible)
@@ -42,14 +50,16 @@ public static class FeedbackEndpoints
                     """
                     INSERT INTO endorsement (
                         context_event_id, from_user_id, target_type, target_id,
-                        target_user_id, tag_code
+                        target_user_id, tag_code, custom_tags
                     ) VALUES (
                         @eventId, @viewerId, @targetType, @targetId,
-                        @targetUserId, @tagCode
+                        @targetUserId, @tagCode, COALESCE(@customTags::text[], '{}')
                     )
                     ON CONFLICT (context_event_id, from_user_id, target_type, target_id)
-                    DO UPDATE SET tag_code=EXCLUDED.tag_code, updated_at=now()
-                    RETURNING id, context_event_id, target_type, target_id, tag_code, updated_at
+                    DO UPDATE SET tag_code=EXCLUDED.tag_code,
+                        custom_tags=COALESCE(@customTags::text[], endorsement.custom_tags),
+                        updated_at=now()
+                    RETURNING id, context_event_id, target_type, target_id, tag_code, custom_tags, updated_at
                     """, new
                     {
                         eventId = request.EventId,
@@ -57,7 +67,8 @@ public static class FeedbackEndpoints
                         targetType,
                         targetId,
                         targetUserId = eligibility.TargetUserId,
-                        tagCode
+                        tagCode = customOnly ? null : tagCode,
+                        customTags
                     }, ct);
                 return ApiSupport.Ok(endorsement);
             }
@@ -103,4 +114,5 @@ public sealed record SubmitFeedbackRequest(
     Guid? TargetUserId,
     string? FeedbackType,
     string? TagCode,
-    string? Description);
+    string? Description,
+    string?[]? CustomTags = null);

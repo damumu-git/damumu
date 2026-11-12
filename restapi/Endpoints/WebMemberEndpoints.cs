@@ -26,6 +26,7 @@ public static class WebMemberEndpoints
         api.MapGet("/me/saved/{kind}/{target}", async (string kind, string target, HttpContext context, Db db, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
+            if (kind == "activity" && Guid.TryParse(target, out var id)) target = id.ToString();
             var saved = await db.ScalarAsync<bool>("""
                 SELECT EXISTS(SELECT 1 FROM web_bookmark WHERE user_id=@userId AND kind=@kind AND target=@target)
                 """, new { userId, kind, target }, ct);
@@ -55,6 +56,7 @@ public static class WebMemberEndpoints
         api.MapDelete("/me/saved/{kind}/{target}", async (string kind, string target, HttpContext context, Db db, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
+            if (kind == "activity" && Guid.TryParse(target, out var id)) target = id.ToString();
             await db.ExecuteAsync("DELETE FROM web_bookmark WHERE user_id=@userId AND kind=@kind AND target=@target",
                 new { userId, kind, target }, ct);
             return ApiSupport.Ok(new { saved = false });

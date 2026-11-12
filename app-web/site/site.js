@@ -3,6 +3,7 @@ import { createMemberPages } from "/member-pages.js";
 import { conversationRoute, createChatPage } from "/chat-page.js";
 import { createBrowseFilters } from "/browse-filters.js";
 import { dateQuery } from "/seoul-dates.js";
+import { setupSchedulePicker } from "/date-picker.js";
 const apiRoot = "https://api.damumu.com";
 const oauth = "/api/v1/auth/web";
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -41,6 +42,7 @@ function setSession(value) {
   login.hidden = Boolean(value);
   myMenu.hidden = !value;
   if (!value) myMenu.open = false;
+  renderAvatar($(".account-avatar", myMenu), value?.user);
 }
 
 async function request(
@@ -133,12 +135,8 @@ function area(item) {
     .join(" · ");
 }
 
-function updateWard(select, label, parent, placeholder = "全部下辖区") {
-  const choices = regionChildren(parent, 3);
-  select.value = "";
-  fillSelect(select, choices, placeholder, "code");
-  select.disabled = choices.length === 0;
-  label.hidden = select.disabled;
+function categoryChildren(parent) {
+  return categories.filter((entry) => entry.level === 2 && entry.parent_id === parent);
 }
 
 const dates = new Intl.DateTimeFormat("zh-CN", {
@@ -182,6 +180,17 @@ function uploadedImage(value) {
       : null;
   } catch {
     return null;
+  }
+}
+function renderAvatar(container, user) {
+  container.textContent = Array.from(user?.nickname?.trim() || "搭")[0];
+  const url = uploadedImage(user?.avatarImageUrl) ?? uploadedImage(user?.avatarUrl);
+  if (url) {
+    const image = node("img");
+    image.alt = "";
+    image.addEventListener("error", () => image.remove(), { once: true });
+    image.src = url;
+    container.append(image);
   }
 }
 function cover(item, className = "") {
@@ -252,23 +261,37 @@ function card(item) {
   return article;
 }
 
-function renderCategories() {
-  const list = $("#categories");
-  const choices = [
-    { id: "", name_zh_cn: "全部活动" },
-    ...categories.filter((entry) => entry.level === 2),
-  ];
-  list.replaceChildren(
-    ...choices.map((entry) => {
+function renderCategories(focusLevel) {
+  const selected = categories.find((entry) => entry.id === category);
+  const major = selected?.level === 2 ? selected.parent_id : selected?.id ?? "";
+  const majors = categories.filter((entry) => entry.level === 1);
+  const minors = major ? categoryChildren(major) : [];
+  const groups = $("#categories");
+  const rows = [];
+  let nextFocus;
+  function categoryRow(title, options, active) {
+    const group = node("div", null, "category-group");
+    const row = node("div", null, "categories");
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-label", title);
+    for (const entry of options) {
       const item = button(entry.name_zh_cn, () => {
         category = entry.id;
-        renderCategories();
+        renderCategories(title);
         refreshFeed();
       });
-      item.setAttribute("aria-pressed", String(category === entry.id));
-      return item;
-    }),
-  );
+      const pressed = active === entry.id;
+      item.setAttribute("aria-pressed", String(pressed));
+      if (focusLevel === title && pressed) nextFocus = item;
+      row.append(item);
+    }
+    group.append(node("span", title, "category-group-label"), row);
+    return group;
+  }
+  if (majors.length) rows.push(categoryRow("大分类", [{ id: "", name_zh_cn: "全部大类" }, ...majors], major));
+  if (minors.length) rows.push(categoryRow("小分类", [{ id: major, name_zh_cn: "全部小类" }, ...minors], category));
+  groups.replaceChildren(...rows);
+  nextFocus?.focus({ preventScroll: true });
 }
 
 async function loadFeed(append = false) {
@@ -521,7 +544,7 @@ async function showActivity(id) {
   const loading = node("p", "正在加载活动详情…", "meta");
   content.append(loading);
   try {
-    const { item, schedules } = await request(
+    const { item, schedules, customFeedbackTags } = await request(
       "/events/" + encodeURIComponent(id),
       { auth: true },
     );
@@ -530,48 +553,68 @@ async function showActivity(id) {
     $("h1", content).textContent = item.title;
     document.title = item.title + " · 搭慕 DAMU";
     const layout = node("div", null, "invitation");
-    const story = node("div", null, "invitation-story");
-    const details = node("aside", null, "invitation-summary");
-    layout.append(story, details);
+    const details = node("section", null, "activity-section");
+    layout.append(cover(item, "detail-cover"), details);
     content.append(layout);
-    story.append(cover(item, "detail-cover"));
     const schedule =
       schedules?.find((entry) => entry.status === "scheduled") ??
       schedules?.[0];
-    details.append(
-      node(
-        "p",
-        [item.category_name, time(schedule?.starts_at), area(item)]
-          .filter(Boolean)
-          .join(" · "),
-        "meta",
-      ),
+    const organizer = item.organizer_name || "搭慕用户";
+    const facts = node("dl", null, "activity-facts");
+    const starts = time(schedule?.starts_at);
+    const ends = schedule?.ends_at ? time(schedule.ends_at) : "";
+    const addFact = (label, value) => {
+      if (!value) return;
+      const row = node("div");
+      const description = node("dd");
+      description.append(value);
+      row.append(node("dt", label), description);
+      facts.append(row);
+    };
+    addFact("分类", item.category_name);
+    addFact("时间", [starts, ends].filter(Boolean).join(" 至 "));
+    addFact("地区", area(item));
+    addFact("人均费用", cost(item));
+    addFact(
+      "组织者",
+      item.organizer_user_id
+        ? actionLink(
+            organizer,
+            "/people/" + item.organizer_user_id,
+            "text-button",
+          )
+        : organizer,
     );
-    details.append(
-      node(
-        "p",
-        "组织者 " + (item.organizer_name || "搭慕用户") + " · " + cost(item),
-        "meta",
-      ),
-    );
-    story.append(
-      node("h2", "活动介绍"),
-      node("p", item.description || "组织者还未填写活动介绍。", "detail-copy"),
-    );
+    details.append(node("h2", "活动信息"), facts);
     const membership = item.viewer_membership_status;
     const owns = session?.user.id === item.organizer_user_id;
     const approved = ["approved", "attended"].includes(membership);
     if ((owns || approved) && (item.place_name || item.address_public)) {
-      details.append(
-        node(
-          "p",
-          [item.place_name, item.address_public].filter(Boolean).join(" · "),
-          "notice",
-        ),
+      addFact(
+        "集合点",
+        [item.place_name, item.address_public].filter(Boolean).join(" · "),
       );
     } else if (!owns && !approved) {
       details.append(node("p", "报名通过后可查看具体集合点。", "notice"));
     }
+    if (item.description?.trim()) {
+      const introduction = node("section", null, "activity-section");
+      introduction.append(
+        node("h2", "活动介绍"),
+        node("p", item.description, "detail-copy"),
+      );
+      layout.append(introduction);
+    }
+    if (customFeedbackTags?.length) {
+      const feedback = node("section", null, "activity-section");
+      const labels = node("ul", null, "feedback-chips feedback-summary");
+      for (const { label, count } of customFeedbackTags)
+        labels.append(node("li", label + " · " + count, "button ghost"));
+      feedback.append(node("h2", "参与者的评价标签"), labels);
+      layout.append(feedback);
+    }
+    const participation = node("section", null, "activity-section");
+    participation.append(node("h2", "活动参与"));
     const labels = {
       applied: "已申请 · 等待审核",
       approved: "报名已通过",
@@ -581,7 +624,9 @@ async function showActivity(id) {
       withdrawn: "已退出",
     };
     if (membership && !owns)
-      details.append(node("p", labels[membership] ?? "已有报名记录", "meta"));
+      participation.append(
+        node("p", labels[membership] ?? "已有报名记录", "meta"),
+      );
     const active =
       ["published", "full"].includes(item.status) &&
       (!schedule?.ends_at || Date.parse(schedule.ends_at) > Date.now());
@@ -589,14 +634,6 @@ async function showActivity(id) {
     if (owns)
       actions.append(
         actionLink("管理报名", "/organizer/activities/" + id, "button primary"),
-      );
-    if (item.organizer_user_id)
-      details.append(
-        actionLink(
-          "查看组织者",
-          "/people/" + item.organizer_user_id,
-          "text-button",
-        ),
       );
     if (active && !owns && !membership) {
       actions.append(
@@ -646,7 +683,8 @@ async function showActivity(id) {
       memberPages.bookmark("activity", id),
       actionLink("活动后评价", eventLink(id) + "/feedback", "text-button"),
     );
-    details.append(actions);
+    participation.append(actions);
+    layout.append(participation);
   } catch (error) {
     if (marker === dialogRequest) {
       loading.remove();
@@ -791,7 +829,7 @@ function showPublish(template) {
   const form = node("form", null, "form");
   form.innerHTML = `
     <label class="cover-picker">
-      <span id="cover-heading">活动封面（选填，发布后审核）</span>
+      <span id="cover-heading">活动封面（选填）</span>
       <span class="cover-picker-tile">
         <span class="cover-camera" aria-hidden="true"></span>
         <span aria-hidden="true">选图片</span>
@@ -800,12 +838,15 @@ function showPublish(template) {
       <span class="cover-file-name meta" role="status" hidden></span>
     </label>
     <label>活动名称<input name="title" required maxlength="80"></label>
-    <label>活动介绍<textarea name="description" required maxlength="3000"></textarea></label>
-    <div class="form-row"><label>活动分类<select name="categoryId" required></select></label><label id="custom-label" hidden>自定义分类<input name="customSubcategory" maxlength="15"></label></div>
-    <div class="form-row"><label>市／道<select name="cityCode" required></select></label><label>市／郡／区<select name="districtCode" required disabled></select></label></div>
-    <label id="publish-ward" hidden>下辖区<select name="wardCode" disabled></select></label>
-    <div class="form-row"><label>开始时间（韩国）<input name="startsAt" type="datetime-local" required></label><label>结束时间（韩国）<input name="endsAt" type="datetime-local" required></label></div>
-    <div class="form-row"><label>人数上限（含组织者）<input name="capacity" type="number" value="6" min="2" max="100" required></label><label>预计线下人均费用（₩）<input name="price" type="number" value="0" min="0" required></label></div>
+    <label>活动介绍（选填）<textarea name="description" maxlength="3000"></textarea></label>
+    <div class="form-row"><label>大分类<select name="majorCategory" required></select></label><label>小分类<select name="categoryId" required disabled></select></label></div>
+    <label id="custom-label" hidden>自定义小分类<input name="customSubcategory" maxlength="15"></label>
+    <div class="form-row publish-regions"><label>市／道<select name="cityCode" required></select></label><label>市／郡／区<select name="districtCode" required disabled></select></label><label>下辖区<select name="wardCode" disabled></select></label></div>
+    <div class="form-row">
+      <div class="schedule-field"><span id="start-label">开始时间（韩国）</span><button type="button" class="schedule-trigger" data-schedule="startsAt" aria-labelledby="start-label start-value"><span class="schedule-icon" aria-hidden="true"></span><span id="start-value" class="schedule-value">选择日期和时间</span></button><input type="hidden" name="startsAt"></div>
+      <div class="schedule-field"><span id="end-label">结束时间（韩国）</span><button type="button" class="schedule-trigger" data-schedule="endsAt" aria-labelledby="end-label end-value"><span class="schedule-icon" aria-hidden="true"></span><span id="end-value" class="schedule-value">选择日期和时间</span></button><input type="hidden" name="endsAt"></div>
+    </div>
+    <div class="form-row"><label>人数上限（含组织者）<input name="capacity" type="number" value="6" min="2" max="100" required></label><label>预计线下人均费用（₩）<input name="price" type="text" inputmode="numeric" value="0" required></label></div>
     <label>集合点（报名通过后可见）<input name="place" required maxlength="100"></label>
     <label>报名方式<select name="approvalMode"><option value="manual">组织者审核</option><option value="auto">直接加入</option></select></label>
     <button class="button primary" type="submit">发布活动</button>`;
@@ -817,6 +858,29 @@ function showPublish(template) {
   preview.append(previewCover, previewTitle, previewMeta);
   layout.append(form, preview);
   content.append(layout);
+  setupSchedulePicker(form, content, { node, button });
+  const price = form.elements.price;
+  const majorCategory = form.elements.majorCategory;
+  const publishCategory = form.elements.categoryId;
+  const custom = form.elements.customSubcategory;
+  const publishCity = form.elements.cityCode;
+  const publishDistrict = form.elements.districtCode;
+  const publishWard = form.elements.wardCode;
+  const numberValue = (value) => Number(value.replaceAll(",", ""));
+  const formatWon = (value) => value.replace(/[^0-9]/g, "").replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  price.addEventListener("input", () => {
+    const before = price.value;
+    const formatted = formatWon(before);
+    if (formatted === before) return;
+    let digitsAfter = before.slice(price.selectionEnd).replace(/\D/g, "").length;
+    let caret = formatted.length;
+    while (caret && digitsAfter) {
+      caret--;
+      if (formatted[caret] !== ",") digitsAfter--;
+    }
+    price.value = formatted;
+    price.setSelectionRange(caret, caret);
+  });
   let objectUrl;
   let selectedPicture;
   const fileName = $(".cover-file-name", form);
@@ -841,9 +905,10 @@ function showPublish(template) {
     previewTitle.textContent =
       form.elements.title.value.trim() || "活动卡片预览";
     previewMeta.textContent = [
-      selected?.name_zh_cn,
-      region(form.elements.cityCode.value)?.name_zh_cn,
-      cost({ price_amount: Number(form.elements.price.value) }),
+      categories.find((item) => item.id === majorCategory.value)?.name_zh_cn,
+      selected?.requires_custom_label ? custom.value.trim() || selected.name_zh_cn : selected?.name_zh_cn,
+      ...[publishCity, publishDistrict, publishWard].map((field) => region(field.value)?.name_zh_cn),
+      cost({ price_amount: numberValue(price.value) }),
     ]
       .filter(Boolean)
       .join(" · ");
@@ -854,12 +919,6 @@ function showPublish(template) {
   });
   form.addEventListener("input", updatePreview);
   form.addEventListener("change", updatePreview);
-  const publishCity = $('[name="cityCode"]', form);
-  const publishDistrict = $('[name="districtCode"]', form);
-  const publishWard = $('[name="wardCode"]', form);
-  const publishWardLabel = $("#publish-ward", form);
-  const publishCategory = $('[name="categoryId"]', form);
-  const custom = $('[name="customSubcategory"]', form);
   fillSelect(
     publishCity,
     regions.filter((entry) => entry.level === 1),
@@ -867,12 +926,12 @@ function showPublish(template) {
     "code",
   );
   fillSelect(
-    publishCategory,
-    categories.filter((entry) => entry.level === 2),
-    "选择分类",
+    majorCategory,
+    categories.filter((entry) => entry.level === 1),
+    "选择大分类",
     "id",
   );
-  publishCategory.addEventListener("change", () => {
+  function syncCustomCategory() {
     const required = Boolean(
       categories.find((entry) => entry.id === publishCategory.value)
         ?.requires_custom_label,
@@ -880,34 +939,50 @@ function showPublish(template) {
     custom.required = required;
     $("#custom-label", form).hidden = !required;
     if (!required) custom.value = "";
-  });
+  }
+  function fillMinorCategories() {
+    const options = categoryChildren(majorCategory.value);
+    publishCategory.value = "";
+    fillSelect(publishCategory, options, majorCategory.value ? "选择小分类" : "先选择大分类", "id");
+    publishCategory.disabled = !options.length;
+    syncCustomCategory();
+  }
+  function fillWards() {
+    const options = regionChildren(publishDistrict.value, 3);
+    const placeholder = !publishDistrict.value ? "先选择市／郡／区"
+      : options.length ? "整个市／郡／区" : "本地区无下辖区";
+    publishWard.value = "";
+    fillSelect(publishWard, options, placeholder, "code");
+    publishWard.disabled = !options.length;
+  }
+  fillMinorCategories();
+  fillSelect(publishDistrict, [], "先选择市／道", "code");
+  fillWards();
+  majorCategory.addEventListener("change", fillMinorCategories);
+  publishCategory.addEventListener("change", syncCustomCategory);
   publishCity.addEventListener("change", () => {
     publishDistrict.value = "";
     fillSelect(
       publishDistrict,
       regionChildren(publishCity.value, 2),
-      "选择市／郡／区",
+      publishCity.value ? "选择市／郡／区" : "先选择市／道",
       "code",
     );
     publishDistrict.disabled = !publishCity.value;
-    updateWard(publishWard, publishWardLabel, "");
+    fillWards();
   });
-  publishDistrict.addEventListener("change", () => {
-    updateWard(
-      publishWard,
-      publishWardLabel,
-      publishDistrict.value,
-      "不指定下辖区",
-    );
-  });
+  publishDistrict.addEventListener("change", fillWards);
   if (template) {
     form.elements.title.value = template.title;
     form.elements.description.value = template.description;
     form.elements.capacity.value = template.capacity;
-    form.elements.price.value = template.price_amount ?? 0;
+    const previousPrice = Number(template.price_amount ?? 0);
+    price.value = Number.isSafeInteger(previousPrice) && previousPrice >= 0 ? formatWon(String(previousPrice)) : "";
     form.elements.approvalMode.value = template.approval_mode;
+    majorCategory.value = categories.find((entry) => entry.id === template.category_id)?.parent_id ?? "";
+    fillMinorCategories();
     publishCategory.value = template.category_id;
-    publishCategory.dispatchEvent(new Event("change"));
+    syncCustomCategory();
     custom.value = template.custom_subcategory ?? "";
     publishCity.value = template.city_code;
     publishCity.dispatchEvent(new Event("change"));
@@ -917,10 +992,15 @@ function showPublish(template) {
     updatePreview();
   }
   handleForm(form, content, async (values) => {
+    if (!values.categoryId) throw new Error("请选择活动小分类。");
+    if (!values.districtCode) throw new Error("请选择市／郡／区。");
+    if (!values.startsAt || !values.endsAt) throw new Error("请选择活动的开始和结束日期与时间。");
     const startsAt = new Date(values.startsAt + ":00+09:00");
     const endsAt = new Date(values.endsAt + ":00+09:00");
     if (endsAt <= startsAt) throw new Error("结束时间必须晚于开始时间。");
-    const amount = Number(values.price);
+    const amount = numberValue(values.price);
+    if (!Number.isSafeInteger(amount) || amount < 0 || amount > 9_999_999_999)
+      throw new Error("请输入 0 至 9,999,999,999 之间的韩元整数金额。");
     const coverMediaId = await uploadCover(values.cover);
     let item;
     try {
@@ -1105,7 +1185,7 @@ async function showEdit(id) {
       throw new Error("只有组织者可以编辑。");
     const form = node("form", null, "form");
     form.innerHTML =
-      '<label>活动名称<input name="title" required maxlength="80"></label><label>活动介绍<textarea name="description" required maxlength="3000"></textarea></label><button type="submit" class="button primary">保存</button>';
+      '<label>活动名称<input name="title" required maxlength="80"></label><label>活动介绍（选填）<textarea name="description" maxlength="3000"></textarea></label><button type="submit" class="button primary">保存</button>';
     form.elements.title.value = item.title ?? "";
     form.elements.description.value = item.description ?? "";
     content.append(
@@ -1129,15 +1209,72 @@ async function showEdit(id) {
   }
 }
 async function showSettings() {
-  const content = show("个人设置", "account-page");
+  const content = show("个人资料", "account-page personal-page");
+  const user = session.user;
   content.append(memberPages.accountLinks());
+  const marker = dialogRequest;
+  const loading = node("p", "正在加载个人资料…", "meta");
+  content.append(loading);
+  const [account, profile] = await Promise.all([
+    request("/me", { auth: true }).catch(() => null),
+    request("/users/" + encodeURIComponent(user.id) + "/public-profile", { auth: true })
+      .catch(() => null),
+    regions.length ? Promise.resolve() : request("/regions")
+      .then((catalog) => { regions = catalog; }).catch(() => {}),
+  ]);
+  if (marker !== dialogRequest) return;
+  loading.remove();
+  if (session?.user.id !== user.id) {
+    showError(content, new Error("请重新登录后查看个人资料。"));
+    return;
+  }
+  if (account) {
+    const { nickname, avatarUrl, avatarImageUrl } = account;
+    setSession({ ...session, user: { ...user, nickname, avatarUrl, avatarImageUrl } });
+  }
+  const info = node("section", null, "personal-card");
+  const identity = node("div", null, "personal-identity");
+  const avatar = node("div", null, "account-avatar");
+  avatar.setAttribute("aria-hidden", "true");
+  renderAvatar(avatar, session.user);
+  identity.append(avatar, node("h2", session.user.nickname || "搭慕用户"));
+  info.append(identity);
+  const stats = node("dl", null, "personal-stats");
+  for (const [label, count] of [
+    ["已报名", account?.joined_count],
+    ["已组织", account?.organized_count],
+    ["已到场", account?.attended_count],
+    ["获赞", profile?.like_count],
+  ]) {
+    const entry = node("div");
+    entry.append(node("dt", label), node("dd", count ?? "—"));
+    stats.append(entry);
+  }
+  info.append(stats);
+  const fields = node("dl", null, "activity-facts");
+  let bioValue;
+  const joined = new Date(account?.created_at ?? "");
+  const joinedOn = Number.isFinite(joined.valueOf())
+    ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "long", timeZone: "Asia/Seoul" }).format(joined)
+    : "";
+  for (const [label, value] of [
+    ["注册邮箱", account?.email ?? user.email],
+    ["所在地区", account && area(account)],
+    ["加入日期", joinedOn],
+    ["公开简介", profile?.bio],
+  ]) {
+    const entry = node("div");
+    const description = node("dd", value || "—");
+    if (label === "公开简介") bioValue = description;
+    entry.append(node("dt", label), description);
+    fields.append(entry);
+  }
+  info.append(fields);
+  content.append(info);
+
   const form = node("form", null, "form");
   form.innerHTML =
-    '<label>昵称<input name="nickname" required minlength="2" maxlength="30"></label><button type="submit" class="button primary">保存昵称</button>';
-  const profile = await request(
-    "/users/" + encodeURIComponent(session.user.id) + "/public-profile",
-    { auth: true },
-  ).catch(() => null);
+    '<h2>编辑资料</h2><label>昵称<input name="nickname" required minlength="2" maxlength="30"></label><button type="submit" class="button primary">保存资料</button>';
   if (profile) {
     const label = node("label", "公开简介");
     const input = node("textarea");
@@ -1150,7 +1287,7 @@ async function showSettings() {
   form.elements.nickname.value = session.user.nickname ?? "";
   content.append(
     form,
-    actionLink("查看公开主页", "/people/" + session.user.id),
+    actionLink("查看公开主页", "/people/" + user.id),
     button("退出登录", () => {
       setSession(null);
       location.assign("/");
@@ -1172,8 +1309,11 @@ async function showSettings() {
       ...session,
       user: { ...session.user, nickname: updated.nickname },
     });
+    $("h2", identity).textContent = updated.nickname;
+    renderAvatar(avatar, session.user);
+    if (values.bio !== undefined) bioValue.textContent = values.bio.trim() || "—";
     $(".notice", content)?.remove();
-    content.append(node("p", "昵称已保存。", "notice"));
+    content.append(node("p", "资料已保存。", "notice"));
   });
 }
 

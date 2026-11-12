@@ -1,4 +1,6 @@
-import { datePresets, dateRange, dayInSeoul, shiftDay, validDay } from "/seoul-dates.js";
+import { datePresets, dateRange, dayInSeoul, validDay } from "/seoul-dates.js";
+
+import { renderCalendar } from "/date-picker.js";
 
 export function createBrowseFilters({ node, button, changed }) {
   const filters = document.querySelector("#filters");
@@ -137,46 +139,12 @@ export function createBrowseFilters({ node, button, changed }) {
   }
 
   function renderDate(focus) {
-    const [year, month] = dateMonth.split("-").map(Number);
-    const toolbar = node("div", null, "date-picker-toolbar");
-    for (const [direction, label, symbol] of [[-1, "上个月", "‹"], [1, "下个月", "›"]]) {
-      const control = button(symbol, () => {
-        dateMonth = new Date(Date.UTC(year, month - 1 + direction, 1)).toISOString().slice(0, 7);
-        renderDate(label);
-      }, "date-arrow");
-      control.setAttribute("aria-label", label);
-      if (direction > 0) toolbar.append(node("strong", `${year} 年 ${month} 月`));
-      toolbar.append(control);
-    }
-    const grid = node("div", null, "date-picker-grid");
-    const today = dayInSeoul();
-    const tabbable = [focus, dateDraft, today].find((value) => value?.startsWith(dateMonth + "-"))
-      ?? dateMonth + "-01";
-    grid.append(...["一", "二", "三", "四", "五", "六", "日"].map((label) => node("span", label, "meta")));
-    const offset = (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7;
-    for (let gap = 0; gap < offset; gap++) grid.append(node("span"));
-    for (let number = 1; number <= new Date(Date.UTC(year, month, 0)).getUTCDate(); number++) {
-      const value = dateMonth + "-" + String(number).padStart(2, "0");
-      const choice = button(number, () => { dateDraft = value; renderDate(value); }, "date-choice");
-      choice.tabIndex = value === tabbable ? 0 : -1;
-      choice.setAttribute("aria-label", value);
-      choice.setAttribute("aria-pressed", String(value === dateDraft));
-      if (value === today) choice.setAttribute("aria-current", "date");
-      grid.append(choice);
-    }
-    grid.addEventListener("keydown", (event) => {
-      const offset = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[event.key];
-      const current = event.target.getAttribute("aria-label");
-      if (!offset || !validDay(current)) return;
-      event.preventDefault();
-      const next = shiftDay(current, offset);
-      dateMonth = next.slice(0, 7);
-      renderDate(next);
+    renderCalendar(datePicker.body, {
+      node, button, month: dateMonth, selected: dateDraft, focus,
+      navigate(value, target) { dateMonth = value; renderDate(target); },
+      choose(value) { dateDraft = value; renderDate(value); },
     });
     dateApply.disabled = !dateDraft;
-    datePicker.body.replaceChildren(toolbar, grid);
-    if (focus) [...datePicker.body.querySelectorAll("button")]
-      .find((item) => item.getAttribute("aria-label") === focus)?.focus();
   }
 
   for (const select of filters.querySelectorAll("select")) {

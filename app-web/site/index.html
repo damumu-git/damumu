@@ -31,12 +31,13 @@
       <div class="account">
         <a id="login" class="button ghost" href="/login">登录</a>
         <details id="my-menu" class="my-menu" hidden>
-          <summary class="button ghost">我的</summary>
+          <summary class="avatar-trigger" aria-label="我的"><span class="account-avatar" aria-hidden="true"></span></summary>
           <ul aria-label="我的" class="my-menu-links">
             <li><a href="/me/activities">我的活动</a></li>
+            <li><a href="/me/saved">我的收藏</a></li>
             <li><a href="/notifications">通知</a></li>
             <li><a href="/messages">消息</a></li>
-            <li><a href="/settings/profile">个人设置</a></li>
+            <li><a href="/settings/profile">个人资料</a></li>
           </ul>
         </details>
         <a class="button primary" href="/activities/new">＋ 发起活动</a>
@@ -90,7 +91,7 @@
               <option value="newest">最新发布</option>
             </select>
           </div>
-          <div id="categories" class="categories" aria-label="活动类别"></div>
+          <div id="categories" class="category-filters"></div>
           <p id="status" class="status" role="status"></p>
           <div id="cards" class="cards"></div>
           <div class="more">

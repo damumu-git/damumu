@@ -47,28 +47,32 @@ export function createMemberPages(ui) {
 
   function bookmark(kind, target) {
     const path = "/me/saved/" + kind + "/" + encodeURIComponent(target);
-    function update(saved) {
+    let saved = null;
+    function update(value) {
+      saved = value;
       trigger.setAttribute("aria-pressed", String(saved));
-      trigger.textContent = saved ? "取消收藏" : "收藏";
+      trigger.textContent = saved ? "已收藏" : "收藏";
+      trigger.title = saved ? "取消收藏" : "收藏";
     }
     const trigger = button("收藏", () =>
       requireLogin(async () => {
         trigger.disabled = true;
         try {
-          const saved = trigger.getAttribute("aria-pressed") === "true";
+          if (saved === null) saved = (await request(path, { auth: true })).saved;
           const result = await request(path, {
             method: saved ? "DELETE" : "PUT",
             auth: true,
           });
           update(result.saved);
         } catch (error) {
-          showError(trigger.closest("section"), error);
+          showError(trigger.closest(".page-content"), error);
         } finally {
           trigger.disabled = false;
         }
       }),
     );
-    update(false);
+    trigger.classList.add("bookmark-button");
+    trigger.setAttribute("aria-pressed", "false");
     if (session()) {
       trigger.disabled = true;
       request(path, { auth: true })
@@ -93,9 +97,17 @@ export function createMemberPages(ui) {
 
   memberPage("/me/saved", "我的收藏", async (content) => {
     const items = await request("/me/saved", { auth: true });
+    const kind = new URLSearchParams(location.search).get("kind");
+    const navigation = node("nav", null, "section-nav");
+    for (const [label, value] of [["全部", ""], ["活动", "activity"], ["周末指南", "guide"]]) {
+      const link = actionLink(label, "/me/saved" + (value ? "?kind=" + value : ""));
+      if (value === (kind ?? "")) link.setAttribute("aria-current", "page");
+      navigation.append(link);
+    }
+    content.append(navigation);
     addList(
       content,
-      items,
+      items.filter((item) => !kind || item.kind === kind),
       (row, item) => {
         row.append(
           actionLink(
@@ -106,6 +118,7 @@ export function createMemberPages(ui) {
             "text-button",
           ),
         );
+        if (item.summary) row.append(node("p", item.summary, "saved-summary"));
         const label =
           item.kind === "guide"
             ? "周末指南"
@@ -421,9 +434,7 @@ export function createMemberPages(ui) {
           return content.append(
             node("p", "只有符合条件的已结束活动参与者可以评价。", "meta"),
           );
-        const form = node("form", null, "form");
-        form.innerHTML =
-          '<label>评价标签<select name="tagCode" required></select></label><button type="submit" class="button primary">提交评价</button>';
+        const form = node("form", null, "form feedback-form");
         const choices = {
           punctual: "准时",
           well_organized: "组织有序",
@@ -433,19 +444,55 @@ export function createMemberPages(ui) {
           good_value: "费用合理",
           would_join_again: "愿意再参加",
         };
-        for (const [code, title] of Object.entries(choices))
-          form.elements.tagCode.add(new Option(title, code));
-        if (choices[eligibility.likeTag])
-          form.elements.tagCode.value = eligibility.likeTag;
+        const presets = node("fieldset");
+        presets.append(node("legend", "预设标签（选填，最多一个）"));
+        const chips = node("div", null, "feedback-chips");
+        let selected = eligibility.likeTag ?? "";
+        for (const [code, title] of Object.entries(choices)) {
+          const chip = button(title, () => {
+            selected = selected === code ? "" : code;
+            for (const choice of chips.children)
+              choice.setAttribute("aria-pressed", String(choice.dataset.tag === selected));
+          });
+          chip.dataset.tag = code;
+          chip.setAttribute("aria-pressed", String(selected === code));
+          chips.append(chip);
+        }
+        presets.append(chips);
+        const custom = node("fieldset");
+        custom.append(
+          node("legend", "自定义标签（选填，最多两个）"),
+          node("p", "每个标签最多 15 字，活动组织者可看到标签内容。", "meta"),
+        );
+        const inputs = node("div", null, "form-row");
+        for (let i = 0; i < 2; i++) {
+          const label = node("label", "自定义标签 " + (i + 1));
+          const input = node("input");
+          input.name = "customTag" + (i + 1);
+          input.maxLength = 15;
+          input.value = eligibility.customTags?.[i] ?? "";
+          label.append(input);
+          inputs.append(label);
+        }
+        custom.append(inputs);
+        const submit = node("button", "保存评价", "button primary");
+        submit.type = "submit";
+        form.append(presets, custom, submit);
         content.append(form);
         handleForm(form, content, async (values) => {
+          const customTags = [values.customTag1, values.customTag2]
+            .map((tag) => tag.trim()).filter(Boolean);
+          if (!selected && !customTags.length) throw new Error("请选择或填写至少一个评价标签。");
+          if (new Set(customTags.map((tag) => tag.toLowerCase())).size !== customTags.length)
+            throw new Error("两个自定义标签需要不同。");
           await request("/feedback", {
             auth: true,
             data: {
               eventId: id,
               targetType: "activity",
               feedbackType: "like",
-              tagCode: values.tagCode,
+              tagCode: selected || null,
+              customTags,
             },
           });
           form.replaceWith(node("p", "评价已保存。", "notice"));

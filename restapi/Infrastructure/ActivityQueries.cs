@@ -12,18 +12,44 @@ public static class ActivityQueries
                   AND district.code=@districtCode AND district.level IN (2, 3) AND district.is_active
                 """;
 
-    private const string Matching = """
+    // Publishing and moderation are independent. A rejection removes both URLs
+    // and direct file access while preserving the original review history.
+    internal const string PublicCoverEvent = """
+        e.deleted_at IS NULL AND e.visibility='public'
+        AND e.status IN ('published','full','completed','cancelled')
+        AND e.cover_review_status IN ('pending','approved')
+        """;
+
+    internal const string CoverMediaJoin = $"""
+        LEFT JOIN media_asset cover ON cover.id=e.cover_media_id
+            AND cover.deleted_at IS NULL AND cover.status='ready' AND {PublicCoverEvent}
+        """;
+
+    internal const string CoverThumbnail = """
+        CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || COALESCE(cover.thumbnail_storage_key, cover.storage_key) END AS cover_url
+        """;
+
+    internal const string CoverCategoryCodes = """
+        COALESCE(grandparent_category.code, parent_category.code, c.code) AS cover_category_code,
+        c.code AS cover_subcategory_code
+        """;
+
+    internal const string CoverCategoryJoins = """
+        LEFT JOIN category parent_category ON parent_category.id=c.parent_id
+        LEFT JOIN category grandparent_category ON grandparent_category.id=parent_category.parent_id
+        """;
+
+    private const string Matching = $"""
                 WITH matching AS (
                 SELECT count(*) OVER () AS total_count, e.id, e.created_at, e.title, e.description, e.status, e.visibility, e.approval_mode,
                        e.min_participants, e.capacity, e.approved_count, e.waitlist_count,
                        e.price_min, e.price_max, e.price_amount,
                        e.price_currency, e.city_code, e.district_code, e.language_codes,
                        e.cover_media_id,
-                       CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || COALESCE(cover.thumbnail_storage_key, cover.storage_key) END AS cover_url,
+                       {CoverThumbnail},
                        e.published_at,
                        c.id AS category_id,
-                       COALESCE(grandparent_category.code, parent_category.code, c.code) AS cover_category_code,
-                       c.code AS cover_subcategory_code,
+                       {CoverCategoryCodes},
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
                        c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
                        city_region.name_zh_cn AS city_name,
@@ -54,10 +80,8 @@ public static class ActivityQueries
                             ELSE NULL END AS distance_meters
                 FROM event e
                 JOIN category c ON c.id=e.category_id
-                LEFT JOIN category parent_category ON parent_category.id=c.parent_id
-                LEFT JOIN category grandparent_category ON grandparent_category.id=parent_category.parent_id
-                LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
-                    AND cover.status='ready' AND e.cover_review_status='approved'
+                {CoverCategoryJoins}
+                {CoverMediaJoin}
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 LEFT JOIN system_avatar organizer_avatar

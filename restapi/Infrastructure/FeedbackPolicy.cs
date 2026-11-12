@@ -4,7 +4,8 @@ public sealed record FeedbackEligibility(
     bool Eligible,
     Guid TargetUserId,
     string? LikeTag,
-    string? ReportTag);
+    string? ReportTag,
+    string[]? CustomTags = null);
 
 public static class FeedbackPolicy
 {
@@ -36,7 +37,8 @@ public static class FeedbackPolicy
          "dishonesty", "spam", "discrimination", "privacy_violation"],
         StringComparer.Ordinal);
 
-    public static void Validate(string targetType, string feedbackType, string tagCode, string? description)
+    public static void Validate(string targetType, string feedbackType, string tagCode, string? description,
+        bool hasCustomTags = false)
     {
         if (targetType is not ("activity" or "user"))
             throw new ApiException(400, "invalid_feedback_target", "不支持的评价对象");
@@ -49,10 +51,21 @@ public static class FeedbackPolicy
             ("user", "like") => UserLikeTags,
             _ => UserReportTags
         };
-        if (!tags.Contains(tagCode))
+        if (!(hasCustomTags && tagCode.Length == 0 && targetType == "activity" && feedbackType == "like") &&
+            !tags.Contains(tagCode))
             throw new ApiException(400, "invalid_feedback_tag", "请选择有效的评价标签");
         if (description?.Trim().Length > 500)
             throw new ApiException(400, "feedback_description_too_long", "补充说明最多 500 字");
+    }
+
+    public static string[] ValidateCustomTags(string?[] tags)
+    {
+        var trimmed = tags.Select(tag => tag?.Trim() ?? "").ToArray();
+        if (trimmed.Length > 2 ||
+            trimmed.Any(tag => tag.Length == 0 || tag.Length > 15 || tag.Any(char.IsControl)) ||
+            trimmed.Distinct(StringComparer.OrdinalIgnoreCase).Count() != trimmed.Length)
+            throw new ApiException(400, "invalid_custom_feedback_tags", "最多可添加两个不同的自定义标签，每个 1 至 15 字");
+        return trimmed;
     }
 
     public static async Task<FeedbackEligibility> ResolveAsync(
@@ -101,9 +114,9 @@ public static class FeedbackPolicy
             && viewerId != targetUserId;
 
         var targetId = targetType == "activity" ? eventId : targetUserId;
-        var likeTag = await db.ScalarAsync<string>(
+        var like = await db.QueryOneAsync(
             """
-            SELECT tag_code FROM endorsement
+            SELECT tag_code, custom_tags FROM endorsement
             WHERE context_event_id=@eventId AND from_user_id=@viewerId
               AND target_type=@targetType AND target_id=@targetId
             """, new { eventId, viewerId, targetType, targetId }, cancellationToken);
@@ -113,6 +126,7 @@ public static class FeedbackPolicy
             WHERE context_event_id=@eventId AND reporter_user_id=@viewerId
               AND target_type=@targetType AND target_id=@targetId
             """, new { eventId, viewerId, targetType, targetId }, cancellationToken);
-        return new FeedbackEligibility(eligible, targetUserId, likeTag, reportTag);
+        return new FeedbackEligibility(eligible, targetUserId, like?["tag_code"] as string,
+            reportTag, like?["custom_tags"] as string[] ?? []);
     }
 }

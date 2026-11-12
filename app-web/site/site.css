@@ -153,25 +153,41 @@ textarea:focus-visible {
   position: relative;
 }
 .my-menu summary {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #fff;
   list-style: none;
   cursor: pointer;
 }
 .my-menu summary::-webkit-details-marker {
   display: none;
 }
-.my-menu summary::after {
-  content: "";
-  width: 0.38rem;
-  height: 0.38rem;
-  border: solid currentColor;
-  border-width: 0 1.5px 1.5px 0;
-  transform: translateY(-0.1rem) rotate(45deg);
+.account-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  aspect-ratio: 1;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--accent-tint);
+  color: var(--blue);
+  font-weight: 750;
 }
-.my-menu[open] summary::after {
-  transform: translateY(0.1rem) rotate(225deg);
+.account-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.my-menu[open] summary {
+  border-color: var(--blue);
 }
 .my-menu-links {
   position: absolute;
@@ -370,13 +386,28 @@ h2 {
   letter-spacing: -0.06em;
   margin: 0.25rem 0 0;
 }
+.category-filters {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 1.15rem;
+}
+.category-group {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+}
+.category-group-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
 .categories {
   display: flex;
   align-items: center;
   gap: 0.55rem;
   overflow-x: auto;
-  margin-top: 1.15rem;
-  padding: 0.24rem 0.2rem 0.75rem;
+  padding: 0.24rem 0.2rem 0.45rem;
   scrollbar-width: thin;
 }
 .categories button {
@@ -775,13 +806,17 @@ dialog .close {
 .explore-hero h1 {
   font-size: clamp(2.1rem, 5vw, 3.65rem);
 }
+.activity-page {
+  max-width: 860px;
+  min-width: 0;
+  margin-inline: auto;
+}
 .invitation {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(230px, 1fr);
-  gap: clamp(1rem, 4vw, 2rem);
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(0.85rem, 2vw, 1.35rem);
 }
-.invitation-story,
+.activity-section,
 .invitation-summary,
 .page-content > .form {
   background: #fff;
@@ -789,9 +824,126 @@ dialog .close {
   border-radius: 18px;
   padding: clamp(0.85rem, 2.4vw, 1.5rem);
 }
-.invitation-story .detail-cover {
-  border-radius: 12px;
+.invitation > .detail-cover {
+  aspect-ratio: 16 / 8;
+  border-radius: 18px;
   max-height: none;
+  background: #e5eaff;
+}
+.activity-section h2 {
+  margin: 0;
+  font-size: clamp(1.1rem, 2.5vw, 1.35rem);
+}
+.activity-facts {
+  margin: 0.65rem 0 0;
+}
+.activity-facts > div {
+  display: grid;
+  grid-template-columns: clamp(4.5rem, 16vw, 7rem) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.75rem;
+  padding-block: 0.65rem;
+}
+.activity-facts > div + div {
+  border-top: 1px solid var(--line);
+}
+.activity-facts dt {
+  font-size: 0.87rem;
+  color: var(--muted);
+}
+.activity-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.activity-section > p {
+  margin-bottom: 0;
+}
+.activity-section .detail-actions {
+  align-items: center;
+  margin-top: 0.85rem;
+}
+.personal-card {
+  margin-top: 1rem;
+  padding: clamp(0.85rem, 3vw, 1.5rem);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+.personal-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+.personal-identity h2,
+.personal-page form h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.personal-identity .account-avatar {
+  width: clamp(54px, 12vw, 68px);
+  font-size: 1.45rem;
+}
+.personal-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin-block: 1rem;
+}
+.personal-stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  padding: 0.65rem 0.25rem;
+  border-radius: 12px;
+  background: var(--accent-tint);
+}
+.personal-stats dt {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.personal-stats dd {
+  margin: 0;
+  font-size: clamp(1.05rem, 4vw, 1.45rem);
+  font-weight: 750;
+}
+.personal-card .activity-facts dd {
+  white-space: pre-wrap;
+}
+.feedback-form fieldset {
+  margin: 0;
+  padding: 0.85rem 0;
+  border: 0;
+  min-width: 0;
+}
+.feedback-form legend {
+  font-weight: 700;
+}
+.feedback-form fieldset > p {
+  margin-top: 0;
+}
+.feedback-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.feedback-chips .button[aria-pressed="true"],
+.bookmark-button[aria-pressed="true"] {
+  background: var(--accent-tint);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.feedback-summary {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 0;
+}
+.saved-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 .invitation-summary {
   position: sticky;
@@ -832,8 +984,8 @@ dialog .close {
   object-fit: contain;
 }
 @media (max-width: 700px) {
-  .invitation {
-    grid-template-columns: 1fr;
+  .invitation > .detail-cover {
+    aspect-ratio: 16 / 10;
   }
   .invitation-summary {
     position: static;
@@ -1150,6 +1302,11 @@ dialog .close {
 }
 .publish-layout .detail-cover {
   border-radius: 10px;
+}
+@media (min-width: 581px) {
+  .publish-regions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 .form .cover-picker {
   justify-items: start;

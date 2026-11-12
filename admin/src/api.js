@@ -36,6 +36,8 @@ function params(values) {
 }
 
 export const api = {
+  contentFilterTerms: () => request('/admin/content-filter'),
+  saveContentFilterTerm: (body) => request('/admin/content-filter', { method: 'PUT', body: JSON.stringify(body) }),
   webGuides: () => request('/admin/guides'),
   saveWebGuide: (slug, body) => request('/admin/guides/' + encodeURIComponent(slug), {
     method: 'PUT', body: JSON.stringify(body),

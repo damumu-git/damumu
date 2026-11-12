@@ -22,6 +22,7 @@ var connectionString = builder.Configuration.GetConnectionString("Muda")
     ?? throw new InvalidOperationException("ConnectionStrings:Muda is required.");
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<Db>();
+builder.Services.AddSingleton<ContentFilter>();
 builder.Services.AddSingleton<EventLog>();
 builder.Services.AddHostedService(services => services.GetRequiredService<EventLog>());
 builder.Services.AddSingleton<MediaStorage>();
@@ -162,6 +163,7 @@ app.UseStaticFiles(new StaticFileOptions
 app.MapOpenApi();
 
 var api = app.MapGroup("/api/v1");
+api.AddEndpointFilter(ContentFilter.Inspect);
 api.MapGet("/health", async (Db db, PushNotificationService push, CancellationToken ct) =>
 {
     var databaseTime = await db.ScalarAsync<DateTime>("SELECT now()", cancellationToken: ct);
@@ -184,6 +186,7 @@ api.MapGovernanceEndpoints();
 api.MapFeedbackEndpoints();
 api.MapAdminEndpoints();
 api.MapSuggestionEndpoints();
+api.MapContentFilterEndpoints();
 api.MapRealtimeEndpoints();
 
 app.Run();

@@ -27,13 +27,14 @@ public static class EventEndpoints
             var hasGeo = latitude.HasValue && longitude.HasValue;
             var radius = Math.Clamp(radiusMeters ?? 20000, 500, 100000);
             var rows = await db.QueryAsync(
-                """
+                $"""
                 SELECT e.id, e.title, e.description, e.status, e.visibility, e.approval_mode,
                        e.min_participants, e.capacity, e.approved_count, e.waitlist_count,
                        e.price_min, e.price_max, e.price_amount,
                        e.price_currency, e.city_code, e.district_code, e.language_codes,
                        e.cover_media_id,
-                       CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || COALESCE(cover.thumbnail_storage_key, cover.storage_key) END AS cover_url,
+                       {ActivityQueries.CoverThumbnail},
+                       {ActivityQueries.CoverCategoryCodes},
                        e.published_at,
                        c.id AS category_id,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
@@ -66,8 +67,8 @@ public static class EventEndpoints
                             ELSE NULL END AS distance_meters
                 FROM event e
                 JOIN category c ON c.id=e.category_id
-                LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
-                    AND cover.status='ready' AND e.cover_review_status='approved' AND e.visibility='public'
+                {ActivityQueries.CoverCategoryJoins}
+                {ActivityQueries.CoverMediaJoin}
                 JOIN app_user u ON u.id=e.organizer_user_id
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 LEFT JOIN system_avatar organizer_avatar
@@ -145,7 +146,7 @@ public static class EventEndpoints
         {
             var viewerId = ApiSupport.GetOptionalUserId(context);
             var item = await db.QueryOneAsync(
-                """
+                $"""
                 SELECT e.*,
                        city_region.name_zh_cn AS city_name,
                        city_region.name_ko_kr AS city_name_ko_kr,
@@ -157,7 +158,8 @@ public static class EventEndpoints
                        municipality.name_zh_cn AS municipality_name,
                        municipality.name_ko_kr AS municipality_name_ko_kr,
                        municipality.name_en_us AS municipality_name_en_us,
-                       CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || COALESCE(cover.thumbnail_storage_key, cover.storage_key) END AS cover_url,
+                       {ActivityQueries.CoverThumbnail},
+                       {ActivityQueries.CoverCategoryCodes},
                        CASE WHEN cover.id IS NOT NULL THEN '/uploads/' || cover.storage_key END AS cover_original_url,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
                        c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
@@ -199,9 +201,8 @@ public static class EventEndpoints
                        ) AS viewer_membership_status
                 FROM event e
                 JOIN category c ON c.id=e.category_id
-                LEFT JOIN media_asset cover ON cover.id=e.cover_media_id AND cover.deleted_at IS NULL
-                    AND cover.status='ready' AND e.cover_review_status='approved' AND e.visibility='public'
-                    AND e.status IN ('published','full','completed','cancelled')
+                {ActivityQueries.CoverCategoryJoins}
+                {ActivityQueries.CoverMediaJoin}
                 LEFT JOIN administrative_region city_region ON city_region.code=e.city_code
                 LEFT JOIN administrative_region district_region ON district_region.code=e.district_code
                 LEFT JOIN administrative_region municipality ON district_region.level=3 AND municipality.code=district_region.parent_code
@@ -254,7 +255,16 @@ public static class EventEndpoints
             if (viewerId.HasValue)
                 feedback = await FeedbackPolicy.ResolveAsync(
                     db, id, viewerId.Value, "activity", null, ct);
-            return ApiSupport.Ok(new { item, schedules, tags, members, feedback });
+            var customFeedbackTags = viewerId == (Guid)item["organizer_user_id"]!
+                ? await db.QueryAsync("""
+                    SELECT label, count(*) AS count
+                    FROM endorsement
+                    CROSS JOIN LATERAL unnest(custom_tags) AS custom(label)
+                    WHERE context_event_id=@id AND target_type='activity'
+                    GROUP BY label ORDER BY count(*) DESC, label LIMIT 30
+                    """, new { id }, ct)
+                : null;
+            return ApiSupport.Ok(new { item, schedules, tags, members, feedback, customFeedbackTags });
         });
 
         api.MapGet("/users/{id:guid}/public-profile", async (
@@ -276,17 +286,20 @@ public static class EventEndpoints
                 """
                 SELECT tag_code, count(*) AS count
                 FROM endorsement
-                WHERE target_user_id=@id
+                WHERE target_user_id=@id AND tag_code IS NOT NULL
                 GROUP BY tag_code
                 ORDER BY count(*) DESC, tag_code
                 LIMIT 3
                 """, new { id }, ct);
-            profile["activities"] = await db.QueryAsync("""
-                SELECT e.id,e.title,e.description,e.price_amount, c.name_zh_cn AS category_name,
-                       COALESCE(parent.code,c.code) AS cover_category_code, c.code AS cover_subcategory_code,
+            profile["activities"] = await db.QueryAsync($"""
+                SELECT e.id,e.title,e.description,e.price_amount,
+                       COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
+                       {ActivityQueries.CoverCategoryCodes},
+                       {ActivityQueries.CoverThumbnail},
                        (SELECT min(starts_at) FROM event_schedule s WHERE s.event_id=e.id AND s.status='scheduled') AS starts_at
                 FROM event e JOIN category c ON c.id=e.category_id
-                LEFT JOIN category parent ON parent.id=c.parent_id
+                {ActivityQueries.CoverCategoryJoins}
+                {ActivityQueries.CoverMediaJoin}
                 WHERE e.organizer_user_id=@id AND e.visibility='public' AND e.deleted_at IS NULL
                   AND e.status IN ('published','full','completed')
                 ORDER BY starts_at DESC NULLS LAST, e.id LIMIT 12

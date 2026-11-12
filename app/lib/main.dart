@@ -1936,9 +1936,10 @@ class SectionTitle extends StatelessWidget {
 }
 
 class _ActivityCategoryCover extends StatelessWidget {
-  const _ActivityCategoryCover({required this.event});
+  const _ActivityCategoryCover({required this.event, this.coverUrl});
 
   final EventItem event;
+  final String? coverUrl;
 
   String get _majorAsset {
     final category = switch (event.coverCategoryCode) {
@@ -1955,6 +1956,19 @@ class _ActivityCategoryCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final url = coverUrl;
+    if (url != null && url.trim().isNotEmpty) {
+      return Image.network(
+        absoluteImageUrl(url),
+        fit: BoxFit.cover,
+        excludeFromSemantics: true,
+        errorBuilder: (_, _, _) => _categoryCover(),
+      );
+    }
+    return _categoryCover();
+  }
+
+  Widget _categoryCover() {
     final subcategory = event.coverSubcategoryCode;
     Widget major() =>
         Image.asset(_majorAsset, fit: BoxFit.cover, excludeFromSemantics: true);
@@ -2499,7 +2513,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
                     borderRadius: BorderRadius.circular(10),
                     child: SizedBox.square(
                       dimension: 44,
-                      child: _ActivityCategoryCover(event: event),
+                      child: _ActivityCategoryCover(
+                        event: event,
+                        coverUrl: event.coverUrl,
+                      ),
                     ),
                   ),
                   title: Text(
@@ -2787,10 +2804,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
     final organizerName = _detail?['organizer_name'] as String? ?? e.host;
     final organizerScore =
         (_detail?['organizer_score'] as num?)?.toDouble() ?? e.hostScore;
-    final uploadedCover =
-        _detail?['cover_original_url'] as String? ??
-        _detail?['cover_url'] as String? ??
-        e.coverUrl;
+    final uploadedCover = _detail == null
+        ? e.coverUrl
+        : _detail?['cover_original_url'] as String? ??
+              _detail?['cover_url'] as String?;
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -3268,7 +3285,7 @@ class _EventUploadedCover extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          context.tr('eventCoverApproved'),
+          context.tr('eventCoverPhoto'),
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 10),

@@ -9,13 +9,11 @@ public sealed class PrivateMediaMiddleware(RequestDelegate next)
             context.Response.Headers.CacheControl = "private,no-store";
             var storageKey = context.Request.Path.Value!["/uploads/".Length..];
             var allowed = await db.ScalarAsync<bool>(
-                """
+                $"""
                 SELECT EXISTS (
                     SELECT 1 FROM media_asset ma JOIN event e ON e.cover_media_id=ma.id
                     WHERE (ma.storage_key=@storageKey OR ma.thumbnail_storage_key=@storageKey)
-                      AND ma.status='ready' AND ma.deleted_at IS NULL AND e.deleted_at IS NULL
-                      AND e.cover_review_status='approved'
-                      AND e.visibility='public' AND e.status IN ('published','full','completed','cancelled')
+                      AND ma.status='ready' AND ma.deleted_at IS NULL AND {ActivityQueries.PublicCoverEvent}
                 )
                 """, new { storageKey }, context.RequestAborted);
             if (!allowed)

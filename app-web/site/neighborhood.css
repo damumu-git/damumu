@@ -236,6 +236,63 @@
   background: var(--blue);
   color: #fff;
 }
+.schedule-field {
+  display: grid;
+  gap: 0.28rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+.schedule-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 44px;
+  padding: 0.65rem;
+  border: 1px solid var(--filter-line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--muted);
+  text-align: start;
+}
+.schedule-trigger:hover,
+.schedule-trigger.has-value {
+  border-color: #b9c8ff;
+  background: var(--accent-tint);
+  color: #253fab;
+}
+.schedule-icon {
+  width: 16px;
+  height: 15px;
+  flex: none;
+  border: 1.5px solid currentColor;
+  border-top-width: 4px;
+  border-radius: 4px;
+}
+.schedule-selected-date {
+  margin: 0.85rem 0 0.55rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--filter-line);
+}
+.schedule-time {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+.schedule-time label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.schedule-time input {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid var(--filter-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
 
 .agenda-page {
   max-width: 960px;
