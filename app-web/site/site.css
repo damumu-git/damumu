@@ -771,6 +771,24 @@ dialog .close {
 .profile-page {
   max-width: 650px;
 }
+.download-card {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(0.75rem, 3vw, 1.5rem);
+  padding: clamp(1rem, 4vw, 1.6rem);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+.download-logo {
+  flex: none;
+  width: clamp(48px, 10vw, 72px);
+  aspect-ratio: 1;
+  border-radius: 22%;
+}
+.download-card p {
+  margin: 0 0 0.75rem;
+}
 .guide-article,
 .editor-page {
   max-width: 930px;

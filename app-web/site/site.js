@@ -5,6 +5,10 @@ import { createBrowseFilters } from "/browse-filters.js";
 import { dateQuery } from "/seoul-dates.js";
 import { setupSchedulePicker } from "/date-picker.js";
 const apiRoot = "https://api.damumu.com";
+const appStoreLinks = [
+  { label: "App Store", url: "" },
+  { label: "Google Play", url: "" },
+];
 const oauth = "/api/v1/auth/web";
 const $ = (selector, root = document) => root.querySelector(selector);
 const dialog = $("#dialog");
@@ -1493,8 +1497,31 @@ function showNotFound() {
   const content = show("没有找到这个页面");
   content.append(actionLink("返回发现活动", "/explore"));
 }
+function showDownload() {
+  const content = show("下载搭慕 App", "reading download-page");
+  const card = node("section", null, "download-card");
+  const logo = node("img", null, "download-logo");
+  logo.src = "/assets/logo.png";
+  logo.alt = "";
+  const copy = node("div");
+  const available = appStoreLinks.filter(({ url }) => url);
+  const links = node("div", null, "section-nav");
+  if (available.length) {
+    copy.append(node("p", "选择手机对应的应用商店。"));
+    for (const { label, url } of available)
+      links.append(actionLink(label, url, "button primary"));
+  } else {
+    copy.append(node("p", "App 下载暂未开放。你可以先在网页浏览和报名参加活动。"));
+    links.append(actionLink("浏览活动", "/explore", "button primary"));
+  }
+  copy.append(links);
+  card.append(logo, copy);
+  content.append(card);
+}
+
 async function route() {
   const path = location.pathname;
+  if (path === "/download") return showDownload();
   for (const link of document.querySelectorAll(".masthead nav a, #my-menu a")) {
     if (link.pathname === path || path.startsWith(link.pathname + "/"))
       link.setAttribute("aria-current", "page");

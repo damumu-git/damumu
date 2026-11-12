@@ -34,6 +34,12 @@ class FeedbackActionGrid extends StatefulWidget {
 class _FeedbackActionGridState extends State<FeedbackActionGrid> {
   FeedbackEligibilityData? _eligibility;
   bool _loading = false;
+  bool _submitting = false;
+  bool _userFeedbackLocked = false;
+
+  bool get _userFeedbackComplete =>
+      widget.targetType == 'user' &&
+      (_userFeedbackLocked || _eligibility?.likeTag != null);
 
   @override
   void initState() {
@@ -61,6 +67,7 @@ class _FeedbackActionGridState extends State<FeedbackActionGrid> {
 
   @override
   Widget build(BuildContext context) {
+    final liked = _userFeedbackComplete || _eligibility?.likeTag != null;
     final actions = <Widget>[
       if (widget.onPublishSimilar != null)
         FeedbackActionCard(
@@ -70,14 +77,14 @@ class _FeedbackActionGridState extends State<FeedbackActionGrid> {
         ),
       if (_eligibility?.eligible == true)
         FeedbackActionCard(
-          icon: _eligibility?.likeTag == null
-              ? Icons.favorite_border
-              : Icons.favorite,
-          label: _eligibility?.likeTag == null
-              ? context.tr('like')
-              : context.tr('liked'),
+          icon: liked ? Icons.favorite : Icons.favorite_border,
+          label: _userFeedbackComplete
+              ? context.tr('userFeedbackComplete')
+              : context.tr(liked ? 'liked' : 'like'),
           color: Colors.pink.shade600,
-          onTap: () => _submit('like'),
+          onTap: _submitting || _userFeedbackComplete
+              ? null
+              : () => _submit('like'),
         ),
       if (_eligibility?.eligible == true)
         FeedbackActionCard(
@@ -86,7 +93,7 @@ class _FeedbackActionGridState extends State<FeedbackActionGrid> {
               ? context.tr('report')
               : context.tr('reported'),
           color: Colors.orange.shade800,
-          onTap: _eligibility?.reportTag == null
+          onTap: !_submitting && _eligibility?.reportTag == null
               ? () => _submit('report')
               : null,
         ),
@@ -105,24 +112,32 @@ class _FeedbackActionGridState extends State<FeedbackActionGrid> {
   }
 
   Future<void> _submit(String feedbackType) async {
+    if (_submitting ||
+        _eligibility?.eligible != true ||
+        (feedbackType == 'like'
+            ? _userFeedbackComplete
+            : _eligibility?.reportTag != null)) {
+      return;
+    }
+    setState(() => _submitting = true);
     final tags = switch ((widget.targetType, feedbackType)) {
       ('activity', 'like') => activityLikeTags,
       ('activity', 'report') => activityReportTags,
       ('user', 'like') => userLikeTags,
       _ => userReportTags,
     };
-    final result = await showDialog<({String tag, String? description})>(
-      context: context,
-      builder: (_) => FeedbackTagDialog(
-        feedbackType: feedbackType,
-        tags: tags,
-        selectedTag: feedbackType == 'like'
-            ? _eligibility?.likeTag
-            : _eligibility?.reportTag,
-      ),
-    );
-    if (result == null || !mounted) return;
     try {
+      final result = await showDialog<({String tag, String? description})>(
+        context: context,
+        builder: (_) => FeedbackTagDialog(
+          feedbackType: feedbackType,
+          tags: tags,
+          selectedTag: feedbackType == 'like'
+              ? _eligibility?.likeTag
+              : _eligibility?.reportTag,
+        ),
+      );
+      if (result == null || !mounted) return;
       await EventService.submitFeedback(
         widget.token,
         eventId: widget.eventId,
@@ -142,12 +157,24 @@ class _FeedbackActionGridState extends State<FeedbackActionGrid> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(context.tr('feedbackSubmitted'))));
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.tr('feedbackFailed'))));
+        final alreadySubmitted =
+            error is EventServiceException &&
+            error.code == 'user_feedback_already_submitted';
+        if (alreadySubmitted) setState(() => _userFeedbackLocked = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.tr(
+                alreadySubmitted ? 'userFeedbackComplete' : 'feedbackFailed',
+              ),
+            ),
+          ),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 }

@@ -12,9 +12,10 @@ const _apiBase = String.fromEnvironment(
 );
 
 class EventServiceException implements Exception {
-  const EventServiceException(this.message);
+  const EventServiceException(this.message, {this.code});
 
   final String message;
+  final String? code;
 
   @override
   String toString() => message;
@@ -42,12 +43,14 @@ Map<String, dynamic> _decodeResponse(
   if (response.statusCode < 200 || response.statusCode >= 300) {
     final error = envelope['error'];
     final message = error is Map ? error['message'] : null;
+    final code = error is Map ? error['code'] : null;
     throw EventServiceException(
       message is String &&
               message.trim().isNotEmpty &&
               !_looksTechnical(message)
           ? message
           : fallbackMessage,
+      code: code is String ? code : null,
     );
   }
   return envelope;

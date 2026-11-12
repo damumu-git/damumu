@@ -22,6 +22,10 @@ docker compose -f app-web/compose.yaml up --build
 
 浏览器打开 http://127.0.0.1:8083。本地容器可访问公开活动和邮箱登录；注册和网页 OAuth 使用生产同源代理。
 
+## App 下载入口
+
+页脚的「下载 App」指向 `/download`。商店页面发布后，在 `site/site.js` 的 `appStoreLinks` 中填入对应的官方商店链接。每个按钮会在自己的链接配置后显示。
+
 ## 服务器部署
 
 本次升级先按服务器部署指南备份并依次应用 `030_web_guides.sql`、`031_web_bookmarks.sql`、`032_web_community.sql`，然后从 `main` 运行 `damumu-deploy --migrations-applied`。它会构建独立网站镜像、部署 API 和其它服务并检查健康状态。首次配置域名或从旧容器迁移，见 [服务器部署指南](../deploy/README.md)。

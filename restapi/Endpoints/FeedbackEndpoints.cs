@@ -59,6 +59,7 @@ public static class FeedbackEndpoints
                     DO UPDATE SET tag_code=EXCLUDED.tag_code,
                         custom_tags=COALESCE(@customTags::text[], endorsement.custom_tags),
                         updated_at=now()
+                    WHERE EXCLUDED.target_type='activity'
                     RETURNING id, context_event_id, target_type, target_id, tag_code, custom_tags, updated_at
                     """, new
                     {
@@ -70,6 +71,8 @@ public static class FeedbackEndpoints
                         tagCode = customOnly ? null : tagCode,
                         customTags
                     }, ct);
+                if (endorsement is null)
+                    throw new ApiException(409, "user_feedback_already_submitted", "你已评价过这位用户");
                 return ApiSupport.Ok(endorsement);
             }
 

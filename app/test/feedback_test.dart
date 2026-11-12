@@ -10,6 +10,56 @@ import 'package:zaihandazi/feedback_model.dart';
 import 'package:zaihandazi/main.dart';
 
 void main() {
+  for (final alreadySubmitted in [false, true]) {
+    testWidgets(
+      'user feedback locks after submit (existing: $alreadySubmitted)',
+      (tester) async {
+        var submissions = 0;
+        final client = MockClient((request) async {
+          expect(request.method, 'POST');
+          submissions++;
+          return alreadySubmitted
+              ? http.Response(
+                  '{"error":{"code":"user_feedback_already_submitted"}}',
+                  409,
+                )
+              : http.Response('{"data":{}}', 200);
+        });
+        await http.runWithClient(() async {
+          await tester.pumpWidget(
+            const MaterialApp(
+              home: Scaffold(
+                body: FeedbackActionGrid(
+                  token: 'token',
+                  eventId: 'event',
+                  targetType: 'user',
+                  targetUserId: 'peer',
+                  initialEligibility: FeedbackEligibilityData(eligible: true),
+                ),
+              ),
+            ),
+          );
+          await tester.tap(find.byType(FeedbackActionCard).first);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byType(ChoiceChip).first);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byType(FilledButton));
+          await tester.pumpAndSettle();
+          final cards = tester.widgetList<FeedbackActionCard>(
+            find.byType(FeedbackActionCard),
+          );
+          expect(cards.first.label, 'Feedback submitted');
+          expect(cards.first.onTap, isNull);
+          expect(cards.last.onTap, isNotNull);
+          await tester.tap(find.byType(FeedbackActionCard).first);
+          await tester.pumpAndSettle();
+          expect(find.byType(FeedbackTagDialog), findsNothing);
+          expect(submissions, 1);
+        }, () => client);
+      },
+    );
+  }
+
   testWidgets(
     'feedback actions are square, spaced, and wrap on narrow screens',
     (tester) async {
