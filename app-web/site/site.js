@@ -1,6 +1,6 @@
 import { createCommunityPages } from "/community-pages.js";
 import { createMemberPages } from "/member-pages.js";
-import { createChatPage } from "/chat-page.js";
+import { conversationRoute, createChatPage } from "/chat-page.js";
 import { createBrowseFilters } from "/browse-filters.js";
 import { dateQuery } from "/seoul-dates.js";
 const apiRoot = "https://api.damumu.com";
@@ -747,36 +747,6 @@ async function showMine() {
   }
 }
 
-async function showMessages() {
-  const content = show("消息", "workspace-page");
-  const marker = dialogRequest;
-  try {
-    const conversations = await request("/conversations?limit=100", { auth: true });
-    if (marker !== dialogRequest) return;
-    const list = node("ul", null, "detail-list");
-    for (const conversation of conversations) {
-      const entry = node("li");
-      const unread = conversation.unread_count
-        ? " · " + conversation.unread_count + " 条未读"
-        : "";
-      entry.append(
-        actionLink(
-          conversation.display_title + unread,
-          "/messages/" + encodeURIComponent(conversation.id),
-          "text-button",
-        ),
-        node("p", conversation.last_message_body || "暂无文字消息", "meta"),
-      );
-      list.append(entry);
-    }
-    content.append(
-      list.children.length ? list : node("p", "还没有会话。", "meta"),
-    );
-  } catch (error) {
-    if (marker === dialogRequest) showError(content, error);
-  }
-}
-
 async function uploadCover(file) {
   if (!file?.size) return null;
   if (file.size > 15 * 1024 * 1024)
@@ -820,7 +790,15 @@ function showPublish(template) {
   const content = show("发起活动", "editor-page");
   const form = node("form", null, "form");
   form.innerHTML = `
-    <label>活动封面（选填，发布后审核）<input name="cover" type="file" accept="image/jpeg,image/png,image/webp"></label>
+    <label class="cover-picker">
+      <span id="cover-heading">活动封面（选填，发布后审核）</span>
+      <span class="cover-picker-tile">
+        <span class="cover-camera" aria-hidden="true"></span>
+        <span aria-hidden="true">选图片</span>
+        <input name="cover" type="file" accept="image/jpeg,image/png,image/webp" aria-labelledby="cover-heading">
+      </span>
+      <span class="cover-file-name meta" role="status" hidden></span>
+    </label>
     <label>活动名称<input name="title" required maxlength="80"></label>
     <label>活动介绍<textarea name="description" required maxlength="3000"></textarea></label>
     <div class="form-row"><label>活动分类<select name="categoryId" required></select></label><label id="custom-label" hidden>自定义分类<input name="customSubcategory" maxlength="15"></label></div>
@@ -840,10 +818,17 @@ function showPublish(template) {
   layout.append(form, preview);
   content.append(layout);
   let objectUrl;
+  let selectedPicture;
+  const fileName = $(".cover-file-name", form);
   function updatePreview() {
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
     const picture = form.elements.cover.files[0];
-    objectUrl = picture ? URL.createObjectURL(picture) : null;
+    if (picture !== selectedPicture) {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      selectedPicture = picture;
+      objectUrl = picture ? URL.createObjectURL(picture) : null;
+      fileName.textContent = picture?.name ?? "";
+      fileName.hidden = !picture;
+    }
     const selected = categories.find(
       (item) => item.id === form.elements.categoryId.value,
     );
@@ -1507,19 +1492,8 @@ async function route() {
   const person = /^\/people\/([0-9a-f-]{36})$/i.exec(path);
   if (person) return showPerson(person[1]);
   if (path === "/me/activities") return requireLogin(showMine);
-  if (path === "/messages") return requireLogin(showMessages);
-  const conversation = /^\/messages\/([0-9a-f-]{36})$/i.exec(path);
-  if (conversation)
-    return requireLogin(async () => {
-      try {
-        const list = await request("/conversations?limit=100", { auth: true });
-        const item = list.find((entry) => entry.id === conversation[1]);
-        if (item) showConversation(item, list);
-        else showNotFound();
-      } catch (error) {
-        showError(show("消息"), error);
-      }
-    });
+  if (path === "/messages" || conversationRoute.test(path))
+    return requireLogin(showMessages);
   if (path === "/settings/profile") return requireLogin(showSettings);
   showNotFound();
 }
@@ -1615,7 +1589,7 @@ const communityPages = createCommunityPages({
   cover,
   session: () => session,
 });
-const showConversation = createChatPage({
+const showMessages = createChatPage({
   show,
   node,
   button,

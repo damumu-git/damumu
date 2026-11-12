@@ -1,6 +1,16 @@
 const recentDays = 7;
 const pageSize = 40;
 const historyEdge = 64;
+export const conversationRoute = /^\/messages\/([0-9a-f-]{36})$/i;
+const listDate = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Seoul", month: "numeric", day: "numeric",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+
+function previewTime(value) {
+  const date = new Date(value);
+  return value && Number.isFinite(date.valueOf()) ? listDate.format(date) : "";
+}
 
 export function createChatPage({
   show,
@@ -14,47 +24,116 @@ export function createChatPage({
   session,
   time,
 }) {
-  return function showConversation(conversation, conversations) {
-    const viewer = session().user;
+  return async function showMessages() {
     const content = show("消息", "chat-page");
-    document.title = conversation.display_title + " · 消息 · 搭慕 DAMU";
     const layout = node("div", null, "chat-layout");
     const sidebar = node("nav", null, "chat-sidebar");
-    sidebar.setAttribute("aria-label", "会话列表");
-    const picker = node("details", null, "chat-picker");
-    const pickerLabel = node("summary");
-    pickerLabel.append(
-      node("span", "切换会话", "meta"),
-      node("strong", conversation.display_title),
-    );
+    sidebar.setAttribute("aria-label", "消息列表");
+    const heading = node("h2", "消息列表", "chat-list-heading");
+    heading.tabIndex = -1;
     const choices = node("ul", null, "chat-choices");
-    for (const item of conversations) {
-      const entry = node("li");
-      const link = actionLink(item.display_title, "/messages/" + encodeURIComponent(item.id), "chat-choice");
-      if (item.id === conversation.id) link.setAttribute("aria-current", "page");
-      else if (item.unread_count) link.append(node("small", item.unread_count + " 条未读"));
-      entry.append(link);
-      choices.append(entry);
-    }
-    picker.append(pickerLabel, choices);
-    sidebar.append(picker, actionLink("会话列表", "/messages", "text-button"));
-    picker.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape" || !picker.open) return;
-      event.preventDefault();
-      picker.open = false;
-      pickerLabel.focus();
-    });
-    content.addEventListener("pointerdown", (event) => {
-      if (!picker.contains(event.target)) picker.open = false;
-    });
+    const listStatus = node("p", "正在加载会话…", "chat-list-status meta");
+    listStatus.setAttribute("role", "status");
+    sidebar.append(heading, choices, listStatus);
+    const panel = node("div", null, "chat-panel");
+    const placeholder = node("div", null, "chat-placeholder");
+    const prompt = node("p", "选择一个会话查看消息。");
+    const back = actionLink("‹ 消息列表", "/messages", "chat-back text-button");
+    back.addEventListener("click", (event) => navigate(event, back.pathname));
+    placeholder.append(back, prompt);
+    panel.append(placeholder);
+    layout.append(sidebar, panel);
+    content.append(layout);
 
+    const rows = new Map();
+    let activeId = null;
+    let threadRequest;
+
+    function navigate(event, href) {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      if (location.pathname === href) return;
+      history.pushState(null, "", href);
+      selectFromLocation(true);
+    }
+
+    function selectFromLocation(focus = false) {
+      const id = conversationRoute.exec(location.pathname)?.[1].toLowerCase() ?? null;
+      if (id === activeId) return;
+      const previous = rows.get(activeId);
+      previous?.link.removeAttribute("aria-current");
+      threadRequest?.abort();
+      activeId = id;
+      const selected = rows.get(id);
+      layout.classList.toggle("has-thread", Boolean(id));
+      document.title = selected ? selected.item.display_title + " · 消息 · 搭慕 DAMU" : "消息 · 搭慕 DAMU";
+      if (!selected) {
+        prompt.textContent = id ? "找不到这个会话。" : rows.size ? "选择一个会话查看消息。" : "";
+        panel.replaceChildren(placeholder);
+        if (focus) (previous?.link ?? heading).focus({ preventScroll: true });
+        return;
+      }
+      selected.link.setAttribute("aria-current", "page");
+      threadRequest = new AbortController();
+      const threadBack = back.cloneNode(true);
+      threadBack.addEventListener("click", (event) => navigate(event, threadBack.pathname));
+      const threadTitle = renderConversation(selected.item, panel, threadBack, threadRequest.signal, {
+        read() { selected.unread.hidden = true; },
+        sent(message) {
+          selected.preview.textContent = message.body || "暂无文字消息";
+          selected.date.textContent = previewTime(message.created_at);
+          choices.prepend(selected.entry);
+        },
+      });
+      if (focus) threadTitle.focus({ preventScroll: true });
+    }
+
+    try {
+      const conversations = await request("/conversations?limit=100", { auth: true });
+      if (!content.isConnected) return;
+      for (const item of conversations) {
+        const entry = node("li");
+        const link = actionLink("", "/messages/" + encodeURIComponent(item.id), "chat-choice");
+        const isGroup = item.conversation_type === "event";
+        const avatar = node("span", isGroup ? "群" : Array.from(item.display_title)[0] || "聊", isGroup ? "chat-avatar group" : "chat-avatar");
+        avatar.setAttribute("aria-hidden", "true");
+        const label = node("span", null, "chat-choice-label");
+        const preview = node("span", item.last_message_body || "暂无文字消息", "chat-choice-preview");
+        label.append(node("strong", item.display_title), preview);
+        const meta = node("span", null, "chat-choice-meta");
+        const date = node("small", previewTime(item.last_message_at));
+        const unread = node("small", item.unread_count ? item.unread_count + " 条未读" : "", "chat-unread");
+        unread.hidden = !item.unread_count;
+        meta.append(date, unread);
+        link.append(avatar, label, meta);
+        link.addEventListener("click", (event) => navigate(event, link.pathname));
+        entry.append(link);
+        choices.append(entry);
+        rows.set(item.id, { item, link, entry, preview, date, unread });
+      }
+      listStatus.hidden = rows.size > 0;
+      listStatus.textContent = "还没有会话。";
+      if (!rows.size) prompt.textContent = "";
+      selectFromLocation();
+      window.addEventListener("popstate", () => {
+        if (content.isConnected) selectFromLocation(true);
+      });
+    } catch (error) {
+      listStatus.textContent = error.message;
+      prompt.textContent = "暂时无法加载会话。";
+    }
+  };
+
+  function renderConversation(conversation, panel, back, signal, updates) {
+    const viewer = session().user;
     const thread = node("section", null, "chat-thread");
     const header = node("header", null, "chat-thread-header");
     const title = node("h2", conversation.display_title);
     title.id = "chat-title";
+    title.tabIndex = -1;
     thread.setAttribute("aria-labelledby", title.id);
     const subtitle = conversation.conversation_type === "direct" ? "私信" : "活动群聊";
-    header.append(title, node("p", conversation.status === "active" ? subtitle : subtitle + " · 只读", "meta"));
+    header.append(back, title, node("p", conversation.status === "active" ? subtitle : subtitle + " · 只读", "meta"));
     const feedback = node("p", null, "chat-feedback");
     feedback.setAttribute("role", "status");
     header.append(feedback);
@@ -71,8 +150,7 @@ export function createChatPage({
     const empty = node("p", "正在加载消息…", "chat-empty");
     viewport.append(history, empty, messages);
     thread.append(header, viewport);
-    layout.append(sidebar, thread);
-    content.append(layout);
+    panel.replaceChildren(thread);
 
     const base = "/conversations/" + encodeURIComponent(conversation.id);
     const visible = new Map();
@@ -114,12 +192,13 @@ export function createChatPage({
       const previous = readMarker;
       readMarker = message.id;
       request(base + "/read", { auth: true, data: { messageId: message.id } })
+        .then(updates.read)
         .catch(() => { if (readMarker === message.id) readMarker = previous; });
     }
 
     function fetchMessages(pagination = { recentDays }) {
       const params = new URLSearchParams({ limit: pageSize, ...pagination });
-      return request(base + "/messages?" + params, { auth: true });
+      return request(base + "/messages?" + params, { auth: true, signal });
     }
 
     async function loadMessages(historyPage = false) {
@@ -130,7 +209,7 @@ export function createChatPage({
       viewport.setAttribute("aria-busy", "true");
       try {
         const result = await fetchMessages(historyPage ? nextPage : undefined);
-        if (!content.isConnected) return;
+        if (!thread.isConnected) return;
         const before = viewport.scrollHeight;
         const top = viewport.scrollTop;
         const entries = [...result.items].reverse().map(showMessage).filter(Boolean);
@@ -147,7 +226,7 @@ export function createChatPage({
           : viewport.scrollHeight);
         if (!readMarker) readThrough(result.items[0]);
       } catch (error) {
-        if (content.isConnected) {
+        if (thread.isConnected) {
           feedback.textContent = error.message;
           if (!historyPage) {
             empty.textContent = "消息加载失败。";
@@ -188,6 +267,8 @@ export function createChatPage({
         if (!body) throw new Error("请输入消息。");
         if (draft?.body !== body) draft = { body, clientMessageId: crypto.randomUUID() };
         const message = await request(base + "/messages", { auth: true, data: { messageType: "text", ...draft } });
+        updates.sent(message);
+        if (!thread.isConnected) return;
         draft = null;
         if (form.elements.body.value === values.body) form.elements.body.value = "";
         const entry = showMessage(message);
@@ -196,7 +277,7 @@ export function createChatPage({
         setScroll(viewport.scrollHeight);
         try {
           const latest = await fetchMessages();
-          if (!content.isConnected || !latest.items.some((item) => item.id === message.id)) return;
+          if (!thread.isConnected || !latest.items.some((item) => item.id === message.id)) return;
           const atBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < historyEdge;
           let newer = null;
           for (const item of latest.items) {
@@ -211,10 +292,11 @@ export function createChatPage({
           if (atBottom) setScroll(viewport.scrollHeight);
           readThrough(latest.items[0]);
         } catch (error) {
-          if (content.isConnected) feedback.textContent = "消息已发送，刷新失败。";
+          if (thread.isConnected) feedback.textContent = "消息已发送，刷新失败。";
         }
       });
     }
     loadMessages().finally(() => { if (submit) submit.disabled = false; });
-  };
+    return title;
+  }
 }
