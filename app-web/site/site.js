@@ -12,6 +12,8 @@ const page = $("#page");
 const browse = $("#browse");
 const cards = $("#cards");
 const status = $("#status");
+const login = $("#login");
+const myMenu = $("#my-menu");
 const more = $("#more");
 let regions = [],
   categories = [],
@@ -36,8 +38,9 @@ function setSession(value) {
   session = value;
   if (value) sessionStorage.setItem("damu-session", JSON.stringify(value));
   else sessionStorage.removeItem("damu-session");
-  $("#login").textContent = value ? value.user.nickname : "登录";
-  $("#login").href = value ? "/settings/profile" : "/login";
+  login.hidden = Boolean(value);
+  myMenu.hidden = !value;
+  if (!value) myMenu.open = false;
 }
 
 async function request(
@@ -1367,7 +1370,7 @@ function showNotFound() {
 }
 async function route() {
   const path = location.pathname;
-  for (const link of document.querySelectorAll(".masthead nav a")) {
+  for (const link of document.querySelectorAll(".masthead nav a, #my-menu a")) {
     if (link.pathname === path || path.startsWith(link.pathname + "/"))
       link.setAttribute("aria-current", "page");
   }
@@ -1568,6 +1571,15 @@ $("#search").addEventListener("submit", (event) => {
   refreshFeed();
 });
 const browseFilters = createBrowseFilters({ node, button, changed: refreshFeed });
+document.addEventListener("pointerdown", (event) => {
+  if (myMenu.open && !myMenu.contains(event.target)) myMenu.open = false;
+});
+myMenu.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !myMenu.open) return;
+  event.preventDefault();
+  myMenu.open = false;
+  $("summary", myMenu).focus();
+});
 more.addEventListener("click", () => loadFeed(true));
 $("#close").addEventListener("click", () => dialog.close());
 const memberPages = createMemberPages({

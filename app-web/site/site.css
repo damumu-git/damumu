@@ -132,6 +132,59 @@ textarea:focus-visible {
   align-items: center;
   gap: 0.55rem;
 }
+.my-menu {
+  position: relative;
+}
+.my-menu summary {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  list-style: none;
+  cursor: pointer;
+}
+.my-menu summary::-webkit-details-marker {
+  display: none;
+}
+.my-menu summary::after {
+  content: "";
+  width: 0.38rem;
+  height: 0.38rem;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-0.1rem) rotate(45deg);
+}
+.my-menu[open] summary::after {
+  transform: translateY(0.1rem) rotate(225deg);
+}
+.my-menu-links {
+  position: absolute;
+  z-index: 1;
+  inset: calc(100% + 0.45rem) 0 auto auto;
+  width: 9rem;
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 30px #28335224;
+}
+.my-menu-links a {
+  display: block;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+.my-menu-links a:hover,
+.my-menu-links a[aria-current="page"],
+.my-menu:has(a[aria-current="page"]) summary {
+  color: var(--blue);
+  background: var(--accent-tint);
+}
+.my-menu summary:focus-visible {
+  outline: 3px solid #8799ff;
+  outline-offset: 3px;
+}
 .button {
   border: 1px solid transparent;
   border-radius: 99px;
