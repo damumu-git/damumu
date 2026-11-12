@@ -2,7 +2,7 @@
 
 Admin正式界面与离线Admin预览采用Noto Sans SC中文及Noto Sans KR韩文，
 两者均为100–900可变字重，包含英文与数字；系统无衬线字体作为后备。
-App及其预览也已改用Noto Sans SC / KR；Admin仍独立打包，不依赖App预览文件。
+Admin 独立打包字体。用户端的字体见 `preview/app/FONTS.md`。
 
 ## 来源与许可
 

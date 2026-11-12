@@ -1,5 +1,20 @@
+@font-face {
+  font-family: "Resource Han Rounded CN";
+  src: url("/assets/fonts/ResourceHanRoundedCN-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Resource Han Rounded CN";
+  src: url("/assets/fonts/ResourceHanRoundedCN-Bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
 :root {
   font-family:
+    "Resource Han Rounded CN",
     "Noto Sans SC",
     "Noto Sans KR",
     "Segoe UI",

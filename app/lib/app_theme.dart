@@ -3,9 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 abstract final class AppTypography {
-  // Use one sans-serif style for Chinese, Latin and numbers; Korean falls back
-  // to the matching Noto face, followed by emoji and system fonts.
-  static const family = 'Noto Sans SC';
+  // The simplified Chinese rounded face has no Hangul syllables.
+  static const family = 'Resource Han Rounded CN';
   static const fallback = [
     'Noto Sans KR',
     'Segoe UI Emoji',
@@ -21,7 +20,7 @@ abstract final class AppTypography {
 void registerAppFontLicenses() {
   LicenseRegistry.addLicense(() async* {
     for (final entry in const {
-      'Noto Sans SC': 'NotoSansSC-LICENSE.txt',
+      AppTypography.family: 'ResourceHanRounded-LICENSE.txt',
       'Noto Sans KR': 'NotoSansKR-LICENSE.txt',
       'Noto Emoji': 'NotoEmoji-LICENSE.txt',
     }.entries) {

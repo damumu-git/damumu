@@ -40,13 +40,16 @@ flutter:
     - assets/branding/logo.png
     - assets/activity-covers/
     - assets/activity-covers/sub/
-    - assets/fonts/NotoSansSC-LICENSE.txt
+    - assets/fonts/ResourceHanRounded-LICENSE.txt
     - assets/fonts/NotoSansKR-LICENSE.txt
     - assets/fonts/NotoEmoji-LICENSE.txt
   fonts:
-    - family: Noto Sans SC
+    - family: Resource Han Rounded CN
       fonts:
-        - asset: assets/fonts/NotoSansSC-VF.ttf
+        - asset: assets/fonts/ResourceHanRoundedCN-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/ResourceHanRoundedCN-Bold.ttf
+          weight: 700
     - family: Noto Sans KR
       fonts:
         - asset: assets/fonts/NotoSansKR-VF.ttf

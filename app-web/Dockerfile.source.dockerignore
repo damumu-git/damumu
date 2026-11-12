@@ -13,6 +13,8 @@
 !app/web/
 !app/web/logo.png
 !app/assets/
+!app/assets/fonts/
+!app/assets/fonts/ResourceHanRounded-LICENSE.txt
 !app/assets/activity-covers/
 !app/assets/activity-covers/*.webp
 !app/assets/activity-covers/sub/

@@ -1,4 +1,4 @@
-"""Create file://-safe App preview fonts from the same assets used by Flutter.
+"""Create App preview and website fonts from the same assets used by Flutter.
 
 Requires fonttools[woff]. Font sources and licenses are documented in FONTS.md.
 No glyphs are removed; WOFF2 is a reversible font container conversion.
@@ -26,9 +26,13 @@ def compress_preview(data, **options):
 brotli.compress = compress_preview
 
 HERE = Path(__file__).resolve().parent
-FONTS = HERE.parents[1] / "app" / "assets" / "fonts"
+REPO = HERE.parents[1]
+FONTS = REPO / "app" / "assets" / "fonts"
+WEB_FONTS = REPO / "app-web" / "site" / "assets" / "fonts"
+ROUNDED = "Resource Han Rounded CN"
 SOURCES = [
-    ("NotoSansSC-VF.ttf", "Noto Sans SC", "100 900"),
+    ("ResourceHanRoundedCN-Regular.ttf", ROUNDED, "400"),
+    ("ResourceHanRoundedCN-Bold.ttf", ROUNDED, "700"),
     ("NotoSansKR-VF.ttf", "Noto Sans KR", "100 900"),
 ]
 
@@ -47,6 +51,9 @@ for filename, family, weight in SOURCES:
     assert restored.getBestCmap() == original_cmap
     assert restored.reader["glyf"] == font.reader["glyf"]
     assert restored["OS/2"].usWeightClass == font["OS/2"].usWeightClass
+    if family == ROUNDED:
+        WEB_FONTS.mkdir(parents=True, exist_ok=True)
+        (WEB_FONTS / Path(filename).with_suffix(".woff2")).write_bytes(packed)
     css.append(f"/* {filename}: sha256 {sha256(source.read_bytes()).hexdigest()} */")
     css.append(
         f"@font-face {{font-family:'{family}';font-style:normal;font-weight:{weight};"
@@ -55,10 +62,10 @@ for filename, family, weight in SOURCES:
     print(f"{filename}: WOFF2 {len(packed):,} bytes, {len(original_cmap):,} characters retained", flush=True)
 
 css.append(
-    ":root {font-family:'Noto Sans SC','Noto Sans KR','Segoe UI',"
+    f":root {{font-family:'{ROUNDED}','Noto Sans KR','Segoe UI',"
     "'Microsoft YaHei',sans-serif;font-synthesis:none;}"
 )
 (HERE / "app-fonts.css").write_text("\n".join(css) + "\n", encoding="utf-8")
 (HERE / "licenses").mkdir(exist_ok=True)
-for filename in ["NotoSansSC-LICENSE.txt", "NotoSansKR-LICENSE.txt"]:
+for filename in ["ResourceHanRounded-LICENSE.txt", "NotoSansKR-LICENSE.txt"]:
     copyfile(FONTS / filename, HERE / "licenses" / filename)

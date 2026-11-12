@@ -92,7 +92,10 @@ void main() {
         'MaterialIcons',
       )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
       for (final entry in const {
-        'Noto Sans SC': ['NotoSansSC-VF.ttf'],
+        AppTypography.family: [
+          'ResourceHanRoundedCN-Regular.ttf',
+          'ResourceHanRoundedCN-Bold.ttf',
+        ],
         'Noto Sans KR': ['NotoSansKR-VF.ttf'],
         'Noto Emoji': ['NotoEmoji-VF.ttf'],
       }.entries) {
