@@ -268,7 +268,9 @@ textarea:focus-visible {
   isolation: isolate;
   overflow: hidden;
   padding: clamp(2.7rem, 6.1vw, 6.25rem) var(--gutter);
-  background: #f0f2ff;
+  background:
+    linear-gradient(90deg, #f0f2ff 0%, #f0f2ffed 27%, #f0f2ffc9 39%, #f0f2ff00 64%),
+    #f0f2ff url("/assets/han-river-picnic-hero.webp") 72% center / cover no-repeat;
   min-height: 380px;
 }
 .hero-copy {
@@ -309,50 +311,6 @@ textarea:focus-visible {
   color: #3d4964;
   font-size: clamp(0.9rem, 1.35vw, 1.08rem);
   margin: 0 0 1.65rem;
-}
-.hero-art {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 48%;
-  overflow: hidden;
-  z-index: -1;
-  background: linear-gradient(142deg, #bfc8ff, #e2e6ff 42%, #9baeff);
-}
-.hero-art i {
-  position: absolute;
-  width: 76%;
-  height: 106%;
-  border-radius: 50%;
-  border: 1px solid #f5f7ffb3;
-  transform: rotate(-32deg);
-  left: 28%;
-  top: 0;
-}
-.hero-art i:nth-child(2) {
-  left: 41%;
-  top: -5%;
-}
-.hero-art i:nth-child(3) {
-  left: 54%;
-  top: -10%;
-  background: linear-gradient(126deg, #e6ecff80, #5e7cff50);
-}
-.hero-art > span {
-  position: absolute;
-  bottom: 10%;
-  right: 10%;
-  color: #17288e;
-  font-size: clamp(2.8rem, 6.4vw, 7rem);
-  font-weight: 950;
-  letter-spacing: -0.09em;
-  line-height: 0.83;
-  transform: rotate(-8deg);
-  opacity: 0.83;
-}
-.hero-art span span {
-  color: white;
 }
 .search {
   display: flex;
@@ -656,13 +614,6 @@ dialog .close {
   color: #2348cf;
 }
 @media (max-width: 850px) {
-  .hero-art {
-    width: 43%;
-    opacity: 0.72;
-  }
-  .hero-art > span {
-    font-size: clamp(2.4rem, 8vw, 4.5rem);
-  }
   .brand small {
     display: none;
   }
@@ -701,13 +652,6 @@ dialog .close {
   .hero {
     min-height: 0;
     padding-block: 2.2rem;
-  }
-  .hero-art {
-    width: 39%;
-    opacity: 0.52;
-  }
-  .hero-art > span {
-    display: none;
   }
   .hero h1 {
     font-size: clamp(2.5rem, 10vw, 3.6rem);
@@ -841,6 +785,22 @@ dialog .close {
 }
 .explore-hero h1 {
   font-size: clamp(2.1rem, 5vw, 3.65rem);
+}
+@media (max-width: 850px) {
+  .hero {
+    --hero-photo-height: clamp(9rem, 31vw, 14rem);
+    background: #f0f2ff;
+    padding-top: calc(var(--hero-photo-height) + .9rem);
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: var(--hero-photo-height);
+    background:
+      linear-gradient(0deg, #f0f2ff 3%, #f0f2ff00 29%),
+      url("/assets/han-river-picnic-hero.webp") 94% center / cover no-repeat;
+  }
 }
 .activity-page {
   max-width: 860px;
@@ -1690,7 +1650,30 @@ a.activity-organizer::after {
   gap: 8px;
   margin-block: 0 24px;
 }
-.discover-feed-tabs { margin-block: 14px; }
+.discover-toolbar-actions,
+.discover-feed-tabs {
+  display: flex;
+  flex-wrap: wrap;
+}
+.discover-toolbar-actions { gap: .5rem; }
+.discover-feed-tabs {
+  gap: clamp(1rem, 2vw, 1.75rem);
+  margin-top: .8rem;
+  border-bottom: 1px solid var(--line);
+}
+.discover-feed-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: .55rem 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 700;
+}
+.discover-feed-tab:hover,
+.discover-feed-tab[aria-current="page"] { color: var(--blue); }
+.discover-feed-tab[aria-current="page"] { border-bottom-color: currentColor; }
 .profile-region { display: inline-block; width: fit-content; padding: 4px 10px; border-radius: 999px; background: var(--soft, #eef1ff); }
 .form label.profile-visibility { align-items: center; gap: 10px; }
 .profile-visibility input[type="checkbox"] { width: auto; min-height: auto; }

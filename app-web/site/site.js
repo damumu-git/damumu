@@ -1708,22 +1708,23 @@ async function route() {
       const following = new URLSearchParams(location.search).get("feed") === "following";
       if (following && !session) return requireLogin(() => {});
       $("#filters").append(actionLink("清除筛选", following ? "/explore?feed=following" : "/explore", "text-button"));
-      $(".toolbar").append(actionLink("活动日历", "/calendar"));
+      const toolbar = $("#gallery .toolbar");
+      const actions = node("div", null, "discover-toolbar-actions");
+      actions.append(actionLink("活动日历", "/calendar"));
+      toolbar.append(actions);
       if (session) {
-        const tabs = node("nav", null, "section-nav discover-feed-tabs");
+        const tabs = node("nav", null, "discover-feed-tabs");
         tabs.setAttribute("aria-label", "活动来源");
         for (const [label, href, active] of [["全部活动", "/explore", !following], ["我关注的", "/explore?feed=following", following]]) {
-          const tab = actionLink(label, href, "filter-pill");
+          const tab = actionLink(label, href, "discover-feed-tab");
           if (active) tab.setAttribute("aria-current", "page");
           tabs.append(tab);
         }
-        $("#gallery").before(tabs);
+        toolbar.after(tabs);
         if (following) {
-          $("#gallery-title").textContent = "关注的人发布的活动";
-          $(".toolbar").append(actionLink("管理关注", "/me/following"));
+          actions.append(actionLink("管理关注", "/me/following"));
         }
       }
-      $(".hero-art").hidden = true;
       $(".hero").classList.add("explore-hero");
       $("#hero-title").textContent = "发现活动";
       $(".intro").textContent = "按地区和兴趣，找一场想参加的活动。";
