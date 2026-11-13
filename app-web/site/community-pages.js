@@ -14,6 +14,7 @@ export function createCommunityPages(ui) {
     card,
     area,
     cover,
+    renderAvatar,
     time,
     session,
   } = ui;
@@ -379,6 +380,9 @@ export function createCommunityPages(ui) {
     state.setAttribute("role", "status");
     const dates = new Map();
     const seen = new Set();
+    const categoryNames = request("/categories")
+      .then((items) => new Map(items.map((item) => [item.code, item.name_zh_cn])))
+      .catch(() => new Map());
     let cursor;
     const more = button("加载更多活动", () => load(cursor));
     more.hidden = true;
@@ -390,7 +394,7 @@ export function createCommunityPages(ui) {
       try {
         const query = new URLSearchParams({ ...dateQuery(range), sort: "recommended", limit: "30" });
         if (position) query.set("cursor", position);
-        const page = await request("/activities?" + query);
+        const [page, names] = await Promise.all([request("/activities?" + query), categoryNames]);
         if (!content.isConnected) return;
         for (const event of page.items) {
           const start = new Date(event.starts_at);
@@ -410,17 +414,38 @@ export function createCommunityPages(ui) {
             results.append(group);
             dates.set(key, entries);
           }
-          const item = node("li");
-          const link = actionLink("", eventLink(event.id), "agenda-event");
+          const item = node("li", null, "agenda-event");
+          const link = actionLink("", eventLink(event.id), "agenda-event-link");
           const copy = node("div", null, "agenda-event-copy");
           copy.append(
             node("strong", event.title),
             node("span", [hour.format(start), area(event)].filter(Boolean).join(" · "), "meta"),
           );
+          const major = names.get(event.cover_category_code);
+          const minor = event.category_name || names.get(event.cover_subcategory_code);
+          const labels = (event.cover_category_code === event.cover_subcategory_code && minor
+            ? [minor] : [major, minor]).filter(Boolean);
+          if (labels.length) {
+            const categories = node("span", null, "agenda-event-categories");
+            for (const label of labels) categories.append(node("span", label));
+            copy.append(categories);
+          }
           const image = cover(event, "agenda-cover");
           image.alt = "";
           link.append(image, copy);
           item.append(link);
+          if (event.organizer_name) {
+            const organizer = event.organizer_user_id
+              ? actionLink("", "/people/" + encodeURIComponent(event.organizer_user_id), "agenda-organizer")
+              : node("span", null, "agenda-organizer");
+            const avatar = node("span", null, "account-avatar");
+            avatar.setAttribute("aria-hidden", "true");
+            renderAvatar(avatar, { nickname: event.organizer_name, avatarImageUrl: event.organizer_avatar });
+            const identity = node("span", null, "agenda-organizer-copy");
+            identity.append(node("small", "发布者", "meta"), node("span", event.organizer_name));
+            organizer.append(avatar, identity);
+            item.append(organizer);
+          }
           dates.get(key).append(item);
         }
         cursor = page.hasMore ? page.nextCursor : null;

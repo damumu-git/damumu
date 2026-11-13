@@ -1949,6 +1949,7 @@ const communityPages = createCommunityPages({
   card,
   area,
   cover,
+  renderAvatar,
   session: () => session,
 });
 const showMessages = createChatPage({
