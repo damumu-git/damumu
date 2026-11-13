@@ -870,6 +870,24 @@ dialog .close {
   margin: 0;
   font-size: clamp(1.1rem, 2.5vw, 1.35rem);
 }
+.series-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 255px), 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.series-page .series-subscribe {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.series-page .series-subscribe input {
+  width: auto;
+  margin: 0;
+}
+.series-page .cards {
+  margin-bottom: 1.4rem;
+}
 .activity-facts {
   margin: 0.65rem 0 0;
 }

@@ -14,6 +14,15 @@ public sealed class PrivateMediaMiddleware(RequestDelegate next)
                     SELECT 1 FROM media_asset ma JOIN event e ON e.cover_media_id=ma.id
                     WHERE (ma.storage_key=@storageKey OR ma.thumbnail_storage_key=@storageKey)
                       AND ma.status='ready' AND ma.deleted_at IS NULL AND {ActivityQueries.PublicCoverEvent}
+                    UNION ALL
+                    SELECT 1 FROM media_asset ma JOIN activity_recap r ON ARRAY[ma.id] <@ r.photo_ids
+                    JOIN event e ON e.id=r.event_id JOIN app_user host ON host.id=e.organizer_user_id
+                    WHERE (ma.storage_key=@storageKey OR ma.thumbnail_storage_key=@storageKey)
+                      AND ma.status='ready' AND ma.deleted_at IS NULL
+                      AND e.deleted_at IS NULL AND e.visibility='public' AND e.status IN ('published','full','completed')
+                      AND host.status='active' AND host.deleted_at IS NULL
+                      AND EXISTS (SELECT 1 FROM event_schedule WHERE event_id=e.id AND status='scheduled')
+                      AND NOT EXISTS (SELECT 1 FROM event_schedule WHERE event_id=e.id AND status='scheduled' AND ends_at>now())
                 )
                 """, new { storageKey }, context.RequestAborted);
             if (!allowed)

@@ -382,6 +382,7 @@ public static class EventEndpoints
                 UPDATE media_asset SET deleted_at=now()
                 WHERE id=@id AND owner_user_id=@userId AND deleted_at IS NULL
                   AND NOT EXISTS (SELECT 1 FROM event WHERE cover_media_id=@id AND deleted_at IS NULL)
+                  AND NOT activity_recap_uses_media(@id)
                 RETURNING storage_key, thumbnail_storage_key
                 """, new { id, userId }, ct);
             if (deleted is null)
@@ -418,7 +419,7 @@ public static class EventEndpoints
             if (!requiresCustomLabel && !string.IsNullOrEmpty(customSubcategory))
                 throw new ApiException(400, "custom_subcategory_unexpected", "该分类不支持自定义小分类");
             if (request.CoverMediaId is Guid coverMediaId && await db.ScalarAsync<int>(
-                "SELECT count(*) FROM media_asset WHERE id=@coverMediaId AND owner_user_id=@userId AND mime_type='image/jpeg' AND status='ready' AND deleted_at IS NULL",
+                "SELECT count(*) FROM media_asset WHERE id=@coverMediaId AND owner_user_id=@userId AND mime_type='image/jpeg' AND status='ready' AND deleted_at IS NULL AND NOT activity_recap_uses_media(id)",
                 new { coverMediaId, userId }, ct) == 0)
                 throw new ApiException(400, "cover_invalid", "活动图片不存在或无权使用");
             var regionValid = await db.ScalarAsync<int>(
@@ -620,6 +621,7 @@ public static class EventEndpoints
                           WHERE ma.id=@coverMediaId AND ma.owner_user_id=@userId
                             AND ma.mime_type='image/jpeg' AND ma.status='ready'
                             AND ma.deleted_at IS NULL
+                            AND NOT activity_recap_uses_media(ma.id)
                       )
                     RETURNING e.id, e.cover_media_id, e.cover_review_status,
                               e.cover_review_reason, e.row_version

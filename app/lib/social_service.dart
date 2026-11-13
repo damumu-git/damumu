@@ -206,6 +206,7 @@ class NotificationItem {
     required this.body,
     required this.createdAt,
     required this.read,
+    this.eventId,
   });
   final String id;
   final String type;
@@ -213,16 +214,29 @@ class NotificationItem {
   final String body;
   final DateTime createdAt;
   final bool read;
+  final String? eventId;
 
-  factory NotificationItem.fromJson(Map<String, dynamic> json) =>
-      NotificationItem(
-        id: '${json['id']}',
-        type: '${json['notification_type']}',
-        title: '${json['title']}',
-        body: '${json['body']}',
-        createdAt: DateTime.parse('${json['created_at']}').toLocal(),
-        read: json['read_at'] != null,
-      );
+  factory NotificationItem.fromJson(Map<String, dynamic> json) {
+    var data = json['data'];
+    if (data is String) {
+      try {
+        data = jsonDecode(data);
+      } on FormatException {
+        data = null;
+      }
+    }
+    return NotificationItem(
+      id: '${json['id']}',
+      type: '${json['notification_type']}',
+      title: '${json['title']}',
+      body: '${json['body']}',
+      createdAt: DateTime.parse('${json['created_at']}').toLocal(),
+      read: json['read_at'] != null,
+      eventId: data is Map && data['eventId'] is String
+          ? data['eventId'] as String
+          : null,
+    );
+  }
 }
 
 class UnreadSummary {

@@ -5,6 +5,7 @@ import { createBrowseFilters } from "/browse-filters.js";
 import { dateQuery } from "/seoul-dates.js";
 import { setupSchedulePicker } from "/date-picker.js";
 import { createDirectContact } from "/direct-contact.js";
+import { createActivitySeries } from "/activity-series.js";
 const apiRoot = "https://api.damumu.com";
 const appStoreLinks = [
   { label: "App Store", url: "" },
@@ -781,6 +782,7 @@ async function showActivity(id) {
     }
     participation.append(actions);
     layout.append(participation);
+    activitySeries.activityLinks(id, participation);
   } catch (error) {
     if (marker === dialogRequest) {
       loading.remove();
@@ -906,7 +908,7 @@ async function uploadCover(file) {
     .coverMediaId;
 }
 
-function showPublish(template) {
+function showPublish(template, seriesId) {
   const content = show("发起活动", "editor-page");
   const form = node("form", null, "form");
   form.innerHTML = `
@@ -1117,6 +1119,13 @@ function showPublish(template) {
           method: "DELETE",
         }).catch(() => {});
       throw error;
+    }
+    if (seriesId) {
+      try {
+        await request("/series/" + seriesId + "/events/" + item.id, { auth: true, method: "PUT" });
+      } catch {
+        window.alert("活动已发布。请从系列管理页手动加入活动。");
+      }
     }
     location.assign(eventLink(item.id));
   });
@@ -1473,6 +1482,7 @@ async function showPerson(id) {
       grid.append(...user.activities.map(card));
       content.append(grid);
     }
+    activitySeries.organizer(id, content);
   } catch (error) {
     if (marker === dialogRequest) showError(content, error);
   }
@@ -1603,11 +1613,20 @@ function showDownload() {
 
 async function route() {
   const path = location.pathname;
-  if (path === "/download") return showDownload();
   for (const link of document.querySelectorAll(".masthead nav a, #my-menu a")) {
     if (link.pathname === path || path.startsWith(link.pathname + "/"))
       link.setAttribute("aria-current", "page");
   }
+  if (path === "/download") return showDownload();
+  if (path === "/series") return activitySeries.index();
+  if (path === "/series/new" || path === "/series/participate")
+    return activitySeries.create(path.endsWith("/participate"));
+  const series = /^\/series\/([a-z0-9-]+)(\/manage)?$/i.exec(path);
+  if (series) return series[2] ? activitySeries.manage(series[1]) : activitySeries.detail(series[1]);
+  const recap = /^\/activities\/([0-9a-f-]{36})\/recap(\/edit)?$/i.exec(path);
+  if (recap) return recap[2] ? requireLogin(() => activitySeries.recap(recap[1], true)) : activitySeries.recap(recap[1]);
+  const share = /^\/activities\/([0-9a-f-]{36})\/share$/i.exec(path);
+  if (share) return location.replace(eventLink(share[1]));
   const hash = location.hash;
   const legacy = /^#activity\/([0-9a-f-]{36})$/i.exec(hash);
   if (legacy) return location.replace(eventLink(legacy[1]));
@@ -1637,6 +1656,7 @@ async function route() {
         node("h2", "周末去哪儿？"),
         node("p", "散步、看展，或和新朋友喝一杯咖啡。", "meta"),
         actionLink("浏览周末指南", "/guides"),
+          actionLink("搭慕周末", "/series/damu-weekend"),
       );
       browse.append(preview);
       loadGuideCards(preview, true);
@@ -1668,18 +1688,21 @@ async function route() {
     return requireLogin(async () => {
       try {
         const copy = new URLSearchParams(location.search).get("copy");
-        const [areaCatalog, categoryCatalog, source] = await Promise.all([
+        const seriesKey = new URLSearchParams(location.search).get("series");
+        const [areaCatalog, categoryCatalog, source, series] = await Promise.all([
           request("/regions"),
           request("/categories"),
           copy
             ? request("/events/" + encodeURIComponent(copy), { auth: true })
             : null,
+          seriesKey ? request("/series/" + encodeURIComponent(seriesKey), { auth: true }) : null,
         ]);
         if (source && source.item.organizer_user_id !== session.user.id)
           throw new Error("只能复办自己发起的活动。");
         regions = areaCatalog;
         categories = categoryCatalog;
-        showPublish(source?.item);
+        if (series && !series.item.can_manage) throw new Error("仅系列管理者可添加活动。");
+        showPublish(source?.item, series?.item.id);
       } catch (error) {
         showError(show("发起活动"), error);
       }
@@ -1859,6 +1882,10 @@ const showMessages = createChatPage({
 const directContact = createDirectContact({
   show, node, button, actionLink, request, requireLogin, handleForm, showError,
   showReport, renderAvatar, refreshUnread,
+});
+const activitySeries = createActivitySeries({
+  show, node, button, actionLink, request, requireLogin, handleForm, showError,
+  session: () => session, cover, card, eventLink, uploadCover, uploadedImage,
 });
 setSession(session);
 document.addEventListener("visibilitychange", () => {

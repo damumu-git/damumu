@@ -36,6 +36,9 @@ function params(values) {
 }
 
 export const api = {
+  seriesProposals: () => request('/admin/activity-series/proposals'),
+  seriesEditor: () => request('/admin/activity-series/official-editor'),
+  saveSeriesEditor: (body) => request('/admin/activity-series/official-editor', { method: 'PUT', body: JSON.stringify(body) }),
   contentFilterTerms: () => request('/admin/content-filter'),
   saveContentFilterTerm: (body) => request('/admin/content-filter', { method: 'PUT', body: JSON.stringify(body) }),
   webGuides: () => request('/admin/guides'),

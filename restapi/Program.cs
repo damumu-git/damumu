@@ -179,6 +179,7 @@ api.MapWebGuideEndpoints();
 api.MapWebMemberEndpoints();
 api.MapWebCommunityEndpoints();
 api.MapEventEndpoints();
+api.MapActivitySeriesEndpoints();
 api.MapActivityEndpoints();
 api.MapSocialEndpoints();
 api.MapDirectContactEndpoints();

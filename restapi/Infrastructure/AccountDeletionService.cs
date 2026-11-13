@@ -67,6 +67,11 @@ public sealed class AccountDeletionService(
             DELETE FROM web_group_member WHERE user_id=@userId;
             DELETE FROM web_group WHERE owner_id=@userId;
             DELETE FROM web_follow WHERE user_id=@userId OR target_id=@userId;
+            DELETE FROM activity_series_member WHERE user_id=@userId;
+            DELETE FROM activity_series_proposal WHERE user_id=@userId;
+            UPDATE activity_series SET editor_id=NULL WHERE editor_id=@userId;
+            DELETE FROM activity_series WHERE owner_id=@userId;
+            DELETE FROM activity_recap WHERE event_id IN (SELECT id FROM event WHERE organizer_user_id=@userId);
             DELETE FROM direct_contact_request WHERE sender_id=@userId OR recipient_id=@userId;
             DELETE FROM direct_contact_preference WHERE user_id=@userId;
             DELETE FROM web_bookmark WHERE user_id=@userId;

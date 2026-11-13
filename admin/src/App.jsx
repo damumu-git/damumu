@@ -1,4 +1,5 @@
 import WebGuides from './WebGuides.jsx'
+import ActivitySeries from './ActivitySeries.jsx'
 import ContentFilterPage from './ContentFilterPage.jsx'
 import AdminNavIcon from './AdminNavIcon.jsx'
 import { FilePicker } from './AdminControls.jsx'
@@ -15,6 +16,7 @@ const navigation = [
   { id: 'users', label: '用户管理' },
   { id: 'events', label: '活动管理' },
   { id: 'web-guides', label: '周末指南' },
+  { id: 'activity-series', label: '活动系列' },
   { id: 'messages', label: '消息管理' },
   { id: 'reports', label: '举报治理' },
   { id: 'content-filter', label: '敏感词管理' },
@@ -1280,7 +1282,7 @@ function Settings() {
   )
 }
 
-const pages = { 'web-guides': WebGuides, 'content-filter': ContentFilterPage, 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, messages: Messages, reports: Reports, safety: Safety, suggestions: Suggestions, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
+const pages = { 'web-guides': WebGuides, 'activity-series': ActivitySeries, 'content-filter': ContentFilterPage, 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, messages: Messages, reports: Reports, safety: Safety, suggestions: Suggestions, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
 
 function AnnouncementDialog({ onClose }) {
   const [title, setTitle] = useState('')

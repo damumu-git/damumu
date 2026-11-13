@@ -18,6 +18,7 @@ import 'app_theme.dart';
 import 'external_processing.dart';
 import 'activity_interactions.dart';
 import 'activity_text.dart';
+import 'activity_series.dart';
 import 'category_service.dart';
 import 'emoji_picture.dart';
 import 'chat_image.dart';
@@ -1271,6 +1272,11 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ],
                       ),
+                    ),
+                    IconButton(
+                      onPressed: () => _openSeriesPage(context),
+                      tooltip: context.tr('seriesTitle'),
+                      icon: const Icon(Icons.event_repeat_outlined),
                     ),
                     IconButton(
                       onPressed: widget.onOpenNotifications,
@@ -2761,6 +2767,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
   List<Map<String, dynamic>> _members = const [];
   String? _membershipStatus;
   FeedbackEligibilityData? _feedback;
+  Map<String, dynamic>? _seriesStory;
 
   @override
   void didChangeDependencies() {
@@ -2788,6 +2795,19 @@ class _EventDetailPageState extends State<EventDetailPage> {
         widget.event.isJoined =
             _membershipStatus == 'approved' || _membershipStatus == 'attended';
       });
+      if (detail.item['visibility'] == 'public' &&
+          ['published', 'full', 'completed'].contains(detail.item['status'])) {
+        try {
+          final story =
+              await ActivitySeriesService.request(
+                    '/events/${widget.event.apiId}/story',
+                  )
+                  as SeriesRow;
+          if (mounted) setState(() => _seriesStory = story);
+        } catch (_) {
+          // Activity details remain usable if the story service is unavailable.
+        }
+      }
       widget.onChanged();
     } catch (error) {
       if (mounted) _showMessageError(context, '$error');
@@ -2964,6 +2984,35 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     style: Theme.of(context).textTheme.bodyLarge,
                   ),
                   const SizedBox(height: 14),
+                  if (_seriesStory case final story?)
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        if (story['series_id'] != null)
+                          TextButton(
+                            onPressed: () => _openSeriesPage(
+                              context,
+                              seriesKey:
+                                  (story['series_slug'] ?? story['series_id'])
+                                      as String,
+                            ),
+                            child: Text(story['series_title'] as String),
+                          ),
+                        if (story['recap'] != null ||
+                            (e.isOwned && story['ended'] == true))
+                          TextButton(
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => ActivityRecapPage(
+                                  id: e.apiId!,
+                                  openEvent: _openSeriesEvent,
+                                ),
+                              ),
+                            ),
+                            child: Text(context.tr('seriesRecap')),
+                          ),
+                      ],
+                    ),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -2975,8 +3024,11 @@ class _EventDetailPageState extends State<EventDetailPage> {
                       eventId: e.apiId!,
                       targetType: 'activity',
                       initialEligibility: _feedback,
-                      onPublishSimilar: () =>
-                          _openSimilarEvent(context, e.apiId!),
+                      onPublishSimilar: () => _openSimilarEvent(
+                        context,
+                        e.apiId!,
+                        seriesId: _seriesStory?['series_id'] as String?,
+                      ),
                     ),
                   const SizedBox(height: 26),
                   Row(
@@ -3065,11 +3117,14 @@ class _EventDetailPageState extends State<EventDetailPage> {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
           child: Row(
             children: [
-              IconButton.outlined(
-                onPressed: () {},
-                icon: const Icon(Icons.ios_share),
-              ),
-              const SizedBox(width: 12),
+              if (_seriesStory != null) ...[
+                IconButton.outlined(
+                  onPressed: () => copyActivityShare(context, e.apiId!),
+                  tooltip: context.tr('seriesShare'),
+                  icon: const Icon(Icons.ios_share),
+                ),
+                const SizedBox(width: 12),
+              ],
               Expanded(
                 child: FilledButton(
                   onPressed:
@@ -3507,6 +3562,29 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                     userId: widget.userId,
                     nickname: nickname,
                     onOpen: (id, name) => _openDirectChat(context, id, name),
+                  ),
+                TextButton(
+                  onPressed: () =>
+                      _openSeriesPage(context, ownerId: widget.userId),
+                  child: Text(context.tr('seriesOrganizer')),
+                ),
+                if (profile['activities'] is List &&
+                    (profile['activities'] as List).isNotEmpty)
+                  Text(
+                    context.tr('seriesHosted'),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                for (final activity
+                    in (profile['activities'] as List? ?? const [])
+                        .whereType<Map>())
+                  ListTile(
+                    title: Text(activity['title'] as String),
+                    subtitle: activity['category_name'] is String
+                        ? Text(activity['category_name'] as String)
+                        : null,
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () =>
+                        _openSeriesEvent(context, activity['id'] as String),
                   ),
                 if (widget.eventId != null &&
                     profile['feedback_eligible'] == true)
@@ -5488,6 +5566,11 @@ class _MessagesPageState extends State<MessagesPage> {
       await _openContactRequests();
       return;
     }
+    if (item.type == 'series_event' && item.eventId != null) {
+      await _openSeriesEvent(context, item.eventId!);
+      if (mounted) await _load(showProgress: false);
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => item.type == 'suggestion_replied' && token != null
@@ -6958,7 +7041,12 @@ Future<void> _showNicknameEditor(
   controller.dispose();
 }
 
-Future<void> _openSimilarEvent(BuildContext context, String eventId) async {
+Future<void> _openSimilarEvent(
+  BuildContext context,
+  String eventId, {
+  String? seriesId,
+}) async {
+  final token = AuthScope.of(context).token;
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (routeContext) => Scaffold(
@@ -6968,8 +7056,21 @@ Future<void> _openSimilarEvent(BuildContext context, String eventId) async {
         ),
         body: CreateEventPage(
           sourceEventId: eventId,
-          onCreated: (_) {
+          onCreated: (event) async {
             Navigator.of(routeContext).pop();
+            if (seriesId != null && token != null && event.apiId != null) {
+              try {
+                await ActivitySeriesService.request(
+                  '/series/$seriesId/events/${event.apiId}',
+                  token: token,
+                  method: 'PUT',
+                );
+              } catch (error) {
+                if (context.mounted) _showMessageError(context, '$error');
+                return;
+              }
+            }
+            if (!context.mounted) return;
             ScaffoldMessenger.of(
               context,
             ).showSnackBar(SnackBar(content: Text(context.tr('eventCreated'))));
@@ -6978,6 +7079,58 @@ Future<void> _openSimilarEvent(BuildContext context, String eventId) async {
       ),
     ),
   );
+}
+
+void _openSeriesPage(
+  BuildContext context, {
+  String? ownerId,
+  String? seriesKey,
+}) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => ActivitySeriesPage(
+        ownerId: ownerId,
+        seriesKey: seriesKey,
+        openEvent: _openSeriesEvent,
+      ),
+    ),
+  );
+}
+
+Future<void> _openSeriesEvent(BuildContext context, String id) async {
+  final auth = AuthScope.of(context);
+  final token = auth.token;
+  if (token == null) return;
+  try {
+    final result =
+        await ActivitySeriesService.request('/events/$id', token: token)
+            as SeriesRow;
+    final schedules = ActivitySeriesService.rows(result['schedules']);
+    final schedule = schedules
+        .where((row) => row['status'] == 'scheduled')
+        .firstOrNull;
+    if (!context.mounted) return;
+    final item = _eventFromApi(context, {
+      ...result['item'] as SeriesRow,
+      ...?schedule,
+      'id': id,
+    });
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => EventDetailPage(
+          event: item,
+          onChanged: () {},
+          onOpenMyActivities: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => MyActivitiesPage(token: token),
+            ),
+          ),
+        ),
+      ),
+    );
+  } catch (error) {
+    if (context.mounted) _showMessageError(context, '$error');
+  }
 }
 
 class MyActivitiesPage extends StatefulWidget {
