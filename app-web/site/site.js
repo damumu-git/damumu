@@ -6,6 +6,7 @@ import { dateQuery } from "/seoul-dates.js";
 import { setupSchedulePicker } from "/date-picker.js";
 import { createDirectContact } from "/direct-contact.js";
 import { createActivitySeries } from "/activity-series.js";
+import { installSelectMenus } from "/select-menu.js";
 const apiRoot = "https://api.damumu.com";
 const appStoreLinks = [
   { label: "App Store", url: "" },
@@ -1305,7 +1306,7 @@ async function showEdit(id) {
   }
 }
 async function showSettings() {
-  const content = show("个人资料", "account-page personal-page");
+  const content = show("个人资料", "settings-page personal-page");
   const user = session.user;
   content.append(memberPages.accountLinks());
   const marker = dialogRequest;
@@ -1367,14 +1368,19 @@ async function showSettings() {
     fields.append(entry);
   }
   info.append(fields);
-  content.append(info);
+  const layout = node("div", null, "settings-layout");
+  const summary = node("aside", null, "settings-summary");
+  const editor = node("div", null, "settings-editor");
+  summary.append(info);
+  layout.append(summary, editor);
+  content.append(layout);
 
   const form = node("form", null, "form");
   form.innerHTML =
     '<h2>编辑昵称</h2><label>昵称<input name="nickname" required minlength="2" maxlength="30"></label><button type="submit" class="button primary">保存昵称</button>';
   form.elements.nickname.value = session.user.nickname ?? "";
-  content.append(
-    form,
+  const shortcuts = node("div", null, "section-nav personal-shortcuts");
+  shortcuts.append(
     actionLink("我的关注", "/me/following"),
     actionLink("我的收藏", "/me/saved"),
     actionLink("查看公开主页", "/people/" + user.id),
@@ -1383,6 +1389,8 @@ async function showSettings() {
       location.assign("/");
     }),
   );
+  summary.append(shortcuts);
+  editor.append(form);
   handleForm(form, content, async (values) => {
     const updated = await request("/me", {
       method: "PATCH",
@@ -1396,7 +1404,7 @@ async function showSettings() {
     $("h2", identity).textContent = updated.nickname;
     renderAvatar(avatar, session.user);
     $(".notice", content)?.remove();
-    content.append(node("p", "资料已保存。", "notice"));
+    form.append(node("p", "昵称已保存。", "notice"));
   });
   if (member) {
     const details = node("form", null, "form");
@@ -1456,18 +1464,24 @@ async function showPerson(id) {
       { auth: true },
     );
     if (marker !== dialogRequest) return;
-    $("h1", content).textContent = user.nickname ?? "搭慕用户";
+    const heading = $("h1", content);
+    heading.textContent = user.nickname ?? "搭慕用户";
+    const layout = node("div", null, "public-profile-layout");
+    const identity = node("section", null, "activity-section public-profile-summary");
+    const timeline = node("div", null, "public-profile-activity");
+    layout.append(identity, timeline);
+    content.append(layout);
     const url = uploadedImage(user.avatar_url);
     if (url) {
       const avatar = node("img", null, "profile-avatar");
       avatar.src = url;
       avatar.alt = "";
-      content.prepend(avatar);
+      identity.append(avatar);
     }
-    content.append(node("p", "获赞 " + (user.like_count ?? 0), "meta"));
-    if (user.bio) content.append(node("p", user.bio, "detail-copy"));
+    identity.append(heading, node("p", "获赞 " + (user.like_count ?? 0), "meta"));
+    if (user.bio) identity.append(node("p", user.bio, "detail-copy"));
     if (user.home_region_name)
-      content.append(node("p", "常驻 · " + [user.home_parent_name, user.home_region_name].filter(Boolean).join(" · "), "profile-region"));
+      identity.append(node("p", "常驻 · " + [user.home_parent_name, user.home_region_name].filter(Boolean).join(" · "), "profile-region"));
     const tags = node("div", null, "profile-tags");
     for (const tag of user.positive_tags ?? []) {
       const label = {
@@ -1481,15 +1495,16 @@ async function showPerson(id) {
       }[tag.tag_code];
       if (label) tags.append(node("span", label + " ×" + tag.count));
     }
-    if (tags.children.length) content.append(tags);
+    if (tags.children.length) identity.append(tags);
+    const actions = node("div", null, "section-nav");
     if (id !== session?.user.id) {
       const contactActions = node("span", null, "contact-profile-actions");
       const refresh = () => directContact.profileActions(id, content, contactActions);
-      content.append(communityPages.followButton(id, refresh), contactActions);
+      actions.append(communityPages.followButton(id, refresh), contactActions);
       if (session) refresh();
     }
     if (id !== session?.user.id)
-      content.append(
+      actions.append(
         button(
           "屏蔽用户",
           () =>
@@ -1510,20 +1525,21 @@ async function showPerson(id) {
         ),
       );
     if (id !== session?.user.id)
-      content.append(
+      actions.append(
         button(
           "举报用户",
           () => requireLogin(() => showReport("user", id, id)),
           "text-button",
         ),
       );
+    if (actions.children.length) identity.append(actions);
+    timeline.append(node("h2", "公开发起的活动"));
     if (user.activities?.length) {
-      content.append(node("h2", "公开发起的活动"));
       const grid = node("div", null, "cards");
       grid.append(...user.activities.map(card));
-      content.append(grid);
-    }
-    activitySeries.organizer(id, content);
+      timeline.append(grid);
+    } else timeline.append(node("p", "暂时没有公开活动。", "meta"));
+    activitySeries.organizer(id, timeline);
   } catch (error) {
     if (marker === dialogRequest) showError(content, error);
   }
@@ -1570,14 +1586,17 @@ async function showGuides(slug) {
     const guide = await request("/guides/" + encodeURIComponent(slug));
     $("h1", content).textContent = guide.title;
     document.title = guide.title + " · 搭慕 DAMU";
-    content.append(
+    const layout = node("div", null, "guide-reading-layout");
+    const copy = node("article", null, "activity-section guide-reading-copy");
+    const sidebar = node("aside", null, "activity-section guide-reading-sidebar");
+    copy.append(
       node("p", guide.summary, "meta"),
       cover({ cover_category_code: guide.cover_category }, "detail-cover"),
     );
     for (const paragraph of guide.body
       .split(/\r?\n/)
       .filter((line) => line.trim())) {
-      content.append(node("p", paragraph, "detail-copy"));
+      copy.append(node("p", paragraph, "detail-copy"));
     }
     if (guide.source_url) {
       const source = actionLink(
@@ -1587,13 +1606,18 @@ async function showGuides(slug) {
       );
       source.rel = "noopener noreferrer";
       source.target = "_blank";
-      content.append(source);
+      copy.append(source);
     }
-    content.append(
+    sidebar.append(node("h2", "周末指南"));
+    const actions = node("div", null, "section-nav");
+    actions.append(
       memberPages.bookmark("guide", guide.slug),
       actionLink("发现活动", "/explore"),
       actionLink("返回指南", "/guides", "text-button"),
     );
+    sidebar.append(actions);
+    layout.append(copy, sidebar);
+    content.append(layout);
   } catch (error) {
     showError(content, error);
     content.append(actionLink("返回指南", "/guides"));
@@ -1954,4 +1978,5 @@ document.addEventListener("visibilitychange", () => {
 window.setInterval(() => {
   if (!document.hidden) refreshUnread();
 }, 45_000);
+installSelectMenus();
 route();

@@ -38,7 +38,7 @@ export function createMemberPages(ui) {
   function memberPage(path, title, render) {
     pages.set(path, () =>
       requireLogin(async () => {
-        const content = show(title, "workspace-page");
+        const content = show(title, path.startsWith("/settings/") ? "settings-page" : "workspace-page");
         try {
           await render(content);
         } catch (error) {
@@ -46,6 +46,16 @@ export function createMemberPages(ui) {
         }
       }),
     );
+  }
+
+  function settingsCard(content, title) {
+    const layout = node("div", null, "settings-layout");
+    const menu = accountLinks();
+    const card = node("section", null, "activity-section settings-card");
+    card.append(node("h2", title));
+    layout.append(menu, card);
+    content.append(layout);
+    return card;
   }
 
   function bookmark(kind, target) {
@@ -276,8 +286,8 @@ export function createMemberPages(ui) {
   });
 
   memberPage("/settings/notifications", "通知偏好", async (content) => {
-    content.append(
-      accountLinks(),
+    const settings = settingsCard(content, "通知中心");
+    settings.append(
       node("p", "设置本浏览器打开通知中心时的默认视图。", "meta"),
     );
     const input = node("input");
@@ -288,15 +298,18 @@ export function createMemberPages(ui) {
     );
     const label = node("label", " 默认仅看未读");
     label.prepend(input);
-    content.append(label, actionLink("打开通知中心", "/notifications"));
+    const actions = node("div", null, "section-nav");
+    actions.append(actionLink("打开通知中心", "/notifications"));
+    settings.append(label, actions);
   });
 
   memberPage("/settings/account", "账号设置", async (content) => {
-    content.append(
-      accountLinks(),
+    const settings = settingsCard(content, "登录账号");
+    settings.append(
       node("p", session().user.email ?? "第三方账号", "meta"),
     );
-    content.append(
+    const actions = node("div", null, "section-nav");
+    actions.append(
       actionLink(
         "了解账号注销",
         "https://www.damumu.com/account-deletion.html",
@@ -311,17 +324,17 @@ export function createMemberPages(ui) {
         }),
       ),
     );
+    settings.append(actions);
   });
 
   memberPage("/settings/privacy", "隐私设置", async (content) => {
-    content.append(
-      accountLinks(),
-      actionLink("阅读隐私政策", "/privacy"),
-      node("h2", "已屏蔽用户"),
-    );
+    const settings = settingsCard(content, "已屏蔽用户");
+    const actions = node("div", null, "section-nav");
+    actions.append(actionLink("编辑常驻区域可见性", "/settings/profile"), actionLink("阅读隐私政策", "/privacy"));
+    settings.append(actions);
     const blocked = await request("/me/blocks", { auth: true });
     addList(
-      content,
+      settings,
       blocked,
       (row, item) => {
         row.append(

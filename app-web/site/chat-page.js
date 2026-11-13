@@ -312,7 +312,7 @@ export function createChatPage({
         });
       }
       body.append(
-        node("p", metadata.filter(Boolean).join(" · "), "meta"),
+        node("p", metadata.filter(Boolean).join(" · "), "meta chat-sender"),
         node("p", message.recalled_at ? "消息已撤回" : message.body || "附件请在搭慕 App 内查看", "chat-bubble"),
       );
       if (message.sender_user_id && !own && !message.recalled_at) {
@@ -326,10 +326,7 @@ export function createChatPage({
         }), "chat-report"));
       }
       entry.append(body);
-      if (avatar) {
-        if (own) entry.append(avatar);
-        else entry.prepend(avatar);
-      }
+      if (avatar) body.prepend(avatar);
       return entry;
     }
 
