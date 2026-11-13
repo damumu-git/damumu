@@ -258,31 +258,29 @@ cd /opt/damumu/repo
 git switch main
 git pull --ff-only origin main
 sudo ln -sfn /opt/damumu/repo/deploy/deploy.sh /usr/local/bin/damumu-deploy
+sudo ln -sfn /opt/damumu/repo/deploy/deploy.sh /usr/local/bin/damumu-deploy-migration
 ```
 
-以后每次 GitHub Pull Request 合并进 `main` 后，只需在服务器执行：
+每次 GitHub Pull Request 合并进 `main` 后，按发布内容选择命令：
+
+| 发布内容 | 服务器命令 |
+| --- | --- |
+| 无新增 SQL 迁移 | `damumu-deploy` |
+| 有新增 SQL 迁移 | `damumu-deploy-migration` |
+
+两条命令共用部署锁，更新到 `origin/main`，构建四个服务并验证健康。普通命令发现
+新增迁移时会列出文件并停止。迁移命令在镜像构建成功后、启动新版容器前，通过
+`sudo -u postgres` 访问宿主机的 `damumu` 数据库，在
+`/var/backups/damumu/pre-migration.*.dump` 保留 root 可读的数据库备份，再按文件名顺序
+执行新增 SQL。每个文件和执行记录一起提交。失败后修复问题，再运行相同命令，会跳过
+已成功提交的文件。发布前须检查 SQL 与迁移期间仍在运行的旧 API 兼容。
+
+如果服务器还没有“上次成功部署版本”记录，先备份并人工核对已经应用的 SQL，再用
+`damumu-deploy --migrations-applied` 建立基线。这个参数也适用于已经手动应用了本次
+全部 SQL 的发布。手动执行单个已核对的迁移时，在仓库目录运行：
 
 ```bash
-damumu-deploy
-```
-
-第一次运行时还没有“上次成功部署版本”记录，脚本不会猜测数据库状态，而会在更新
-源码后停止并显示仓库中的最新迁移编号。备份数据库并核对该编号以前的必要迁移均已
-应用后，使用 `damumu-deploy --migrations-applied` 完成首次受管部署。此后直接运行
-`damumu-deploy` 即可；只有检测到新迁移时才需要再次确认。
-
-该命令会防止并发部署，要求服务器停留在干净的 `main` 分支，从
-`origin/main` 快进更新，校验 `deploy/.env` 和 Compose 配置，构建并启动三个
-容器，等待 Docker 健康检查，通过回环端口验证三个服务，按需更新并校验 Nginx，
-再验证公网 HTTPS。全部成功后才清理悬空镜像；任一步失败都会打印容器状态和最近
-日志。它不会删除 Docker 卷，也不会自动修改数据库。
-
-脚本会在 Git 元数据中记录上次成功部署的提交。如果本次更新含有新的
-`restapi/Migrations/*.sql`，命令只更新源码，保持现有容器继续运行，然后停止并列出
-迁移文件。先创建数据库备份，审查并按编号应用这些迁移；确认全部成功后再执行：
-
-```bash
-damumu-deploy --migrations-applied
+sudo -u postgres -- psql -X -v ON_ERROR_STOP=1 -d damumu -f - < restapi/Migrations/NNN_name.sql
 ```
 
 常用诊断选项：

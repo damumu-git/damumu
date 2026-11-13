@@ -12,6 +12,10 @@ readonly LOCK_FILE="/tmp/damumu-deploy.lock"
 readonly HEALTH_TIMEOUT="180"
 readonly -a SERVICES=(site api admin app-web)
 
+APPLY_MIGRATIONS=false
+if [[ "${0##*/}" == damumu-deploy-migration ]]; then
+  APPLY_MIGRATIONS=true
+fi
 ACKNOWLEDGE_MIGRATIONS=false
 CHECK_PUBLIC=true
 UPDATE_NGINX=true
@@ -25,6 +29,9 @@ STATE_INITIALIZED=false
 usage() {
   cat <<'EOF'
 Usage: damumu-deploy [options]
+       damumu-deploy-migration [options]
+
+The migration command backs up PostgreSQL and applies new SQL before deployment.
 
 Update the production checkout from origin/main, rebuild the DAMUMU containers,
 reload Nginx when its checked-in configuration changed, and verify health.
@@ -50,6 +57,56 @@ die() {
 
 compose() {
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+}
+
+apply_migrations() {
+  local migration filename backup checksum recorded sql
+  local -a unapplied=()
+  local -a psql=(sudo -u postgres -- psql -X -F "|" -v ON_ERROR_STOP=1 -d damumu)
+  local applied
+
+  applied="$("${psql[@]}" -Atc "SELECT to_regclass('public.damumu_deploy_migration') IS NOT NULL")"
+  if [[ "$applied" == t ]]; then
+    applied="$("${psql[@]}" -Atc 'SELECT filename, checksum FROM public.damumu_deploy_migration')"
+  else
+    applied=""
+  fi
+  while IFS= read -r migration; do
+    filename="${migration##*/}"
+    [[ "$filename" =~ ^[0-9]{3}_[a-z0-9_]+[.]sql$ ]] || die "Unsupported migration filename: $filename"
+    checksum="$(git rev-parse "$NEW_REVISION:$migration")"
+    recorded="$(awk -F '|' -v name="$filename" '$1 == name { print $2 }' <<<"$applied")"
+    if [[ -z "$recorded" ]]; then
+      unapplied+=("$migration")
+    elif [[ "$recorded" != "$checksum" ]]; then
+      die "Previously applied migration has changed: $filename"
+    fi
+  done <<<"$pending_migrations"
+
+  if ((${#unapplied[@]} == 0)); then
+    log "All detected migrations were already applied by this command"
+    return
+  fi
+
+  log "Backing up the host PostgreSQL database"
+  sudo install -d -m 700 /var/backups/damumu
+  backup="$(sudo mktemp /var/backups/damumu/pre-migration.XXXXXXXX.dump)"
+  sudo bash -c 'runuser -u postgres -- pg_dump -Fc damumu >"$1" && pg_restore -l "$1" >/dev/null' _ "$backup"
+  log "Database backup saved at $backup"
+
+  for migration in "${unapplied[@]}"; do
+    filename="${migration##*/}"
+    checksum="$(git rev-parse "$NEW_REVISION:$migration")"
+    log "Applying $filename"
+    # Historical files may already wrap their SQL in BEGIN/COMMIT.
+    # Keep the SQL and its completion record in the same transaction.
+    sql="$(git show "$NEW_REVISION:$migration" | sed -E '/^[[:space:]]*(BEGIN|COMMIT);[[:space:]]*$/Id')"
+    {
+      printf '%s\n' "$sql"
+      printf '\nCREATE TABLE IF NOT EXISTS public.damumu_deploy_migration (filename text PRIMARY KEY, checksum text NOT NULL);\n'
+      printf "INSERT INTO public.damumu_deploy_migration (filename, checksum) VALUES ('%s', '%s');\n" "$filename" "$checksum"
+    } | "${psql[@]}" --single-transaction -f -
+  done
 }
 
 show_failure_context() {
@@ -78,6 +135,10 @@ while (($#)); do
   esac
   shift
 done
+
+if [[ "$APPLY_MIGRATIONS" == true && "$ACKNOWLEDGE_MIGRATIONS" == true ]]; then
+  die "Use --migrations-applied with damumu-deploy for manually applied migrations."
+fi
 
 for command in git docker curl find flock readlink stat; do
   command -v "$command" >/dev/null 2>&1 || die "Required command not found: $command"
@@ -126,7 +187,7 @@ git merge-base --is-ancestor "$checkout_revision" "$NEW_REVISION" || \
 git merge-base --is-ancestor "$OLD_REVISION" "$NEW_REVISION" || \
   die "The last successful deployment is not an ancestor of origin/main."
 
-pending_migrations="$(git diff --name-only "$OLD_REVISION" "$NEW_REVISION" -- 'restapi/Migrations/*.sql')"
+pending_migrations="$(git diff --name-only --no-renames "$OLD_REVISION" "$NEW_REVISION" -- 'restapi/Migrations/*.sql')"
 if [[ "$checkout_revision" == "$NEW_REVISION" ]]; then
   log "origin/main is already checked out; rebuilding the current revision"
 else
@@ -149,15 +210,20 @@ EOF
   exit 2
 fi
 
-if [[ -n "$pending_migrations" && "$ACKNOWLEDGE_MIGRATIONS" != true ]]; then
+if [[ -n "$pending_migrations" && "$APPLY_MIGRATIONS" != true && "$ACKNOWLEDGE_MIGRATIONS" != true ]]; then
   printf '\nNew database migration files were detected:\n%s\n' "$pending_migrations" >&2
   cat >&2 <<'EOF'
 
 The source checkout was updated, but the running containers were not changed.
-Create a database backup, review and apply the listed migrations in order, then run:
-  damumu-deploy --migrations-applied
+Run damumu-deploy-migration to back up the database, apply the migrations and deploy.
 EOF
   exit 2
+fi
+
+if [[ "$APPLY_MIGRATIONS" == true && -n "$pending_migrations" ]]; then
+  [[ -z "$(git diff --name-only --diff-filter=DMRTUXB --no-renames "$OLD_REVISION" "$NEW_REVISION" -- 'restapi/Migrations/*.sql')" ]] || \
+    die "Existing migration files changed or were removed. Review the changes before deploying."
+  pending_migrations="$(LC_ALL=C sort <<<"$pending_migrations")"
 fi
 
 if [[ "$UPDATE_NGINX" == true ]]; then
@@ -195,6 +261,10 @@ compose build --pull app-web
 
 log "Building site, API, and Admin images"
 compose build --pull site api admin
+
+if [[ "$APPLY_MIGRATIONS" == true && -n "$pending_migrations" ]]; then
+  apply_migrations
+fi
 
 log "Starting containers and waiting for health checks"
 COMPOSE_STARTED=true
