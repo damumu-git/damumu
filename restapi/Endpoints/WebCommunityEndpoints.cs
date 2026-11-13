@@ -123,7 +123,7 @@ public static class WebCommunityEndpoints
                 WHERE g.id=@id
                 """, new { id, viewer }, ct) ?? throw Missing();
             var events = await db.QueryAsync($"""
-                SELECT e.id,e.title,e.price_amount,e.status,c.name_zh_cn AS category_name,
+                SELECT e.id,e.title,e.price_amount,e.status,e.approved_count,e.capacity,c.name_zh_cn AS category_name,
                     COALESCE(p.code,c.code) AS cover_category_code,c.code AS cover_subcategory_code,
                     (SELECT min(starts_at) FROM event_schedule s WHERE s.event_id=e.id AND s.status='scheduled') AS starts_at
                 FROM web_group_event ge JOIN event e ON e.id=ge.event_id JOIN category c ON c.id=e.category_id

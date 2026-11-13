@@ -300,7 +300,7 @@ public static class EventEndpoints
                 LIMIT 3
                 """, new { id }, ct);
             profile["activities"] = await db.QueryAsync($"""
-                SELECT e.id,e.title,e.description,e.price_amount,
+                SELECT e.id,e.title,e.description,e.price_amount,e.approved_count,e.capacity,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
                        {ActivityQueries.CoverCategoryCodes},
                        {ActivityQueries.CoverThumbnail},

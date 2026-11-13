@@ -52,7 +52,8 @@ public static class ActivitySeriesEndpoints
                 WHERE (s.slug=@key OR s.id::text=@key) AND {VisibleSeries}
                 """, new { key, viewer }, ct) ?? throw new ApiException(404, "series_not_found", "活动系列不存在");
             var events = await db.QueryAsync($"""
-                SELECT e.id,e.title,e.price_amount,e.status,schedule.starts_at,schedule.ends_at,
+                SELECT e.id,e.title,e.price_amount,e.status,e.approved_count,e.capacity,
+                       schedule.starts_at,schedule.ends_at,
                        host_profile.nickname AS organizer_name,COALESCE(e.custom_subcategory,c.name_zh_cn) AS category_name,
                        city.name_zh_cn AS city_name,district.name_zh_cn AS district_name,
                        {ActivityQueries.CoverThumbnail},{ActivityQueries.CoverCategoryCodes},

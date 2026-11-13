@@ -462,6 +462,10 @@ h2 {
   font-size: 0.79rem;
   line-height: 1.6;
 }
+.activity-participation {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 .card .host {
   display: flex;
   justify-content: space-between;

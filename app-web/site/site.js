@@ -263,6 +263,12 @@ function appendActivityLabels(labels, item, minor = item.category_name) {
     labels.append(node("span", "我发布的", "activity-label-owned"));
 }
 
+function participationLabel(item) {
+  if (!Number.isInteger(item.approved_count) || !Number.isInteger(item.capacity))
+    return "";
+  return `参与 ${item.approved_count}/${item.capacity} 人`;
+}
+
 function libraryRow(item, { href, categoryName, state, summary, action }) {
   const entry = node("li", null, "library-row");
   const link = actionLink("", href, "library-item-link");
@@ -272,7 +278,7 @@ function libraryRow(item, { href, categoryName, state, summary, action }) {
   const labels = node("div", null, "library-labels");
   appendActivityLabels(labels, item, categoryName);
   if (state) labels.append(node("span", state, "library-state"));
-  const details = [item.starts_at && time(item.starts_at), area(item)].filter(Boolean);
+  const details = [item.starts_at && time(item.starts_at), area(item), participationLabel(item)].filter(Boolean);
   body.append(node("h3", item.title));
   if (labels.childElementCount) body.prepend(labels);
   if (details.length) body.append(node("p", details.join(" · "), "library-meta"));
@@ -314,6 +320,7 @@ function card(item) {
     node("strong", item.organizer_name || "活动组织者"),
     node("span", cost(item)),
   );
+  const participation = participationLabel(item);
   article.append(
     thumbnail,
     ...(labels.childElementCount ? [labels] : []),
@@ -323,6 +330,7 @@ function card(item) {
       [time(item.starts_at), area(item)].filter(Boolean).join(" · "),
       "meta",
     ),
+    ...(participation ? [node("p", participation, "meta activity-participation")] : []),
     host,
   );
   return article;
