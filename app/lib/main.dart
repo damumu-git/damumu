@@ -19,6 +19,8 @@ import 'external_processing.dart';
 import 'activity_interactions.dart';
 import 'activity_text.dart';
 import 'activity_series.dart';
+import 'member_profile.dart';
+import 'user_avatar_image.dart';
 import 'category_service.dart';
 import 'emoji_picture.dart';
 import 'chat_image.dart';
@@ -35,6 +37,8 @@ import 'suggestion_page.dart';
 import 'web_cropper_layout.dart';
 import 'realtime_service.dart';
 import 'push_notification_service.dart';
+
+export 'user_avatar_image.dart' show UserAvatarImage;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -734,6 +738,7 @@ class _AppShellState extends State<AppShell> {
       DiscoverPage(
         events: _events,
         loadRegions: widget.loadRemoteEvents && _index == 1,
+        enableFollowing: widget.loadRemoteEvents,
         regionalLoader:
             widget.eventLoader ??
             (widget.loadRemoteEvents ? EventService.list : null),
@@ -2146,6 +2151,7 @@ class DiscoverPage extends StatefulWidget {
     this.footer,
     this.loadRegions = false,
     this.regionalLoader,
+    this.enableFollowing = false,
     this.loading = false,
     this.loadFailed = false,
     this.onRetry,
@@ -2156,6 +2162,7 @@ class DiscoverPage extends StatefulWidget {
   final Widget? footer;
   final bool loadRegions;
   final ActivityPageLoader? regionalLoader;
+  final bool enableFollowing;
   final bool loading;
   final bool loadFailed;
   final VoidCallback? onRetry;
@@ -2167,6 +2174,7 @@ class DiscoverPage extends StatefulWidget {
 }
 
 class _DiscoverPageState extends State<DiscoverPage> {
+  bool _following = false;
   String? _city;
   String? _district;
   String? _ward;
@@ -2192,7 +2200,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
   @override
   void didUpdateWidget(covariant DiscoverPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.loadRegions && !oldWidget.loadRegions) _loadRegions();
+    if (widget.loadRegions && !oldWidget.loadRegions) {
+      _loadRegions();
+      if (_following) _loadRegional();
+    }
   }
 
   Future<void> _loadRegions() async {
@@ -2208,7 +2219,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
     }
   }
 
-  bool get _usesRegionalFeed => _city != null && widget.regionalLoader != null;
+  bool get _usesRegionalFeed =>
+      _following || (_city != null && widget.regionalLoader != null);
 
   Future<void> _loadRegional({bool append = false}) async {
     if (!_usesRegionalFeed || (append && _regionalLoading)) return;
@@ -2223,12 +2235,19 @@ class _DiscoverPageState extends State<DiscoverPage> {
       }
     });
     try {
-      final page = await widget.regionalLoader!(
-        city: _city,
-        district: _ward ?? _district,
-        limit: 20,
-        cursor: _regionalCursor,
-      );
+      final page = _following
+          ? await EventService.list(
+              city: _city,
+              district: _ward ?? _district,
+              cursor: _regionalCursor,
+              followingToken: AuthScope.of(context).token!,
+            )
+          : await widget.regionalLoader!(
+              city: _city,
+              district: _ward ?? _district,
+              limit: 20,
+              cursor: _regionalCursor,
+            );
       if (!mounted || request != _regionalRequest) return;
       final events = page.items
           .map((item) => _eventFromApi(context, item))
@@ -2396,6 +2415,29 @@ class _DiscoverPageState extends State<DiscoverPage> {
             context.tr('discover'),
             style: Theme.of(context).textTheme.headlineLarge,
           ),
+          if (widget.enableFollowing &&
+              AuthScope.of(context).token != null) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final following in [false, true])
+                  ChoiceChip(
+                    label: Text(
+                      context.tr(
+                        following ? 'memberFollowFeed' : 'memberAllActivities',
+                      ),
+                    ),
+                    selected: _following == following,
+                    onSelected: (_) {
+                      if (_following == following) return;
+                      setState(() => _following = following);
+                      _selectRegion(_city, _district, _ward);
+                    },
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 14),
           TextField(
             controller: _search,
@@ -2493,7 +2535,22 @@ class _DiscoverPageState extends State<DiscoverPage> {
             )
           else ...[
             if (visible.isEmpty) ...[
-              Text(context.tr('discoverEmpty')),
+              Text(
+                context.tr(
+                  _following ? 'memberFollowFeedEmpty' : 'discoverEmpty',
+                ),
+              ),
+              if (_following)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(
+                    onPressed: () async {
+                      await _openMemberLibrary(context, following: true);
+                      if (mounted && _following) await _loadRegional();
+                    },
+                    child: Text(context.tr('memberFollowing')),
+                  ),
+                ),
               if (query.isNotEmpty ||
                   _city != null ||
                   _category != null ||
@@ -2501,14 +2558,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 Align(
                   alignment: AlignmentDirectional.centerStart,
                   child: TextButton(
-                    onPressed: () => setState(() {
+                    onPressed: () {
                       _search.clear();
-                      _city = null;
-                      _district = null;
-                      _ward = null;
-                      _category = null;
                       _filters.clear();
-                    }),
+                      _selectRegion(null, null);
+                    },
                     child: Text(context.tr('discoverReset')),
                   ),
                 ),
@@ -2544,6 +2598,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                           else
                             event.time,
                           if (event.area.isNotEmpty) event.area,
+                          if (_following) event.host,
                           event.priceAmount == null
                               ? event.price
                               : activityPrice(context, event.priceAmount!),
@@ -3125,6 +3180,22 @@ class _EventDetailPageState extends State<EventDetailPage> {
                 ),
                 const SizedBox(width: 12),
               ],
+              if (e.apiId != null &&
+                  _detail?['visibility'] == 'public' &&
+                  [
+                    'published',
+                    'full',
+                    'completed',
+                    'cancelled',
+                  ].contains(_detail?['status']) &&
+                  AuthScope.of(context).token != null) ...[
+                ActivityBookmarkButton(
+                  key: ValueKey(e.apiId),
+                  token: AuthScope.of(context).token!,
+                  id: e.apiId!,
+                ),
+                const SizedBox(width: 12),
+              ],
               Expanded(
                 child: FilledButton(
                   onPressed:
@@ -3411,40 +3482,6 @@ void _openPublicProfile(
   );
 }
 
-class UserAvatarImage extends StatelessWidget {
-  const UserAvatarImage({
-    required this.nickname,
-    required this.radius,
-    this.avatarUrl,
-    super.key,
-  });
-
-  final String nickname;
-  final String? avatarUrl;
-  final double radius;
-
-  @override
-  Widget build(BuildContext context) {
-    final url = avatarUrl?.trim();
-    final fallback = nickname.trim().isEmpty ? '用' : nickname.trim()[0];
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: _mint,
-      child: url == null || url.isEmpty
-          ? Text(fallback, style: TextStyle(fontSize: radius * .75))
-          : ClipOval(
-              child: Image.network(
-                absoluteImageUrl(url),
-                width: radius * 2,
-                height: radius * 2,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Center(child: Text(fallback)),
-              ),
-            ),
-    );
-  }
-}
-
 class PublicUserProfilePage extends StatefulWidget {
   const PublicUserProfilePage({required this.userId, this.eventId, super.key});
 
@@ -3563,6 +3600,7 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                     nickname: nickname,
                     onOpen: (id, name) => _openDirectChat(context, id, name),
                   ),
+                MemberPublicDetails(profile: profile),
                 TextButton(
                   onPressed: () =>
                       _openSeriesPage(context, ownerId: widget.userId),
@@ -6806,6 +6844,35 @@ class ProfilePage extends StatelessWidget {
               ),
               const Divider(height: 1, indent: 58),
               _Menu(
+                icon: Icons.badge_outlined,
+                title: context.tr('memberEditProfile'),
+                subtitle: context.tr('memberProfileSummary'),
+                onTap: () => Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (_) => MemberProfileEditor(token: auth.token!),
+                  ),
+                ),
+              ),
+              const Divider(height: 1, indent: 58),
+              _Menu(
+                icon: Icons.account_circle_outlined,
+                title: context.tr('memberPreview'),
+                onTap: () => _openMemberPerson(context, user.id),
+              ),
+              const Divider(height: 1, indent: 58),
+              _Menu(
+                icon: Icons.people_outline,
+                title: context.tr('memberFollowing'),
+                onTap: () => _openMemberLibrary(context, following: true),
+              ),
+              const Divider(height: 1, indent: 58),
+              _Menu(
+                icon: Icons.bookmark_outline,
+                title: context.tr('memberSaved'),
+                onTap: () => _openMemberLibrary(context, following: false),
+              ),
+              const Divider(height: 1, indent: 58),
+              _Menu(
                 icon: Icons.star_outline,
                 title: context.tr('trustReviews'),
                 subtitle: '守时 · 友善 · 沟通顺畅',
@@ -7092,6 +7159,35 @@ void _openSeriesPage(
         ownerId: ownerId,
         seriesKey: seriesKey,
         openEvent: _openSeriesEvent,
+      ),
+    ),
+  );
+}
+
+Future<void> _openMemberPerson(BuildContext context, String id) =>
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PublicUserProfilePage(userId: id),
+      ),
+    );
+
+Future<void> _openMemberLibrary(
+  BuildContext context, {
+  required bool following,
+}) async {
+  final token = AuthScope.of(context).token;
+  if (token == null) return;
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => MemberLibraryPage(
+        token: token,
+        following: following,
+        openPerson: _openMemberPerson,
+        openActivity: _openSeriesEvent,
+        activityThumbnail: (context, item) {
+          final event = _eventFromApi(context, {...item, 'id': item['target']});
+          return _ActivityCategoryCover(event: event, coverUrl: event.coverUrl);
+        },
       ),
     ),
   );

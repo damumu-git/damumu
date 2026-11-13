@@ -19,6 +19,7 @@ public sealed partial class ContentFilter(Db db)
             WebSocialRegistration input => [input.Nickname],
             UpdateProfileRequest input => [input.Nickname, input.Bio, input.Occupation],
             WebGuideEndpoints.BioUpdate input => [input.Bio],
+            WebMemberEndpoints.MemberProfileUpdate input => [input.Bio],
             CreateEventRequest input => [input.Title, input.Description, input.CustomSubcategory,
                 input.Announcement, input.OrganizerNote, input.Place?.Name, input.Place?.AddressPublic],
             UpdateEventRequest input => [input.Title, input.Description, input.CustomSubcategory],

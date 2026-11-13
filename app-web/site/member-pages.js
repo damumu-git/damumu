@@ -12,6 +12,7 @@ export function createMemberPages(ui) {
     time,
     libraryRow,
     libraryEventState,
+    renderAvatar,
     card,
     setSession,
     session,
@@ -88,6 +89,64 @@ export function createMemberPages(ui) {
     }
     return trigger;
   }
+
+  memberPage("/me/following", "我的关注", async (content) => {
+    content.append(actionLink("看关注动态", "/explore?feed=following", "button primary"),
+      actionLink("我的收藏", "/me/saved", "button ghost"));
+    const list = node("ul", null, "following-people");
+    content.append(list);
+    const more = button("加载更多", () => load(), "button ghost");
+    more.hidden = true;
+    content.append(more);
+    let offset = 0;
+    async function load() {
+      more.disabled = true;
+      try {
+        const page = await request("/me/following?offset=" + offset, { auth: true });
+        for (const user of page.items) {
+          const entry = node("li", null, "following-person");
+          const avatar = node("span", null, "account-avatar");
+          avatar.setAttribute("aria-hidden", "true");
+          renderAvatar(avatar, { avatarImageUrl: user.avatar_url, nickname: user.nickname });
+          const info = node("div");
+          info.append(actionLink(user.nickname, "/people/" + user.id));
+          if (user.mutual) info.append(node("span", "互相关注", "profile-region"));
+          if (user.bio) info.append(node("p", user.bio, "meta"));
+          const remove = button("取消关注", async () => {
+            if (more.disabled) return;
+            more.disabled = true;
+            remove.disabled = true;
+            try {
+              await request("/web/follows/" + user.id, { auth: true, method: "DELETE" });
+              entry.remove();
+              offset--;
+              if (!list.children.length && !more.hidden) await load();
+              if (!list.children.length && more.hidden) empty.hidden = false;
+            } catch (error) {
+              showError(content, error);
+            } finally {
+              more.disabled = false;
+              remove.disabled = false;
+            }
+          }, "button ghost");
+          entry.append(avatar, info, remove);
+          list.append(entry);
+        }
+        offset += page.items.length;
+        more.hidden = !page.hasMore;
+        empty.hidden = !!list.children.length;
+      } catch (error) {
+        showError(content, error);
+        more.hidden = false;
+      } finally {
+        more.disabled = false;
+      }
+    }
+    const empty = node("p", "还没有关注。可以从活动详情进入组织者主页，关注感兴趣的人。", "meta");
+    empty.hidden = true;
+    content.append(empty);
+    await load();
+  });
 
   function addList(content, entries, render, empty) {
     const list = node("ul", null, "detail-list");

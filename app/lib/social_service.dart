@@ -342,6 +342,47 @@ class SocialService {
         method: follow ? 'PUT' : 'DELETE',
       );
 
+  static Future<Map<String, dynamic>> memberProfile(String token) async =>
+      (await _request(token, '/me/member-profile') as Map)
+          .cast<String, dynamic>();
+
+  static Future<void> saveMemberProfile(
+    String token,
+    String bio,
+    String? region,
+    bool visible,
+  ) => _request(
+    token,
+    '/me/member-profile',
+    method: 'PUT',
+    body: {'bio': bio, 'homeRegionCode': region, 'showHomeRegion': visible},
+  );
+
+  static Future<Map<String, dynamic>> following(
+    String token,
+    int offset,
+  ) async => (await _request(token, '/me/following?offset=$offset') as Map)
+      .cast<String, dynamic>();
+
+  static Future<List<Map<String, dynamic>>> savedItems(String token) async =>
+      (await _request(token, '/me/saved') as List).cast<Map<String, dynamic>>();
+
+  static Future<bool> isSaved(String token, String kind, String id) async =>
+      (await _request(token, '/me/saved/$kind/${Uri.encodeComponent(id)}')
+          as Map)['saved'] ==
+      true;
+
+  static Future<void> setSaved(
+    String token,
+    String kind,
+    String id,
+    bool saved,
+  ) => _request(
+    token,
+    '/me/saved/$kind/${Uri.encodeComponent(id)}',
+    method: saved ? 'PUT' : 'DELETE',
+  );
+
   static Future<String> openDirectContact(String token, String userId) async =>
       (await _request(
                 token,

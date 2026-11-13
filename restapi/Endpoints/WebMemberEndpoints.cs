@@ -4,8 +4,65 @@ namespace Muda.Api.Endpoints;
 
 public static class WebMemberEndpoints
 {
+    public sealed record MemberProfileUpdate(string? Bio, string? HomeRegionCode, bool ShowHomeRegion);
+
     public static RouteGroupBuilder MapWebMemberEndpoints(this RouteGroupBuilder api)
     {
+        api.MapGet("/me/member-profile", async (HttpContext context, Db db, CancellationToken ct) =>
+        {
+            context.Response.Headers.CacheControl = "private, no-store";
+            var userId = ApiSupport.RequireUserId(context);
+            var profile = await db.QueryOneAsync("""
+                SELECT p.web_public_bio AS bio, home.code AS home_region_code,
+                       p.show_home_region AND home.code IS NOT NULL AS show_home_region,
+                       home.name_zh_cn AS home_region_name, parent.name_zh_cn AS home_parent_name
+                FROM user_profile p
+                LEFT JOIN administrative_region home ON home.code=p.home_region_code AND home.is_active
+                LEFT JOIN administrative_region parent ON parent.code=home.parent_code AND parent.is_active
+                WHERE p.user_id=@userId
+                """, new { userId }, ct);
+            return ApiSupport.Ok(profile);
+        });
+
+        api.MapPut("/me/member-profile", async (MemberProfileUpdate input, HttpContext context, Db db, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var bio = input.Bio?.Trim();
+            var regionCode = string.IsNullOrWhiteSpace(input.HomeRegionCode) ? null : input.HomeRegionCode.Trim();
+            if (bio?.Length > 300) throw new ApiException(400, "bio_too_long", "公开简介最多 300 字");
+            if (regionCode?.Length > 32) throw new ApiException(400, "invalid_home_region", "请选择有效的常驻区域");
+            var changed = await db.ExecuteAsync("""
+                UPDATE user_profile SET web_public_bio=NULLIF(@bio,''), home_region_code=@regionCode,
+                    show_home_region=(@regionCode IS NOT NULL AND @showHomeRegion), updated_at=now()
+                WHERE user_id=@userId AND (@regionCode::varchar IS NULL OR EXISTS (
+                    SELECT 1 FROM administrative_region r
+                    LEFT JOIN administrative_region p ON p.code=r.parent_code AND p.level=1 AND p.is_active
+                    WHERE r.code=@regionCode AND r.is_active AND (r.level=1 OR (r.level=2 AND p.code IS NOT NULL))))
+                """, new { userId, bio, regionCode, input.ShowHomeRegion }, ct);
+            if (changed == 0) throw new ApiException(400, "invalid_home_region", "请选择有效的常驻区域");
+            return ApiSupport.Ok(new { bio, home_region_code = regionCode, show_home_region = regionCode is not null && input.ShowHomeRegion });
+        });
+
+        api.MapGet("/me/following", async (HttpContext context, Db db, int? offset, CancellationToken ct) =>
+        {
+            context.Response.Headers.CacheControl = "private, no-store";
+            var userId = ApiSupport.RequireUserId(context);
+            var skip = Math.Max(offset ?? 0, 0);
+            var items = await db.QueryAsync("""
+                SELECT f.target_id AS id, p.nickname, COALESCE(avatar.image_url,p.avatar_url) AS avatar_url,
+                       p.web_public_bio AS bio,
+                       EXISTS (SELECT 1 FROM web_follow reverse_follow
+                         WHERE reverse_follow.user_id=f.target_id AND reverse_follow.target_id=@userId) AS mutual
+                FROM web_follow f JOIN user_profile p ON p.user_id=f.target_id
+                LEFT JOIN system_avatar avatar ON p.avatar_url='system:'||avatar.id::text
+                WHERE f.user_id=@userId AND direct_contact_visible(@userId,f.target_id)
+                ORDER BY f.created_at DESC,f.target_id OFFSET @skip LIMIT 41
+                """, new { userId, skip }, ct);
+            var hasMore = items.Count > 40;
+            if (hasMore) items.RemoveAt(40);
+            return ApiSupport.Ok(new { items, hasMore });
+        });
+
         api.MapGet("/me/saved", async (HttpContext context, Db db, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);

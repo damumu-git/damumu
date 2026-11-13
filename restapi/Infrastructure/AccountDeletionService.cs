@@ -94,6 +94,8 @@ public sealed class AccountDeletionService(
                 avatar_url=NULL,
                 bio=NULL,
                 web_public_bio=NULL,
+                home_region_code=NULL,
+                show_home_region=false,
                 city_code=NULL,
                 district_code=NULL,
                 languages=ARRAY[]::varchar[],
