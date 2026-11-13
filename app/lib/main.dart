@@ -306,6 +306,7 @@ class EventItem {
     this.beginnerFriendly = false,
     this.beginnerFriendlyVerified = false,
     this.coverUrl,
+    this.categoryCoverUrl,
     this.coverCategoryCode,
     this.coverSubcategoryCode,
     this.localizedContent,
@@ -348,6 +349,7 @@ class EventItem {
   final bool beginnerFriendly;
   final bool beginnerFriendlyVerified;
   final String? coverUrl;
+  final String? categoryCoverUrl;
   final String? coverCategoryCode;
   final String? coverSubcategoryCode;
   final Map<String, dynamic>? localizedContent;
@@ -1981,6 +1983,19 @@ class _ActivityCategoryCover extends StatelessWidget {
   }
 
   Widget _categoryCover() {
+    final override = event.categoryCoverUrl;
+    if (override != null && override.isNotEmpty) {
+      return Image.network(
+        absoluteImageUrl(override),
+        fit: BoxFit.cover,
+        excludeFromSemantics: true,
+        errorBuilder: (_, _, _) => _bundledCover(),
+      );
+    }
+    return _bundledCover();
+  }
+
+  Widget _bundledCover() {
     final subcategory = event.coverSubcategoryCode;
     Widget major() =>
         Image.asset(_majorAsset, fit: BoxFit.cover, excludeFromSemantics: true);
@@ -2763,6 +2778,7 @@ EventItem _eventFromApi(BuildContext context, Map<String, dynamic> json) {
     emoji: '${json['category_icon'] ?? '✨'}',
     emojiUrl: json['category_icon_url'] as String?,
     coverUrl: json['cover_url'] as String?,
+    categoryCoverUrl: json['category_cover_url'] as String?,
     coverCategoryCode: json['cover_category_code'] as String?,
     coverSubcategoryCode: json['cover_subcategory_code'] as String?,
     localizedContent: json,
@@ -6041,6 +6057,7 @@ class _ChatPageState extends State<ChatPage> {
                     final viewer = AuthScope.of(context).user;
                     final mine = message.senderUserId == viewer?.id;
                     final bubble = _Bubble(
+                      key: ValueKey(message.id),
                       text: message.recalledAt == null
                           ? message.body
                           : context.tr('messageRecalled'),
@@ -6552,6 +6569,7 @@ class _Bubble extends StatelessWidget {
     this.mediaPreviewUrl,
     this.replyText,
     this.onLongPress,
+    super.key,
   });
   final String text;
   final bool mine;
@@ -6645,8 +6663,8 @@ class _Bubble extends StatelessWidget {
                 if (text.isNotEmpty)
                   Padding(
                     padding: EdgeInsets.only(top: mediaUrl == null ? 0 : 8),
-                    child: Text(
-                      text,
+                    child: _ExpandableMessageText(
+                      text: text,
                       style: TextStyle(
                         color: _ink,
                         fontStyle: recalled ? FontStyle.italic : null,
@@ -6666,6 +6684,72 @@ class _Bubble extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _ExpandableMessageText extends StatefulWidget {
+  const _ExpandableMessageText({required this.text, required this.style});
+
+  final String text;
+  final TextStyle style;
+
+  @override
+  State<_ExpandableMessageText> createState() => _ExpandableMessageTextState();
+}
+
+class _ExpandableMessageTextState extends State<_ExpandableMessageText> {
+  bool _expanded = false;
+
+  @override
+  void didUpdateWidget(covariant _ExpandableMessageText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) _expanded = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = DefaultTextStyle.of(context).style.merge(widget.style);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: widget.text, style: style),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          maxLines: 5,
+        )..layout(maxWidth: constraints.maxWidth);
+        final overflow = painter.didExceedMaxLines;
+        painter.dispose();
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.text,
+              style: style,
+              maxLines: _expanded && overflow ? null : 5,
+              overflow: _expanded && overflow
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
+            ),
+            if (overflow)
+              TextButton(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(44, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  foregroundColor: style.color,
+                  alignment: AlignmentDirectional.centerStart,
+                ),
+                child: Text(
+                  context.tr(_expanded ? 'chatCollapseText' : 'chatExpandText'),
+                  style: const TextStyle(decoration: TextDecoration.underline),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class ChatImagePreviewPage extends StatelessWidget {

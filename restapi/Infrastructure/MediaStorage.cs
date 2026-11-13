@@ -10,7 +10,8 @@ public sealed class MediaStorage
         "imageUrl", "image_url", "avatarUrl", "avatar_url", "avatarImageUrl",
         "organizer_avatar", "sender_avatar", "peer_avatar", "event_avatar", "coverUrl", "cover_url",
         "coverOriginalUrl", "cover_original_url", "mediaUrl", "media_url",
-        "mediaThumbnailUrl", "media_thumbnail_url", "icon_url", "category_icon_url"
+        "mediaThumbnailUrl", "media_thumbnail_url", "icon_url", "category_icon_url",
+        "cover_image_url", "category_cover_url"
     };
 
     public string RootPath { get; }

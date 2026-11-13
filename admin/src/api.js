@@ -98,6 +98,10 @@ export const api = {
   updateSafetyAlert: (id, body) =>
     request(`/admin/safety-alerts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   categories: () => request('/admin/categories'),
+  saveCategoryCover: (id, body) =>
+    request(`/admin/categories/${id}/cover`, { method: 'PUT', body }),
+  resetCategoryCover: (id) =>
+    request(`/admin/categories/${id}/cover`, { method: 'DELETE' }),
   systemAvatars: () => request('/admin/system-avatars'),
   uploadSystemAvatar: (form) =>
     request('/admin/system-avatars', { method: 'POST', body: form }),

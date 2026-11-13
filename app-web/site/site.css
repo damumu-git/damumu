@@ -1459,6 +1459,23 @@ a.activity-organizer::after {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.chat-bubble .chat-bubble-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+  margin: 0;
+  line-height: 1.45;
+}
+.chat-bubble .chat-bubble-text.is-expanded { display: block; }
+.chat-text-toggle {
+  border: 0;
+  padding: .25rem 0 0;
+  background: transparent;
+  color: var(--blue);
+  font-size: .8rem;
+  font-weight: 700;
+}
 .chat-message.own .chat-bubble {
   background: var(--accent-tint);
   border-color: transparent;

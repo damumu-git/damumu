@@ -311,10 +311,31 @@ export function createChatPage({
           avatarImageUrl: message.sender_avatar || (own ? viewer.avatarImageUrl || viewer.avatarUrl : null),
         });
       }
-      body.append(
-        node("p", metadata.filter(Boolean).join(" · "), "meta chat-sender"),
-        node("p", message.recalled_at ? "消息已撤回" : message.body || "附件请在搭慕 App 内查看", "chat-bubble"),
-      );
+      const bubble = node("div", null, "chat-bubble");
+      const text = node("p", message.recalled_at ? "消息已撤回" : message.body || "附件请在搭慕 App 内查看", "chat-bubble-text");
+      bubble.append(text);
+      if (!message.recalled_at && message.body) {
+        text.id = "chat-text-" + message.id;
+        let expanded = false;
+        const toggle = button("展开", () => {
+          expanded = !expanded;
+          text.classList.toggle("is-expanded", expanded);
+          toggle.textContent = expanded ? "收起" : "展开";
+          toggle.setAttribute("aria-expanded", String(expanded));
+        }, "chat-text-toggle");
+        toggle.hidden = true;
+        toggle.setAttribute("aria-controls", text.id);
+        toggle.setAttribute("aria-expanded", "false");
+        bubble.append(toggle);
+        const observer = new ResizeObserver(() => {
+          const lineHeight = Number.parseFloat(getComputedStyle(text).lineHeight);
+          toggle.hidden = text.scrollHeight <= Math.ceil(lineHeight * 5);
+        });
+        observer.observe(text);
+        if (signal.aborted) observer.disconnect();
+        else signal.addEventListener("abort", () => observer.disconnect(), { once: true });
+      }
+      body.append(node("p", metadata.filter(Boolean).join(" · "), "meta chat-sender"), bubble);
       if (message.sender_user_id && !own && !message.recalled_at) {
         body.append(button("举报消息", () => reasonDialog("举报消息", async (description) => {
           await request(base + "/messages/" + encodeURIComponent(message.id) + "/report", {

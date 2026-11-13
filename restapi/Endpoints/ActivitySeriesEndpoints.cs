@@ -220,7 +220,7 @@ public static class ActivitySeriesEndpoints
             var time = story["starts_at"] is DateTime starts
                 ? starts.AddHours(9).ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) + " KST"
                 : "";
-            var cover = story["cover_url"] as string;
+            var cover = story["cover_url"] as string ?? story["category_cover_url"] as string;
             var category = story["cover_category_code"] as string;
             var fallback = category is "culture" or "food" or "outdoors" or "social" or "sports" or "study" ? category : "other";
             var image = cover is not null ? "https://api.damumu.com" + cover : $"https://app.damumu.com/assets/covers/{fallback}.webp";

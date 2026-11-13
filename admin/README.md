@@ -4,6 +4,8 @@
 
 新增“图标素材”管理及分类图片绑定，支持64×64 PNG上传、替换、改名和启停；使用API返回的完整图片URL，不挂载API磁盘。详见仓库根目录 `docs/EMOJI_LIBRARY.md`。
 
+「分类配置」的「封面」可预览、上传、替换及恢复活动默认封面。支持 2 MB 以内的 JPEG、PNG、WebP，建议使用横向 16:9。分类封面供 Web 和 App 共用。
+
 ## 界面主题
 
 品牌Logo与标签图标使用选定的蓝底暖白“环抱”图片，本地文件位于 `public/brand/` 及 `public/favicon.png`，不依赖API。母版与导出见根目录 `branding/README.md`。

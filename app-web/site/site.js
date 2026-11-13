@@ -244,7 +244,7 @@ function cover(item, className = "") {
     typeof sub === "string" && /^[a-z0-9_]+$/.test(sub)
       ? "/assets/covers/sub/" + sub + ".webp"
       : null;
-  const candidates = [uploadedImage(item.cover_url), specific, fallback].filter(
+  const candidates = [uploadedImage(item.cover_url), uploadedImage(item.category_cover_url), specific, fallback].filter(
     Boolean,
   );
   image.addEventListener("error", () => {
@@ -987,8 +987,10 @@ function showPublish(template, seriesId) {
       (item) => item.id === form.elements.categoryId.value,
     );
     const code = selected?.code;
+    const major = categories.find((item) => item.id === majorCategory.value);
     previewCover.src =
       objectUrl ||
+      uploadedImage(selected?.cover_image_url || major?.cover_image_url) ||
       (code && /^[a-z0-9_]+$/.test(code)
         ? "/assets/covers/sub/" + code + ".webp"
         : "/assets/covers/other.webp");

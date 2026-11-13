@@ -2,6 +2,7 @@ import WebGuides from './WebGuides.jsx'
 import ActivitySeries from './ActivitySeries.jsx'
 import ContentFilterPage from './ContentFilterPage.jsx'
 import AdminNavIcon from './AdminNavIcon.jsx'
+import CategoryCoverEditor, { CategoryCoverPreview } from './CategoryCoverEditor.jsx'
 import { FilePicker } from './AdminControls.jsx'
 import { useAdminDialog } from './admin-dialog-context'
 import { EmojiIcon, EmojiAssetManager, EmojiAssetSelect } from './EmojiAssets.jsx'
@@ -957,6 +958,7 @@ function CategoryEditor({ category, rows, onClose, onSaved }) {
 }
 
 function Categories() {
+  const [coverCategory, setCoverCategory] = useState(null)
   const dialog = useAdminDialog()
   const [notice, setNotice] = useState('')
   const [level, setLevel] = useState(0)
@@ -989,12 +991,14 @@ function Categories() {
           <article className={`category-card level-${category.level} ${category.is_active ? '' : 'disabled'}`} key={category.id} style={{ '--category-color': category.color || '#1F7A55' }}>
             <span className="category-icon"><EmojiIcon emoji={category.icon} url={category.icon_url} /></span>
             <div className="category-copy"><span className="category-level">{category.level === 1 ? '大分类' : '小分类'}</span><h4>{category.name_zh_cn}</h4><p className="category-path">{category.full_path}</p><p>{category.name_en_us || '未设置英文'} · {category.name_ko_kr || '未设置韩文'}</p><p>{category.description_zh_cn || '暂无分类说明'}</p><small>{category.child_count} 个子类 · {category.event_count} 场活动 · 排序 {category.sort_order}</small><code>{category.code}</code></div>
-            <div className="category-actions"><button onClick={() => setEditing(category)}>编辑</button><button className="danger" onClick={async () => { if (!(await dialog.confirm(`确认删除「${category.name_zh_cn}」？`))) return; try { await api.deleteCategory(category.id); setNotice('分类已删除'); resource.reload() } catch (error) { setNotice(error.message) } }}>删除</button><label className="switch"><input type="checkbox" checked={category.is_active} onChange={() => toggle(category)} /><span /></label></div>
+            <div className="category-actions"><button onClick={() => setEditing(category)}>编辑</button><button onClick={() => setCoverCategory(category)}>封面</button><button className="danger" onClick={async () => { if (!(await dialog.confirm(`确认删除「${category.name_zh_cn}」？`))) return; try { await api.deleteCategory(category.id); setNotice('分类已删除'); resource.reload() } catch (error) { setNotice(error.message) } }}>删除</button><label className="switch"><input type="checkbox" checked={category.is_active} onChange={() => toggle(category)} /><span /></label></div>
+            <CategoryCoverPreview category={category} rows={rows} />
           </article>
         ))}</div>
         )}</PagedItems>
       </PageState>
       {editing !== undefined && <CategoryEditor category={editing} rows={rows} onClose={() => setEditing(undefined)} onSaved={saved} />}
+      {coverCategory && <CategoryCoverEditor category={coverCategory} rows={rows} onClose={() => setCoverCategory(null)} onSaved={(message) => { setCoverCategory(null); setNotice(message); resource.reload() }} />}
     </section>
   )
 }

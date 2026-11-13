@@ -31,7 +31,8 @@ public static class ActivityQueries
 
     internal const string CoverCategoryCodes = """
         COALESCE(grandparent_category.code, parent_category.code, c.code) AS cover_category_code,
-        c.code AS cover_subcategory_code
+        c.code AS cover_subcategory_code,
+        COALESCE(c.cover_image_url,parent_category.cover_image_url,grandparent_category.cover_image_url) AS category_cover_url
         """;
 
     internal const string CoverCategoryJoins = """

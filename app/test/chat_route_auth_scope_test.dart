@@ -10,6 +10,70 @@ import 'package:zaihandazi/main.dart';
 import 'package:zaihandazi/social_service.dart';
 
 void main() {
+  testWidgets('only messages over five lines can expand and collapse', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final auth = AuthController()
+      ..token = 'test-token'
+      ..user = const AuthUser(
+        id: 'viewer',
+        nickname: 'Viewer',
+        email: 'viewer@example.com',
+      );
+    const five = 'First\nSecond\nThird\nFourth\nFifth';
+    const six = '$five\nSixth';
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/read')) {
+        return http.Response('{"data":{}}', 200);
+      }
+      return http.Response(
+        jsonEncode({
+          'data': {
+            'items': [
+              for (final (id, body) in [('short', five), ('long', six)])
+                {
+                  'id': id,
+                  'body': body,
+                  'sender_user_id': 'viewer',
+                  'created_at': '2026-11-13T10:00:00Z',
+                },
+            ],
+            'hasMore': false,
+          },
+        }),
+        200,
+      );
+    });
+    await http.runWithClient(() async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AuthScope(
+            controller: auth,
+            child: const ChatPage(
+              conversation: ConversationItem(
+                id: 'conversation-1',
+                type: 'direct',
+                title: 'Chat',
+                unreadCount: 0,
+                memberCount: 2,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.text(six)).maxLines, 5);
+      expect(find.text('Show more'), findsOneWidget);
+      await tester.tap(find.text('Show more'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.text(six)).maxLines, isNull);
+      await tester.tap(find.text('Show less'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.text(six)).maxLines, 5);
+    }, () => client);
+  });
+
   testWidgets('chat route keeps access to the authenticated session', (
     tester,
   ) async {

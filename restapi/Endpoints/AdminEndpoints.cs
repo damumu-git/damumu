@@ -708,6 +708,49 @@ public static class AdminEndpoints
                 ORDER BY c.level, c.parent_id NULLS FIRST, c.sort_order, c.name_zh_cn
                 """, cancellationToken: ct)));
 
+        admin.MapPut("/categories/{id:guid}/cover", async (
+            Guid id, HttpContext context, Db db, MediaStorage media, CancellationToken ct) =>
+        {
+            if (!context.Request.HasFormContentType)
+                throw new ApiException(400, "image_required", "请上传封面图片");
+            var image = (await context.Request.ReadFormAsync(ct)).Files.GetFile("image")
+                ?? throw new ApiException(400, "image_required", "请上传封面图片");
+            if (image.Length is <= 0 or > 2_000_000 ||
+                image.ContentType is not ("image/jpeg" or "image/png" or "image/webp"))
+                throw new ApiException(400, "invalid_category_cover", "请选择 2 MB 以内的 JPEG、PNG 或 WebP 图片");
+            var storageKey = $"category-covers/{Guid.NewGuid():N}.webp";
+            var path = media.GetPath(storageKey);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var source = Path.GetTempFileName();
+            var imageUrl = "/uploads/" + storageKey;
+            Dictionary<string, object?> previous;
+            try
+            {
+                await using (var output = File.Create(source))
+                    await image.CopyToAsync(output, ct);
+                await ImageThumbnailService.CreateWebpAsync(source, path, 1280, 720, ct);
+                previous = await ReplaceCategoryCover(db, id, imageUrl, ct);
+            }
+            catch
+            {
+                File.Delete(path);
+                throw;
+            }
+            finally
+            {
+                File.Delete(source);
+            }
+            RemoveCategoryCoverFile(media, previous["cover_image_url"] as string);
+            return ApiSupport.Ok(new { cover_image_url = imageUrl });
+        }).DisableAntiforgery();
+
+        admin.MapDelete("/categories/{id:guid}/cover", async (Guid id, Db db, MediaStorage media, CancellationToken ct) =>
+        {
+            var previous = await ReplaceCategoryCover(db, id, null, ct);
+            RemoveCategoryCoverFile(media, previous["cover_image_url"] as string);
+            return ApiSupport.Ok(new { cover_image_url = (string?)null });
+        });
+
         admin.MapPost("/categories", async (
             AdminCategoryRequest request, Db db, CancellationToken ct) =>
         {
@@ -779,7 +822,7 @@ public static class AdminEndpoints
         });
 
         admin.MapDelete("/categories/{id:guid}", async (
-            Guid id, Db db, CancellationToken ct) =>
+            Guid id, Db db, MediaStorage media, CancellationToken ct) =>
         {
             var references = await db.ScalarAsync<long>(
                 "SELECT count(*) FROM event WHERE category_id=@id AND deleted_at IS NULL",
@@ -789,8 +832,9 @@ public static class AdminEndpoints
                 new { id }, ct);
             if (references > 0 || children > 0)
                 throw new ApiException(409, "category_in_use", "分类已被活动或子分类使用，只能停用");
-            var deleted = await db.ExecuteAsync("DELETE FROM category WHERE id=@id", new { id }, ct);
-            if (deleted == 0) throw new ApiException(404, "category_not_found", "分类不存在");
+            var deleted = await db.QueryOneAsync("DELETE FROM category WHERE id=@id RETURNING cover_image_url", new { id }, ct)
+                ?? throw new ApiException(404, "category_not_found", "分类不存在");
+            RemoveCategoryCoverFile(media, deleted["cover_image_url"] as string);
             return Results.NoContent();
         });
 
@@ -1176,6 +1220,29 @@ public static class AdminEndpoints
         });
 
         return api;
+    }
+
+    private static async Task<Dictionary<string, object?>> ReplaceCategoryCover(Db db, Guid id, string? imageUrl, CancellationToken ct) =>
+        await db.QueryOneAsync("""
+            WITH previous AS MATERIALIZED (
+                SELECT id,cover_image_url FROM category WHERE id=@id FOR UPDATE
+            )
+            UPDATE category SET cover_image_url=@imageUrl, updated_at=now()
+            FROM previous WHERE category.id=previous.id
+            RETURNING previous.cover_image_url
+            """, new { id, imageUrl }, ct)
+        ?? throw new ApiException(404, "category_not_found", "分类不存在");
+
+    private static void RemoveCategoryCoverFile(MediaStorage media, string? url)
+    {
+        const string prefix = "/uploads/category-covers/";
+        if (url is null || !url.StartsWith(prefix, StringComparison.Ordinal)) return;
+        var name = url[prefix.Length..];
+        if (name.Length != 37 || !name.EndsWith(".webp", StringComparison.Ordinal)
+            || !Guid.TryParseExact(name[..32], "N", out _)) return;
+        try { File.Delete(media.GetPath("category-covers/" + name)); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     private static Task<int> WriteAudit(
