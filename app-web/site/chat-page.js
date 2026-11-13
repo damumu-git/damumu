@@ -300,16 +300,16 @@ export function createChatPage({
       const senderName = message.sender_name || (own ? viewer.nickname : "");
       const metadata = [senderName, time(message.created_at)];
       const body = node("div", null, "chat-message-body");
+      let avatar;
       if (conversation.conversation_type === "event" && message.sender_user_id &&
           message.message_type !== "event_cancelled") {
         entry.classList.add("with-avatar");
-        const avatar = node("span", null, "account-avatar chat-sender-avatar");
+        avatar = node("span", null, "account-avatar chat-sender-avatar");
         avatar.setAttribute("aria-hidden", "true");
         renderAvatar(avatar, {
           nickname: senderName,
           avatarImageUrl: message.sender_avatar || (own ? viewer.avatarImageUrl || viewer.avatarUrl : null),
         });
-        entry.append(avatar);
       }
       body.append(
         node("p", metadata.filter(Boolean).join(" · "), "meta"),
@@ -326,6 +326,10 @@ export function createChatPage({
         }), "chat-report"));
       }
       entry.append(body);
+      if (avatar) {
+        if (own) entry.append(avatar);
+        else entry.prepend(avatar);
+      }
       return entry;
     }
 

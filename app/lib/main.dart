@@ -5942,6 +5942,17 @@ class _ChatPageState extends State<ChatPage> {
                         message.senderUserId == null) {
                       return bubble;
                     }
+                    final avatar = UserAvatarImage(
+                      nickname:
+                          message.senderName ??
+                          (mine ? viewer?.nickname ?? '' : ''),
+                      radius: 17,
+                      avatarUrl:
+                          message.senderAvatar ??
+                          (mine
+                              ? viewer?.avatarImageUrl ?? viewer?.avatarUrl
+                              : null),
+                    );
                     return Align(
                       alignment: mine
                           ? Alignment.centerRight
@@ -5950,20 +5961,9 @@ class _ChatPageState extends State<ChatPage> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          UserAvatarImage(
-                            nickname:
-                                message.senderName ??
-                                (mine ? viewer?.nickname ?? '' : ''),
-                            radius: 17,
-                            avatarUrl:
-                                message.senderAvatar ??
-                                (mine
-                                    ? viewer?.avatarImageUrl ??
-                                          viewer?.avatarUrl
-                                    : null),
-                          ),
-                          const SizedBox(width: 8),
+                          if (!mine) ...[avatar, const SizedBox(width: 8)],
                           Flexible(child: bubble),
+                          if (mine) ...[const SizedBox(width: 8), avatar],
                         ],
                       ),
                     );

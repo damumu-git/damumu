@@ -1453,6 +1453,9 @@ a.activity-organizer::after {
   align-items: start;
   gap: 0.5rem;
 }
+.chat-message.own.with-avatar {
+  grid-template-columns: minmax(0, 1fr) 34px;
+}
 .chat-sender-avatar {
   margin-top: 0.2rem;
 }
