@@ -32,6 +32,11 @@ public static class ActivityQueries
     internal const string CoverCategoryCodes = """
         COALESCE(grandparent_category.code, parent_category.code, c.code) AS cover_category_code,
         c.code AS cover_subcategory_code,
+        COALESCE(grandparent_category.name_zh_cn, parent_category.name_zh_cn, c.name_zh_cn) AS major_category_name,
+        CASE WHEN grandparent_category.id IS NOT NULL THEN grandparent_category.name_en_us
+             WHEN parent_category.id IS NOT NULL THEN parent_category.name_en_us ELSE c.name_en_us END AS major_category_name_en_us,
+        CASE WHEN grandparent_category.id IS NOT NULL THEN grandparent_category.name_ko_kr
+             WHEN parent_category.id IS NOT NULL THEN parent_category.name_ko_kr ELSE c.name_ko_kr END AS major_category_name_ko_kr,
         COALESCE(c.cover_image_url,parent_category.cover_image_url,grandparent_category.cover_image_url) AS category_cover_url
         """;
 

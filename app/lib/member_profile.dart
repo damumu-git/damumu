@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'activity_text.dart';
+import 'auth.dart';
 import 'event_service.dart';
 import 'l10n.dart';
 import 'social_service.dart';
@@ -472,7 +473,6 @@ class _MemberLibraryPageState extends State<MemberLibraryPage> {
       if (widget.following && item['bio'] is String) item['bio'] as String,
       if (guide) context.tr('memberGuides'),
       if (start != null) activityTime(context, start),
-      if (item['category_name'] is String) item['category_name'] as String,
     ];
     return Card(
       child: ListTile(
@@ -492,7 +492,22 @@ class _MemberLibraryPageState extends State<MemberLibraryPage> {
                 ),
               ),
         title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
-        subtitle: subtitle.isEmpty
+        subtitle: !widget.following && !guide
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ActivityListTags(
+                    data: item,
+                    category: item['category_name'] as String? ?? '',
+                    owned:
+                        AuthScope.of(context).user?.id ==
+                            item['organizer_user_id'] &&
+                        item['organizer_user_id'] != null,
+                  ),
+                  if (subtitle.isNotEmpty) Text(subtitle.join(' · ')),
+                ],
+              )
+            : subtitle.isEmpty
             ? null
             : Text(
                 subtitle.join(' · '),

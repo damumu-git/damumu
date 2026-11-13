@@ -68,7 +68,7 @@ public static class WebMemberEndpoints
             var userId = ApiSupport.RequireUserId(context);
             return ApiSupport.Ok(await db.QueryAsync($"""
                 SELECT b.kind,b.target,b.created_at, COALESCE(g.title,e.title) AS title,
-                       COALESCE(g.summary,e.description) AS summary, e.status,
+                       COALESCE(g.summary,e.description) AS summary, e.status, e.organizer_user_id,
                        g.cover_category AS guide_cover_category,
                        {ActivityQueries.CoverThumbnail},
                        {ActivityQueries.CoverCategoryCodes},

@@ -1464,7 +1464,7 @@ class _HomePageState extends State<HomePage> {
                         crossAxisSpacing: 16,
                         mainAxisSpacing: 20,
                         mainAxisExtent:
-                            (columns == 1 ? 190 : 170) + 126 * textScale,
+                            (columns == 1 ? 190 : 170) + 168 * textScale,
                       ),
                       itemCount: events.length,
                       itemBuilder: (context, index) => _WebEventCard(
@@ -1501,12 +1501,6 @@ class _WebEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final category = activityText(
-      context,
-      event.localizedContent,
-      'category',
-      event.category,
-    );
     final time = event.startsAt == null
         ? context.tr('activityTimeUnknown')
         : activityTime(context, event.startsAt!);
@@ -1540,15 +1534,11 @@ class _WebEventCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (category.isNotEmpty)
-                    Text(
-                      category,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: _green,
-                      ),
-                    ),
+                  ActivityListTags(
+                    data: event.localizedContent,
+                    category: event.category,
+                    owned: event.isOwned,
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     activityText(
@@ -2037,23 +2027,19 @@ class EventCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                ActivityListTags(
+                  data: event.localizedContent,
+                  category: event.category,
+                  owned: event.isOwned,
+                ),
+                if (event.isInProgress || event.organizerRiskTag != null)
+                  const SizedBox(height: 5),
                 Wrap(
                   spacing: 7,
                   runSpacing: 7,
                   children: [
-                    _Pill(
-                      activityText(
-                        context,
-                        event.localizedContent,
-                        'category',
-                        event.category,
-                      ),
-                      green: true,
-                    ),
                     if (event.isInProgress)
                       _Pill(context.tr('activityInProgress'), green: true),
-                    if (event.isOwned)
-                      _Pill(context.tr('eventOwned'), green: true),
                     if (event.organizerRiskTag != null)
                       _RiskPill(
                         text: feedbackTagLabel(
@@ -2602,7 +2588,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (category(event).isNotEmpty) Text(category(event)),
+                      ActivityListTags(
+                        data: event.localizedContent,
+                        category: event.category,
+                        owned: event.isOwned,
+                      ),
                       Text(
                         [
                           if (event.startsAt != null)
@@ -7474,9 +7464,19 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
                     : ''}${activityText(context, row, 'title', '${row['title'] ?? ''}')}',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
-              subtitle: Text(
-                '${_activityArea(row, Localizations.localeOf(context).languageCode)}\n'
-                '${_formatActivityDate(startsAt)} · ${activityPrice(context, price)}',
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ActivityListTags(
+                    data: row,
+                    category: row['category_name'] as String? ?? '',
+                    owned: organizedByMe,
+                  ),
+                  Text(
+                    '${_activityArea(row, Localizations.localeOf(context).languageCode)}\n'
+                    '${_formatActivityDate(startsAt)} · ${activityPrice(context, price)}',
+                  ),
+                ],
               ),
               isThreeLine: true,
               trailing: organizedByMe && !widget.selectSource

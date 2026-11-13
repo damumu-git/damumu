@@ -81,6 +81,89 @@ String activityText(
   return _translated(translations, language, field, original);
 }
 
+String activityMajorCategory(BuildContext context, Map<String, dynamic>? item) {
+  if (item == null ||
+      item['cover_category_code'] == item['cover_subcategory_code']) {
+    return '';
+  }
+  final suffix = switch (Localizations.localeOf(context).languageCode) {
+    'en' => '_en_us',
+    'ko' => '_ko_kr',
+    _ => '',
+  };
+  final localized = (item['major_category_name$suffix'] as String?)?.trim();
+  return localized != null && localized.isNotEmpty
+      ? localized
+      : (item['major_category_name'] as String?)?.trim() ?? '';
+}
+
+class ActivityListTags extends StatelessWidget {
+  const ActivityListTags({
+    required this.data,
+    required this.category,
+    required this.owned,
+    super.key,
+  });
+
+  final Map<String, dynamic>? data;
+  final String category;
+  final bool owned;
+
+  @override
+  Widget build(BuildContext context) {
+    final major = activityMajorCategory(context, data);
+    final minor = activityText(context, data, 'category', category);
+    if (major.isEmpty && minor.isEmpty && !owned) {
+      return const SizedBox.shrink();
+    }
+    Widget tag(
+      String label,
+      Color ink,
+      Color fill, {
+      Color? border,
+      double radius = 12,
+    }) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: fill,
+        border: border == null ? null : Border.all(color: border),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: ink,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        if (major.isNotEmpty)
+          tag(major, const Color(0xff293b85), const Color(0xffedf0ff)),
+        if (minor.isNotEmpty)
+          tag(
+            minor,
+            const Color(0xff404b5c),
+            Colors.white,
+            border: const Color(0xffd6ddea),
+          ),
+        if (owned)
+          tag(
+            context.tr('eventOwned'),
+            const Color(0xff165339),
+            const Color(0xffe7f6ed),
+            radius: 4,
+          ),
+      ],
+    );
+  }
+}
+
 String activityRegionSearchText(Map<String, dynamic>? item) {
   if (item == null) return '';
   const keys = [

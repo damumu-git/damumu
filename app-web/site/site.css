@@ -1850,3 +1850,21 @@ a.activity-organizer::after {
   .series-toolbar .button,
   .personal-shortcuts .button { white-space: normal; }
 }
+.activity-card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+  margin-top: .55rem;
+}
+.activity-label-major, .activity-label-minor, .activity-label-owned {
+  max-width: 100%;
+  padding: .15rem .5rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.activity-label-major { color: #293b85; background: #edf0ff; }
+.activity-label-minor { color: #404b5c; border-color: #d6ddea; background: #fff; }
+.activity-label-owned { color: #165339; border-color: #a8d5bf; background: #e7f6ed; border-radius: 5px; }

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zaihandazi/activity_interactions.dart';
+import 'package:zaihandazi/activity_text.dart';
 import 'package:zaihandazi/auth.dart';
 import 'package:zaihandazi/main.dart';
 import 'package:zaihandazi/social_service.dart';
@@ -18,6 +19,43 @@ http.Response jsonResponse(String body, int status) => http.Response(
 );
 
 void main() {
+  testWidgets('activity labels distinguish category and ownership', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: ActivityListTags(
+            data: {
+              'cover_category_code': 'sports',
+              'cover_subcategory_code': 'football',
+              'major_category_name': '运动健身',
+              'major_category_name_en_us': 'Sports',
+            },
+            category: 'Football',
+            owned: true,
+          ),
+        ),
+      ),
+    );
+    final major = find
+        .ancestor(of: find.text('Sports'), matching: find.byType(Container))
+        .first;
+    final minor = find
+        .ancestor(of: find.text('Football'), matching: find.byType(Container))
+        .first;
+    final owned = find
+        .ancestor(of: find.text('Your event'), matching: find.byType(Container))
+        .first;
+    final colors = [major, minor, owned]
+        .map(
+          (tag) =>
+              (tester.widget<Container>(tag).decoration as BoxDecoration).color,
+        )
+        .toSet();
+    expect(colors, hasLength(3));
+  });
+
   testWidgets('my activities keeps its list and offset while refreshing', (
     tester,
   ) async {

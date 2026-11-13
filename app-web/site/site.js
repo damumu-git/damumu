@@ -254,6 +254,15 @@ function cover(item, className = "") {
   return image;
 }
 
+function appendActivityLabels(labels, item, minor = item.category_name) {
+  const major = item.major_category_name || categories.find((category) => category.code === item.cover_category_code)?.name_zh_cn;
+  if (major) labels.append(node("span", major, "activity-label-major"));
+  if (minor && (!major || item.cover_category_code !== item.cover_subcategory_code))
+    labels.append(node("span", minor, "activity-label-minor"));
+  if (session?.user.id && session.user.id === item.organizer_user_id)
+    labels.append(node("span", "我发布的", "activity-label-owned"));
+}
+
 function libraryRow(item, { href, categoryName, state, summary, action }) {
   const entry = node("li", null, "library-row");
   const link = actionLink("", href, "library-item-link");
@@ -261,7 +270,7 @@ function libraryRow(item, { href, categoryName, state, summary, action }) {
   thumbnail.append(cover(item));
   const body = node("div", null, "library-body");
   const labels = node("div", null, "library-labels");
-  if (categoryName) labels.append(node("span", categoryName, "library-category"));
+  appendActivityLabels(labels, item, categoryName);
   if (state) labels.append(node("span", state, "library-state"));
   const details = [item.starts_at && time(item.starts_at), area(item)].filter(Boolean);
   body.append(node("h3", item.title));
@@ -294,20 +303,8 @@ function card(item) {
   thumbnail.href = eventLink(item.id);
   thumbnail.setAttribute("aria-label", item.title);
   thumbnail.append(cover(item));
-  if (item.category_name) {
-    const badge = node("span", null, "tag");
-    const icon = uploadedImage(item.category_icon_url);
-    if (icon) {
-      const image = node("img");
-      image.alt = "";
-      image.src = icon;
-      image.addEventListener("error", () => image.remove(), { once: true });
-      badge.append(image);
-    } else if (item.category_icon)
-      badge.append(node("span", item.category_icon));
-    badge.append(node("span", item.category_name));
-    thumbnail.append(badge);
-  }
+  const labels = node("div", null, "activity-card-labels");
+  appendActivityLabels(labels, item);
   const heading = node("h3");
   const link = node("a", item.title);
   link.href = thumbnail.href;
@@ -319,6 +316,7 @@ function card(item) {
   );
   article.append(
     thumbnail,
+    ...(labels.childElementCount ? [labels] : []),
     heading,
     node(
       "p",

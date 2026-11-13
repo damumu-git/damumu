@@ -438,7 +438,7 @@ export function createCommunityPages(ui) {
             node("strong", event.title),
             node("span", [hour.format(start), area(event)].filter(Boolean).join(" · "), "meta"),
           );
-          const major = names.get(event.cover_category_code);
+          const major = event.major_category_name || names.get(event.cover_category_code);
           const minor = event.category_name || names.get(event.cover_subcategory_code);
           const labels = (event.cover_category_code === event.cover_subcategory_code && minor
             ? [minor] : [major, minor]).filter(Boolean);
