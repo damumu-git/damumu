@@ -20,22 +20,26 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
   function cards(content, items) {
     const grid = node("div", null, "series-grid");
     for (const item of items) {
-      const entry = node("article", null, "activity-section");
-      if (item.region_name) entry.append(node("p", item.region_name, "meta"));
-      entry.append(node("h2", item.title), node("p", item.description), actionLink("查看系列", link(item)));
+      const entry = node("article", null, "activity-section series-card");
+      const copy = node("div", null, "series-card-copy");
+      if (item.region_name) copy.append(node("p", item.region_name, "meta"));
+      copy.append(node("h2", item.title), node("p", item.description, "detail-copy"));
+      entry.append(copy, actionLink("查看系列", link(item)));
       grid.append(entry);
     }
     content.append(items.length ? grid : node("p", "这个地区还没有活动系列。", "meta"));
   }
   async function index() {
     const content = show("活动系列", "workspace-page series-page");
+    const toolbar = node("div", null, "series-toolbar");
     const actions = node("div", null, "section-nav");
     actions.append(actionLink("搭慕周末", "/series/damu-weekend", "button primary"),
       actionLink("创建活动系列", "/series/new"), actionLink("组织者招募与场地合作", "/series/participate"));
-    const label = node("label", "按地区浏览 ");
+    const label = node("label", "按地区浏览", "series-region");
     const select = node("select");
     label.append(select);
-    content.append(actions, label);
+    toolbar.append(actions, label);
+    content.append(toolbar);
     const region = new URLSearchParams(location.search).get("region") || "";
     if (region) actions.append(actionLink("查看地区专题", "/places/" + encodeURIComponent(region)));
     try {
@@ -48,7 +52,7 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
   }
   function create(proposal) {
     requireLogin(async () => {
-      const content = show(proposal ? "组织者招募与场地合作" : "创建活动系列", "reading series-page");
+      const content = show(proposal ? "组织者招募与场地合作" : "创建活动系列", "editor-page series-page");
       const kind = proposal
         ? '<label>合作类型<select name="kind"><option value="organizer">成为组织者</option><option value="venue">场地合作</option></select></label>'
         : '<label>系列名称<input name="title" required minlength="2" maxlength="100"></label>';
@@ -82,20 +86,23 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
       if (!content.isConnected) return;
       content.querySelector("h1").textContent = item.title;
       document.title = item.title + " · 搭慕";
-      const intro = node("section", null, "activity-section");
-      if (item.region_name) intro.append(node("p", item.region_name, "meta"));
-      intro.append(node("p", item.description, "detail-copy"));
+      const intro = node("section", null, "activity-section series-intro");
+      const summary = node("div", null, "series-intro-summary");
+      if (item.region_name) summary.append(node("p", item.region_name, "meta"));
+      summary.append(node("p", item.description, "detail-copy"));
       const actions = node("div", null, "section-nav");
       if (item.guide_slug) actions.append(actionLink(item.guide_title, "/guides/" + item.guide_slug));
       if (item.owner_id) actions.append(actionLink("组织者主页", "/people/" + item.owner_id));
       if (item.can_manage) actions.append(actionLink("添加已发布活动", link(item) + "/manage", "button primary"),
         actionLink("发布系列活动", "/activities/new?series=" + item.id));
-      intro.append(actions);
+      if (actions.children.length) summary.append(actions);
+      const participation = node("div", null, "series-intro-participation");
+      intro.append(summary, participation);
       const interestSummary = (row) => "已有 " + row.interest_count + " 人登记时段" +
         (row.interest_count ? " · 周六 " + row.saturday_count + " · 周日 " + row.sunday_count + " · 均可 " + row.either_count : "");
       const count = node("p", interestSummary(item), "meta");
       if (session()) {
-        const editor = form(intro, '<label>方便的周末时段<select name="interestSlot"></select></label><label class="series-subscribe"><input type="checkbox" name="subscribed"> 订阅新活动的站内通知</label>', async (values) => {
+        const editor = form(participation, '<label>方便的周末时段<select name="interestSlot"></select></label><label class="series-subscribe"><input type="checkbox" name="subscribed"> 订阅新活动的站内通知</label>', async (values) => {
           await request("/series/" + item.id + "/membership", { auth: true, method: "PUT",
             data: { subscribed: Boolean(values.subscribed), interestSlot: values.interestSlot || null } });
           const updated = await request("/series/" + encodeURIComponent(key), { auth: true });
@@ -106,8 +113,8 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
         for (const [value, label] of slots) editor.elements.interestSlot.append(new Option(label, value));
         editor.elements.interestSlot.value = item.interest_slot || "";
         editor.elements.subscribed.checked = item.subscribed;
-      } else intro.append(button("登录后订阅或登记意向", () => requireLogin(() => {})));
-      intro.append(count);
+      } else participation.append(button("登录后订阅或登记意向", () => requireLogin(() => {})));
+      participation.append(count);
       content.append(intro);
       eventsSection(content, events, false);
       eventsSection(content, events, true);
@@ -115,7 +122,7 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
   }
   function manage(key) {
     requireLogin(async () => {
-      const content = show("添加活动到系列", "reading series-page");
+      const content = show("添加活动到系列", "editor-page series-page");
       try {
         const [{ item, events }, mine] = await Promise.all([
           request("/series/" + encodeURIComponent(key), { auth: true }),
@@ -139,7 +146,7 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
     });
   }
   async function recap(id, edit = false) {
-    const content = show(edit ? "编辑活动回顾" : "活动回顾", "reading series-page");
+    const content = show(edit ? "编辑活动回顾" : "活动回顾", "editor-page series-page");
     try {
       const item = await request(endpoint(id) + "/story");
       const actions = node("div", null, "section-nav");

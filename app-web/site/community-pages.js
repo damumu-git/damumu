@@ -305,7 +305,7 @@ export function createCommunityPages(ui) {
 
   function followButton(id, onChange) {
     let following = false;
-    const trigger = button("关注组织者", () =>
+    const trigger = button("关注", () =>
       requireLogin(async () => {
         trigger.disabled = true;
         try {
@@ -316,7 +316,7 @@ export function createCommunityPages(ui) {
           update(state.following);
           onChange?.();
         } catch (error) {
-          showError(trigger.closest("section"), error);
+          showError(trigger.closest("main, section") ?? trigger.parentElement, error);
         } finally {
           trigger.disabled = false;
         }
@@ -324,7 +324,7 @@ export function createCommunityPages(ui) {
     );
     function update(value) {
       following = value;
-      trigger.textContent = following ? "取消关注" : "关注组织者";
+      trigger.textContent = following ? "取消关注" : "关注";
       trigger.setAttribute("aria-pressed", String(following));
     }
     if (session())
@@ -332,22 +332,6 @@ export function createCommunityPages(ui) {
         .then((state) => update(state.following))
         .catch(() => {});
     return trigger;
-  }
-
-  function following() {
-    return requireLogin(async () => {
-      const content = show("关注动态", "workspace-page");
-      content.append(actionLink("发现活动小组", "/groups"));
-      try {
-        eventGrid(
-          content,
-          await request("/web/following", { auth: true }),
-          "关注组织者或加入小组后，他们的新活动会显示在这里。",
-        );
-      } catch (error) {
-        showError(content, error);
-      }
-    });
   }
 
   async function calendar() {
@@ -541,7 +525,6 @@ export function createCommunityPages(ui) {
     if (path === "/interests/new") return create("intents");
     if (path === "/groups") return catalog("groups");
     if (path === "/groups/new") return create("groups");
-    if (path === "/following") return following();
     if (path === "/calendar") return calendar();
     if (path === "/map") return mapPage();
     const item = /^\/(interests|groups)\/([0-9a-f-]{36})$/i.exec(path);

@@ -441,11 +441,13 @@ class EventService {
     int limit = 20,
     String? cursor,
     bool recommended = false,
+    String? followingToken,
   }) async {
     final query = <String, String>{
       'limit': limit.toString(),
       'cursor': ?cursor,
       if (recommended) 'sort': 'recommended',
+      if (followingToken != null) 'following': 'true',
     };
     if (latitude != null && longitude != null) {
       query.addAll({
@@ -457,7 +459,12 @@ class EventService {
     if (city != null && city.isNotEmpty) query['city'] = city;
     if (district != null && district.isNotEmpty) query['district'] = district;
     final response = await http
-        .get(Uri.parse('$_apiBase/activities').replace(queryParameters: query))
+        .get(
+          Uri.parse('$_apiBase/activities').replace(queryParameters: query),
+          headers: followingToken == null
+              ? null
+              : {'Authorization': 'Bearer $followingToken'},
+        )
         .timeout(const Duration(seconds: 10));
     final decoded = _decodeResponse(response, '活动暂时无法加载，请稍后再试');
     final data = decoded['data'];

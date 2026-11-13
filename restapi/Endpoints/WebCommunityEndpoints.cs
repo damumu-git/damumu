@@ -189,8 +189,8 @@ public static class WebCommunityEndpoints
         {
             var userId = ApiSupport.RequireUserId(context);
             if (userId == targetId) throw new ApiException(400, "cannot_follow_self", "无法关注自己");
-            if (!await db.ScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM app_user WHERE id=@targetId AND status='active' AND deleted_at IS NULL)",
-                new { targetId }, ct)) throw Missing();
+            if (!await db.ScalarAsync<bool>("SELECT direct_contact_visible(@userId,@targetId)",
+                new { userId, targetId }, ct)) throw Missing();
             await db.ExecuteAsync("INSERT INTO web_follow(user_id,target_id) VALUES (@userId,@targetId) ON CONFLICT DO NOTHING",
                 new { userId, targetId }, ct);
             return ApiSupport.Ok(new { following = true });

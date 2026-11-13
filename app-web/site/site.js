@@ -6,6 +6,7 @@ import { dateQuery } from "/seoul-dates.js";
 import { setupSchedulePicker } from "/date-picker.js";
 import { createDirectContact } from "/direct-contact.js";
 import { createActivitySeries } from "/activity-series.js";
+import { installSelectMenus } from "/select-menu.js";
 const apiRoot = "https://api.damumu.com";
 const appStoreLinks = [
   { label: "App Store", url: "" },
@@ -371,6 +372,8 @@ async function loadFeed(append = false) {
   });
   const { city, district, ward } = browseFilters.values();
   const range = browseFilters.range();
+  const following = location.pathname === "/explore" && new URLSearchParams(location.search).get("feed") === "following";
+  if (following) params.set("following", "true");
   for (const [key, value] of Object.entries({
     city,
     district: ward || district,
@@ -394,6 +397,7 @@ async function loadFeed(append = false) {
   try {
     const page = await request("/activities?" + params, {
       signal: controller.signal,
+      auth: following,
     });
     if (feedRequest !== controller) return;
     cards.append(...page.items.map(card));
@@ -401,7 +405,9 @@ async function loadFeed(append = false) {
     cursor = page.hasMore ? page.nextCursor : null;
     status.textContent = feedCount
       ? "已展示 " + feedCount + " 场活动"
-      : "暂时没有符合条件的活动。试试其他城市、类别或关键词。";
+      : following
+        ? "你关注的人暂时没有符合筛选条件的活动。可以调整筛选，或到活动详情关注组织者。"
+        : "暂时没有符合条件的活动。试试其他城市、类别或关键词。";
   } catch (error) {
     if (feedRequest !== controller) return;
     status.classList.add("error");
@@ -1300,16 +1306,17 @@ async function showEdit(id) {
   }
 }
 async function showSettings() {
-  const content = show("个人资料", "account-page personal-page");
+  const content = show("个人资料", "settings-page personal-page");
   const user = session.user;
   content.append(memberPages.accountLinks());
   const marker = dialogRequest;
   const loading = node("p", "正在加载个人资料…", "meta");
   content.append(loading);
-  const [account, profile] = await Promise.all([
+  const [account, profile, member] = await Promise.all([
     request("/me", { auth: true }).catch(() => null),
     request("/users/" + encodeURIComponent(user.id) + "/public-profile", { auth: true })
       .catch(() => null),
+    request("/me/member-profile", { auth: true }).catch(() => null),
     regions.length ? Promise.resolve() : request("/regions")
       .then((catalog) => { regions = catalog; }).catch(() => {}),
   ]);
@@ -1343,69 +1350,109 @@ async function showSettings() {
   }
   info.append(stats);
   const fields = node("dl", null, "activity-facts");
-  let bioValue;
+  const memberFields = new Map();
   const joined = new Date(account?.created_at ?? "");
   const joinedOn = Number.isFinite(joined.valueOf())
     ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "long", timeZone: "Asia/Seoul" }).format(joined)
     : "";
   for (const [label, value] of [
     ["注册邮箱", account?.email ?? user.email],
-    ["所在地区", account && area(account)],
     ["加入日期", joinedOn],
-    ["公开简介", profile?.bio],
+    ["公开简介", member?.bio ?? profile?.bio],
+    ["常驻区域", member && [member.home_parent_name, member.home_region_name].filter(Boolean).join(" · ")],
   ]) {
     const entry = node("div");
     const description = node("dd", value || "—");
-    if (label === "公开简介") bioValue = description;
+    memberFields.set(label, description);
     entry.append(node("dt", label), description);
     fields.append(entry);
   }
   info.append(fields);
-  content.append(info);
+  const layout = node("div", null, "settings-layout");
+  const summary = node("aside", null, "settings-summary");
+  const editor = node("div", null, "settings-editor");
+  summary.append(info);
+  layout.append(summary, editor);
+  content.append(layout);
 
   const form = node("form", null, "form");
   form.innerHTML =
-    '<h2>编辑资料</h2><label>昵称<input name="nickname" required minlength="2" maxlength="30"></label><button type="submit" class="button primary">保存资料</button>';
-  if (profile) {
-    const label = node("label", "公开简介");
-    const input = node("textarea");
-    input.name = "bio";
-    input.maxLength = 300;
-    input.value = profile.bio ?? "";
-    label.append(input);
-    form.insertBefore(label, $('button[type="submit"]', form));
-  }
+    '<h2>编辑昵称</h2><label>昵称<input name="nickname" required minlength="2" maxlength="30"></label><button type="submit" class="button primary">保存昵称</button>';
   form.elements.nickname.value = session.user.nickname ?? "";
-  content.append(
-    form,
+  const shortcuts = node("div", null, "section-nav personal-shortcuts");
+  shortcuts.append(
+    actionLink("我的关注", "/me/following"),
+    actionLink("我的收藏", "/me/saved"),
     actionLink("查看公开主页", "/people/" + user.id),
     button("退出登录", () => {
       setSession(null);
       location.assign("/");
     }),
   );
+  summary.append(shortcuts);
+  editor.append(form);
   handleForm(form, content, async (values) => {
     const updated = await request("/me", {
       method: "PATCH",
       auth: true,
       data: { nickname: values.nickname.trim() },
     });
-    if (values.bio !== undefined)
-      await request("/me/web-bio", {
-        method: "PUT",
-        auth: true,
-        data: { bio: values.bio },
-      });
     setSession({
       ...session,
       user: { ...session.user, nickname: updated.nickname },
     });
     $("h2", identity).textContent = updated.nickname;
     renderAvatar(avatar, session.user);
-    if (values.bio !== undefined) bioValue.textContent = values.bio.trim() || "—";
     $(".notice", content)?.remove();
-    content.append(node("p", "资料已保存。", "notice"));
+    form.append(node("p", "昵称已保存。", "notice"));
   });
+  if (member) {
+    const details = node("form", null, "form");
+    details.innerHTML = '<h2>公开主页资料</h2><label>简介（选填）<textarea name="bio" maxlength="300" rows="3"></textarea></label><label>常驻市／道（选填）<select name="city"></select></label><label>常驻市／郡／区（选填）<select name="district"></select></label><label class="check profile-visibility"><input type="checkbox" name="show">在公开主页显示常驻区域</label><p class="meta" role="status"></p><button type="submit" class="button primary">保存公开资料</button>';
+    const { bio, city, district, show: visible } = details.elements;
+    const regionStatus = $("[role=status]", details);
+    const selected = regions.find((region) => region.code === member.home_region_code);
+    bio.value = member.bio ?? "";
+    city.append(new Option("不填写", ""));
+    for (const region of regions.filter((item) => item.level === 1))
+      city.append(new Option(region.name_zh_cn, region.code));
+    city.value = selected?.parent_code ?? selected?.code ?? "";
+    function syncRegion() {
+      district.replaceChildren(new Option("仅填写市／道", ""));
+      for (const region of regions.filter((item) => item.level === 2 && item.parent_code === city.value))
+        district.append(new Option(region.name_zh_cn, region.code));
+      district.disabled = !city.value || district.options.length === 1;
+      visible.disabled = !city.value;
+      if (visible.disabled) visible.checked = false;
+    }
+    syncRegion();
+    if (selected?.level === 2) district.value = selected.code;
+    visible.checked = !!city.value && member.show_home_region;
+    city.addEventListener("change", syncRegion);
+    regionStatus.textContent = visible.checked ? "当前公开可见。" : "关闭时仅自己可见。";
+    if (!regions.length) {
+      city.disabled = true;
+      regionStatus.textContent = "地区列表暂时无法加载。仍可更新简介。";
+    }
+    form.after(details);
+    handleForm(details, details, async (values) => {
+      const updated = await request("/me/member-profile", { method: "PUT", auth: true, data: {
+        bio: values.bio,
+        homeRegionCode: regions.length ? district.value || city.value || null : member.home_region_code,
+        showHomeRegion: regions.length ? visible.checked : member.show_home_region,
+      }});
+      regionStatus.textContent = !updated.home_region_code ? "已保存 · 未填写常驻区域"
+        : updated.show_home_region ? "已保存 · 常驻区域公开可见" : "已保存 · 常驻区域仅自己可见";
+      memberFields.get("公开简介").textContent = updated.bio || "—";
+      if (regions.length) {
+        const label = [city.value && city.selectedOptions[0].text, district.value && district.selectedOptions[0].text]
+          .filter(Boolean).join(" · ");
+        memberFields.get("常驻区域").textContent = label || "—";
+      }
+    });
+  } else {
+    content.append(node("p", "公开主页资料暂时无法加载。", "meta"));
+  }
 }
 
 async function showPerson(id) {
@@ -1417,16 +1464,24 @@ async function showPerson(id) {
       { auth: true },
     );
     if (marker !== dialogRequest) return;
-    $("h1", content).textContent = user.nickname ?? "搭慕用户";
+    const heading = $("h1", content);
+    heading.textContent = user.nickname ?? "搭慕用户";
+    const layout = node("div", null, "public-profile-layout");
+    const identity = node("section", null, "activity-section public-profile-summary");
+    const timeline = node("div", null, "public-profile-activity");
+    layout.append(identity, timeline);
+    content.append(layout);
     const url = uploadedImage(user.avatar_url);
     if (url) {
       const avatar = node("img", null, "profile-avatar");
       avatar.src = url;
       avatar.alt = "";
-      content.prepend(avatar);
+      identity.append(avatar);
     }
-    content.append(node("p", "获赞 " + (user.like_count ?? 0), "meta"));
-    if (user.bio) content.append(node("p", user.bio, "detail-copy"));
+    identity.append(heading, node("p", "获赞 " + (user.like_count ?? 0), "meta"));
+    if (user.bio) identity.append(node("p", user.bio, "detail-copy"));
+    if (user.home_region_name)
+      identity.append(node("p", "常驻 · " + [user.home_parent_name, user.home_region_name].filter(Boolean).join(" · "), "profile-region"));
     const tags = node("div", null, "profile-tags");
     for (const tag of user.positive_tags ?? []) {
       const label = {
@@ -1440,15 +1495,16 @@ async function showPerson(id) {
       }[tag.tag_code];
       if (label) tags.append(node("span", label + " ×" + tag.count));
     }
-    if (tags.children.length) content.append(tags);
+    if (tags.children.length) identity.append(tags);
+    const actions = node("div", null, "section-nav");
     if (id !== session?.user.id) {
       const contactActions = node("span", null, "contact-profile-actions");
       const refresh = () => directContact.profileActions(id, content, contactActions);
-      content.append(communityPages.followButton(id, refresh), contactActions);
+      actions.append(communityPages.followButton(id, refresh), contactActions);
       if (session) refresh();
     }
     if (id !== session?.user.id)
-      content.append(
+      actions.append(
         button(
           "屏蔽用户",
           () =>
@@ -1469,20 +1525,21 @@ async function showPerson(id) {
         ),
       );
     if (id !== session?.user.id)
-      content.append(
+      actions.append(
         button(
           "举报用户",
           () => requireLogin(() => showReport("user", id, id)),
           "text-button",
         ),
       );
+    if (actions.children.length) identity.append(actions);
+    timeline.append(node("h2", "公开发起的活动"));
     if (user.activities?.length) {
-      content.append(node("h2", "公开发起的活动"));
       const grid = node("div", null, "cards");
       grid.append(...user.activities.map(card));
-      content.append(grid);
-    }
-    activitySeries.organizer(id, content);
+      timeline.append(grid);
+    } else timeline.append(node("p", "暂时没有公开活动。", "meta"));
+    activitySeries.organizer(id, timeline);
   } catch (error) {
     if (marker === dialogRequest) showError(content, error);
   }
@@ -1529,14 +1586,17 @@ async function showGuides(slug) {
     const guide = await request("/guides/" + encodeURIComponent(slug));
     $("h1", content).textContent = guide.title;
     document.title = guide.title + " · 搭慕 DAMU";
-    content.append(
+    const layout = node("div", null, "guide-reading-layout");
+    const copy = node("article", null, "activity-section guide-reading-copy");
+    const sidebar = node("aside", null, "activity-section guide-reading-sidebar");
+    copy.append(
       node("p", guide.summary, "meta"),
       cover({ cover_category_code: guide.cover_category }, "detail-cover"),
     );
     for (const paragraph of guide.body
       .split(/\r?\n/)
       .filter((line) => line.trim())) {
-      content.append(node("p", paragraph, "detail-copy"));
+      copy.append(node("p", paragraph, "detail-copy"));
     }
     if (guide.source_url) {
       const source = actionLink(
@@ -1546,13 +1606,18 @@ async function showGuides(slug) {
       );
       source.rel = "noopener noreferrer";
       source.target = "_blank";
-      content.append(source);
+      copy.append(source);
     }
-    content.append(
+    sidebar.append(node("h2", "周末指南"));
+    const actions = node("div", null, "section-nav");
+    actions.append(
       memberPages.bookmark("guide", guide.slug),
       actionLink("发现活动", "/explore"),
       actionLink("返回指南", "/guides", "text-button"),
     );
+    sidebar.append(actions);
+    layout.append(copy, sidebar);
+    content.append(layout);
   } catch (error) {
     showError(content, error);
     content.append(actionLink("返回指南", "/guides"));
@@ -1613,6 +1678,7 @@ function showDownload() {
 
 async function route() {
   const path = location.pathname;
+  if (path === "/following") return location.replace("/explore?feed=following");
   for (const link of document.querySelectorAll(".masthead nav a, #my-menu a")) {
     if (link.pathname === path || path.startsWith(link.pathname + "/"))
       link.setAttribute("aria-current", "page");
@@ -1639,8 +1705,24 @@ async function route() {
   if (path === "/" || path === "/explore") {
     browse.hidden = false;
     if (path === "/explore") {
-      $("#filters").append(actionLink("清除筛选", "/explore", "text-button"));
+      const following = new URLSearchParams(location.search).get("feed") === "following";
+      if (following && !session) return requireLogin(() => {});
+      $("#filters").append(actionLink("清除筛选", following ? "/explore?feed=following" : "/explore", "text-button"));
       $(".toolbar").append(actionLink("活动日历", "/calendar"));
+      if (session) {
+        const tabs = node("nav", null, "section-nav discover-feed-tabs");
+        tabs.setAttribute("aria-label", "活动来源");
+        for (const [label, href, active] of [["全部活动", "/explore", !following], ["我关注的", "/explore?feed=following", following]]) {
+          const tab = actionLink(label, href, "filter-pill");
+          if (active) tab.setAttribute("aria-current", "page");
+          tabs.append(tab);
+        }
+        $("#gallery").before(tabs);
+        if (following) {
+          $("#gallery-title").textContent = "关注的人发布的活动";
+          $(".toolbar").append(actionLink("管理关注", "/me/following"));
+        }
+      }
       $(".hero-art").hidden = true;
       $(".hero").classList.add("explore-hero");
       $("#hero-title").textContent = "发现活动";
@@ -1775,6 +1857,7 @@ function syncFilters() {
   if (location.pathname !== "/explore") return;
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries({
+    feed: new URLSearchParams(location.search).get("feed"),
     q: query,
     ...browseFilters.values(),
     maxPrice: $("#max-price").value,
@@ -1842,6 +1925,7 @@ const memberPages = createMemberPages({
   time,
   libraryRow,
   libraryEventState,
+  renderAvatar,
   card,
   setSession,
   session: () => session,
@@ -1894,4 +1978,5 @@ document.addEventListener("visibilitychange", () => {
 window.setInterval(() => {
   if (!document.hidden) refreshUnread();
 }, 45_000);
+installSelectMenus();
 route();

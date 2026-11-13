@@ -270,16 +270,24 @@ public static class EventEndpoints
         api.MapGet("/users/{id:guid}/public-profile", async (
             Guid id, Guid? eventId, HttpContext context, Db db, CancellationToken ct) =>
         {
+            context.Response.Headers.CacheControl = "private, no-store";
             var viewerId = ApiSupport.GetOptionalUserId(context);
             var profile = await db.QueryOneAsync(
                 """
                 SELECT u.id, COALESCE(up.nickname, '用户') AS nickname, COALESCE(member_avatar.image_url, up.avatar_url) AS avatar_url, up.web_public_bio AS bio,
-                       (SELECT count(*) FROM endorsement en WHERE en.target_user_id=u.id) AS like_count
+                       (SELECT count(*) FROM endorsement en WHERE en.target_user_id=u.id) AS like_count,
+                       home.name_zh_cn AS home_region_name, home.name_ko_kr AS home_region_name_ko_kr,
+                       home.name_en_us AS home_region_name_en_us,
+                       parent.name_zh_cn AS home_parent_name, parent.name_ko_kr AS home_parent_name_ko_kr,
+                       parent.name_en_us AS home_parent_name_en_us
                 FROM app_user u
                 LEFT JOIN user_profile up ON up.user_id=u.id
                 LEFT JOIN system_avatar member_avatar ON up.avatar_url='system:'||member_avatar.id::text
+                LEFT JOIN administrative_region home ON up.show_home_region AND home.code=up.home_region_code AND home.is_active
+                LEFT JOIN administrative_region parent ON parent.code=home.parent_code AND parent.is_active
                 WHERE u.id=@id AND u.status='active' AND u.deleted_at IS NULL
-                """, new { id }, ct);
+                  AND (@viewerId::uuid IS NULL OR @viewerId=u.id OR direct_contact_visible(@viewerId,u.id))
+                """, new { id, viewerId }, ct);
             if (profile is null)
                 throw new ApiException(404, "user_not_found", "用户不存在");
             var positiveTags = await db.QueryAsync(

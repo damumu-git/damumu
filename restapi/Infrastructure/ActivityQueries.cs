@@ -120,6 +120,10 @@ public static class ActivityQueries
                   AND e.visibility='public'
                   AND e.status IN ('published', 'full')
                   AND (s.ends_at IS NULL OR s.ends_at > now())
+                  AND (@followingUserId::uuid IS NULL OR (
+                    EXISTS (SELECT 1 FROM web_follow f WHERE f.user_id=@followingUserId AND f.target_id=e.organizer_user_id)
+                    AND direct_contact_visible(@followingUserId,e.organizer_user_id)
+                  ))
                   AND (@city IS NULL OR e.city_code=@city)
                   AND (@district IS NULL OR e.district_code=@district OR municipality.code=@district)
                   AND (@categoryId IS NULL OR e.category_id=@categoryId OR c.parent_id=@categoryId)

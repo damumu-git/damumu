@@ -12,6 +12,7 @@ export function createMemberPages(ui) {
     time,
     libraryRow,
     libraryEventState,
+    renderAvatar,
     card,
     setSession,
     session,
@@ -37,7 +38,7 @@ export function createMemberPages(ui) {
   function memberPage(path, title, render) {
     pages.set(path, () =>
       requireLogin(async () => {
-        const content = show(title, "workspace-page");
+        const content = show(title, path.startsWith("/settings/") ? "settings-page" : "workspace-page");
         try {
           await render(content);
         } catch (error) {
@@ -45,6 +46,16 @@ export function createMemberPages(ui) {
         }
       }),
     );
+  }
+
+  function settingsCard(content, title) {
+    const layout = node("div", null, "settings-layout");
+    const menu = accountLinks();
+    const card = node("section", null, "activity-section settings-card");
+    card.append(node("h2", title));
+    layout.append(menu, card);
+    content.append(layout);
+    return card;
   }
 
   function bookmark(kind, target) {
@@ -88,6 +99,64 @@ export function createMemberPages(ui) {
     }
     return trigger;
   }
+
+  memberPage("/me/following", "我的关注", async (content) => {
+    content.append(actionLink("看关注动态", "/explore?feed=following", "button primary"),
+      actionLink("我的收藏", "/me/saved", "button ghost"));
+    const list = node("ul", null, "following-people");
+    content.append(list);
+    const more = button("加载更多", () => load(), "button ghost");
+    more.hidden = true;
+    content.append(more);
+    let offset = 0;
+    async function load() {
+      more.disabled = true;
+      try {
+        const page = await request("/me/following?offset=" + offset, { auth: true });
+        for (const user of page.items) {
+          const entry = node("li", null, "following-person");
+          const avatar = node("span", null, "account-avatar");
+          avatar.setAttribute("aria-hidden", "true");
+          renderAvatar(avatar, { avatarImageUrl: user.avatar_url, nickname: user.nickname });
+          const info = node("div");
+          info.append(actionLink(user.nickname, "/people/" + user.id));
+          if (user.mutual) info.append(node("span", "互相关注", "profile-region"));
+          if (user.bio) info.append(node("p", user.bio, "meta"));
+          const remove = button("取消关注", async () => {
+            if (more.disabled) return;
+            more.disabled = true;
+            remove.disabled = true;
+            try {
+              await request("/web/follows/" + user.id, { auth: true, method: "DELETE" });
+              entry.remove();
+              offset--;
+              if (!list.children.length && !more.hidden) await load();
+              if (!list.children.length && more.hidden) empty.hidden = false;
+            } catch (error) {
+              showError(content, error);
+            } finally {
+              more.disabled = false;
+              remove.disabled = false;
+            }
+          }, "button ghost");
+          entry.append(avatar, info, remove);
+          list.append(entry);
+        }
+        offset += page.items.length;
+        more.hidden = !page.hasMore;
+        empty.hidden = !!list.children.length;
+      } catch (error) {
+        showError(content, error);
+        more.hidden = false;
+      } finally {
+        more.disabled = false;
+      }
+    }
+    const empty = node("p", "还没有关注。可以从活动详情进入组织者主页，关注感兴趣的人。", "meta");
+    empty.hidden = true;
+    content.append(empty);
+    await load();
+  });
 
   function addList(content, entries, render, empty) {
     const list = node("ul", null, "detail-list");
@@ -217,8 +286,8 @@ export function createMemberPages(ui) {
   });
 
   memberPage("/settings/notifications", "通知偏好", async (content) => {
-    content.append(
-      accountLinks(),
+    const settings = settingsCard(content, "通知中心");
+    settings.append(
       node("p", "设置本浏览器打开通知中心时的默认视图。", "meta"),
     );
     const input = node("input");
@@ -229,15 +298,18 @@ export function createMemberPages(ui) {
     );
     const label = node("label", " 默认仅看未读");
     label.prepend(input);
-    content.append(label, actionLink("打开通知中心", "/notifications"));
+    const actions = node("div", null, "section-nav");
+    actions.append(actionLink("打开通知中心", "/notifications"));
+    settings.append(label, actions);
   });
 
   memberPage("/settings/account", "账号设置", async (content) => {
-    content.append(
-      accountLinks(),
+    const settings = settingsCard(content, "登录账号");
+    settings.append(
       node("p", session().user.email ?? "第三方账号", "meta"),
     );
-    content.append(
+    const actions = node("div", null, "section-nav");
+    actions.append(
       actionLink(
         "了解账号注销",
         "https://www.damumu.com/account-deletion.html",
@@ -252,17 +324,17 @@ export function createMemberPages(ui) {
         }),
       ),
     );
+    settings.append(actions);
   });
 
   memberPage("/settings/privacy", "隐私设置", async (content) => {
-    content.append(
-      accountLinks(),
-      actionLink("阅读隐私政策", "/privacy"),
-      node("h2", "已屏蔽用户"),
-    );
+    const settings = settingsCard(content, "已屏蔽用户");
+    const actions = node("div", null, "section-nav");
+    actions.append(actionLink("编辑常驻区域可见性", "/settings/profile"), actionLink("阅读隐私政策", "/privacy"));
+    settings.append(actions);
     const blocked = await request("/me/blocks", { auth: true });
     addList(
-      content,
+      settings,
       blocked,
       (row, item) => {
         row.append(

@@ -58,6 +58,7 @@ internal static class DatabaseChecks
             command.Parameters.Add("district", NpgsqlDbType.Text).Value = (object?)district ?? DBNull.Value;
             command.Parameters.Add("maxPrice", NpgsqlDbType.Numeric).Value = DBNull.Value;
             command.Parameters.Add("categoryId", NpgsqlDbType.Uuid).Value = DBNull.Value;
+            command.Parameters.Add("followingUserId", NpgsqlDbType.Uuid).Value = DBNull.Value;
             foreach (var name in new[] { "from", "to" }) command.Parameters.Add(name, NpgsqlDbType.TimestampTz).Value = DBNull.Value;
             command.Parameters.AddWithValue("hasGeo", false);
             command.Parameters.AddWithValue("latitude", 0d);
