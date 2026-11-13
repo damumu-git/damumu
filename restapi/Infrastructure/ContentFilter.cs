@@ -28,6 +28,7 @@ public sealed partial class ContentFilter(Db db)
             CancelEventRequest input => [input.Reason],
             SendMessageRequest input => [input.Body],
             ContactRequestInput input => [input.Body],
+            FriendEndpoints.FriendRequestInput input => [input.Body],
             ActivitySeriesEndpoints.SeriesInput input => [input.Title, input.Description],
             ActivitySeriesEndpoints.RecapInput input => [input.Body],
             ActivitySeriesEndpoints.SeriesProposal input => [input.Body],

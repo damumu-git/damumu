@@ -26,6 +26,7 @@ import 'emoji_picture.dart';
 import 'chat_image.dart';
 import 'event_service.dart';
 import 'direct_contact.dart';
+import 'friends.dart';
 import 'feedback.dart';
 import 'feedback_model.dart';
 import 'l10n.dart';
@@ -5274,6 +5275,7 @@ class _MessagesPageState extends State<MessagesPage> {
   String? _error;
   List<ConversationItem> _conversations = const [];
   List<NotificationItem> _notifications = const [];
+  int _pendingFriends = 0;
   StreamSubscription<RealtimeEvent>? _realtimeSubscription;
   StreamSubscription<void>? _pushSubscription;
   Timer? _refreshTimer;
@@ -5285,6 +5287,7 @@ class _MessagesPageState extends State<MessagesPage> {
       if (event.type == 'message.created' ||
           event.type == 'notification.created' ||
           event.type == 'conversation.removed' ||
+          event.type == 'conversation.changed' ||
           event.type == 'notification.removed' ||
           event.type == 'unread.changed') {
         _scheduleRealtimeRefresh();
@@ -5330,11 +5333,13 @@ class _MessagesPageState extends State<MessagesPage> {
       final results = await Future.wait([
         SocialService.conversations(token),
         SocialService.notifications(token),
+        SocialService.pendingFriendRequests(token).catchError((Object _) => 0),
       ]);
       if (!mounted) return;
       setState(() {
         _conversations = results[0] as List<ConversationItem>;
         _notifications = results[1] as List<NotificationItem>;
+        _pendingFriends = results[2] as int;
         _hasLoadedInbox = true;
         _error = null;
         _loading = false;
@@ -5433,9 +5438,11 @@ class _MessagesPageState extends State<MessagesPage> {
     ],
   );
 
-  int _chatUnread(String type) => _conversations
-      .where((item) => item.type == type)
-      .fold(0, (total, item) => total + item.unreadCount);
+  int _chatUnread(String type) =>
+      (type == 'direct' ? _pendingFriends : 0) +
+      _conversations
+          .where((item) => item.type == type)
+          .fold(0, (total, item) => total + item.unreadCount);
 
   Widget _segmentLabel(String label, int unread) => Row(
     mainAxisSize: MainAxisSize.min,
@@ -5477,6 +5484,15 @@ class _MessagesPageState extends State<MessagesPage> {
               title: Text(context.tr('contactRequests')),
               trailing: const Icon(Icons.chevron_right),
               onTap: _openContactRequests,
+            ),
+          if (_segment == 1)
+            ListTile(
+              leading: const Icon(Icons.person_add_alt_1_outlined),
+              title: Text(context.tr('friendRequests')),
+              trailing: _pendingFriends == 0
+                  ? const Icon(Icons.chevron_right)
+                  : Badge(label: Text('$_pendingFriends')),
+              onTap: () => _openFriendsFromInbox(requests: true),
             ),
           if (items.isEmpty)
             Padding(
@@ -5525,6 +5541,8 @@ class _MessagesPageState extends State<MessagesPage> {
                 ].join(' · '),
                 message: item.lastMessageType == 'event_cancelled'
                     ? '${context.tr('eventCancelled')} · ${context.tr('cancellationReason')}：${item.lastMessageBody ?? ''}'
+                    : item.lastMessageType == 'activity_share'
+                    ? context.tr('friendSharedActivity')
                     : item.lastMessageBody ?? context.tr('chatCreated'),
                 time: _relativeTime(item.lastMessageAt),
                 unread: item.unreadCount,
@@ -5617,6 +5635,10 @@ class _MessagesPageState extends State<MessagesPage> {
       await _openContactRequests();
       return;
     }
+    if (item.type == 'friend_request' || item.type == 'friend_accepted') {
+      await _openFriendsFromInbox(requests: item.type == 'friend_request');
+      return;
+    }
     if (item.type == 'series_event' && item.eventId != null) {
       await _openSeriesEvent(context, item.eventId!);
       if (mounted) await _load(showProgress: false);
@@ -5697,7 +5719,28 @@ class _MessagesPageState extends State<MessagesPage> {
     );
     if (mounted) await _load(showProgress: false);
   }
+
+  Future<void> _openFriendsFromInbox({required bool requests}) async {
+    final token = AuthScope.of(context).token;
+    if (token == null) return;
+    await _openFriends(context, token, requests: requests);
+    if (mounted) await _load(showProgress: false);
+  }
 }
+
+Future<void> _openFriends(
+  BuildContext context,
+  String token, {
+  bool requests = false,
+}) => Navigator.of(context).push<void>(
+  MaterialPageRoute<void>(
+    builder: (pageContext) => FriendsPage(
+      token: token,
+      requests: requests,
+      onOpen: (id, name) => _openDirectChat(pageContext, id, name),
+    ),
+  ),
+);
 
 void _openDirectChat(BuildContext context, String id, String name) {
   Navigator.of(context).push(
@@ -5886,6 +5929,10 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
+  late String _conversationStatus = widget.conversation.status;
+  late bool _isFriend = widget.conversation.isFriend;
+  String? _shareActivityId;
+  String? _shareClientId;
   final _input = TextEditingController();
   bool _loading = true;
   bool _sending = false;
@@ -5903,9 +5950,12 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
     _realtimeSubscription = RealtimeService.instance.events.listen((event) {
-      if ((event.type == 'message.created' ||
-              event.type == 'message.updated') &&
-          event.data['conversationId']?.toString() == widget.conversation.id) {
+      if ((event.type == 'conversation.changed' &&
+              widget.conversation.type == 'direct') ||
+          ((event.type == 'message.created' ||
+                  event.type == 'message.updated') &&
+              event.data['conversationId']?.toString() ==
+                  widget.conversation.id)) {
         _refreshTimer?.cancel();
         _refreshTimer = Timer(
           const Duration(milliseconds: 100),
@@ -5957,6 +6007,12 @@ class _ChatPageState extends State<ChatPage> {
       if (!mounted) return;
       setState(() {
         _messages = [...page.items, ...pending];
+        _conversationStatus = page.status ?? _conversationStatus;
+        _isFriend = page.isFriend ?? _isFriend;
+        if (_conversationStatus != 'active') {
+          _replyingTo = null;
+          _editingMessage = null;
+        }
         _nextCursor = page.nextCursor;
         _hasMore = page.hasMore;
         _loading = false;
@@ -5967,8 +6023,10 @@ class _ChatPageState extends State<ChatPage> {
         widget.conversation.id,
         page.items,
       );
-      for (final message in pending) {
-        unawaited(_deliverPending(message));
+      if (_conversationStatus == 'active') {
+        for (final message in pending) {
+          unawaited(_deliverPending(message));
+        }
       }
       if (page.items.isNotEmpty) {
         await SocialService.readConversation(
@@ -6005,7 +6063,7 @@ class _ChatPageState extends State<ChatPage> {
                         '{count}',
                         '${widget.conversation.memberCount}',
                       )
-                : context.tr('privateChat'),
+                : context.tr(_isFriend ? 'friendChat' : 'privateChat'),
             style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal),
           ),
         ],
@@ -6053,26 +6111,54 @@ class _ChatPageState extends State<ChatPage> {
                     }
                     final viewer = AuthScope.of(context).user;
                     final mine = message.senderUserId == viewer?.id;
-                    final bubble = _Bubble(
-                      key: ValueKey(message.id),
-                      text: message.recalledAt == null
-                          ? message.body
-                          : context.tr('messageRecalled'),
-                      mine: mine,
-                      sender: message.senderName,
-                      pending: message.pending,
-                      failed: message.failed,
-                      recalled: message.recalledAt != null,
-                      mediaUrl: message.mediaThumbnailUrl ?? message.mediaUrl,
-                      mediaPreviewUrl: message.mediaUrl,
-                      replyText: message.replyToMessageId == null
-                          ? null
-                          : (message.replyToBody ??
-                                context.tr('messageRecalled')),
-                      onLongPress: message.pending
-                          ? () => _deliverPending(message)
-                          : () => _showMessageActions(message),
-                    );
+                    final Widget bubble =
+                        message.messageType == 'activity_share' &&
+                            message.recalledAt == null
+                        ? Align(
+                            alignment: mine
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Card(
+                              child: ListTile(
+                                leading: const Icon(Icons.event_outlined),
+                                title: Text(
+                                  message.activityTitle ??
+                                      context.tr('friendActivityUnavailable'),
+                                ),
+                                subtitle: Text(
+                                  context.tr('friendSharedActivity'),
+                                ),
+                                onTap: message.activityId == null
+                                    ? null
+                                    : () => _openSeriesEvent(
+                                        context,
+                                        message.activityId!,
+                                      ),
+                                onLongPress: () => _showMessageActions(message),
+                              ),
+                            ),
+                          )
+                        : _Bubble(
+                            key: ValueKey(message.id),
+                            text: message.recalledAt == null
+                                ? message.body
+                                : context.tr('messageRecalled'),
+                            mine: mine,
+                            sender: message.senderName,
+                            pending: message.pending,
+                            failed: message.failed,
+                            recalled: message.recalledAt != null,
+                            mediaUrl:
+                                message.mediaThumbnailUrl ?? message.mediaUrl,
+                            mediaPreviewUrl: message.mediaUrl,
+                            replyText: message.replyToMessageId == null
+                                ? null
+                                : (message.replyToBody ??
+                                      context.tr('messageRecalled')),
+                            onLongPress: message.pending
+                                ? () => _deliverPending(message)
+                                : () => _showMessageActions(message),
+                          );
                     if (widget.conversation.type != 'event' ||
                         message.senderUserId == null) {
                       return bubble;
@@ -6133,10 +6219,16 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ),
           ),
-        if (widget.conversation.status != 'active')
+        if (_conversationStatus != 'active')
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Text(context.tr('conversationReadOnly')),
+            child: Text(
+              context.tr(
+                widget.conversation.type == 'direct'
+                    ? 'friendReadOnly'
+                    : 'conversationReadOnly',
+              ),
+            ),
           )
         else
           SafeArea(
@@ -6148,6 +6240,12 @@ class _ChatPageState extends State<ChatPage> {
                     onPressed: _sending ? null : _chooseChatImageSource,
                     icon: const Icon(Icons.add_circle_outline),
                   ),
+                  if (_isFriend)
+                    IconButton(
+                      tooltip: context.tr('friendShareActivity'),
+                      onPressed: _sending ? null : _shareActivity,
+                      icon: const Icon(Icons.event_outlined),
+                    ),
                   Expanded(
                     child: TextField(
                       controller: _input,
@@ -6170,10 +6268,59 @@ class _ChatPageState extends State<ChatPage> {
     ),
   );
 
+  Future<void> _shareActivity() async {
+    final token = AuthScope.of(context).token;
+    if (token == null ||
+        _sending ||
+        !_isFriend ||
+        _conversationStatus != 'active') {
+      return;
+    }
+    final item = await showDialog<SeriesRow>(
+      context: context,
+      builder: (_) => const ShareActivityDialog(),
+    );
+    if (!mounted ||
+        item == null ||
+        _sending ||
+        _conversationStatus != 'active') {
+      return;
+    }
+    final id = item['id'] as String;
+    if (_shareActivityId != id) {
+      _shareActivityId = id;
+      _shareClientId = SocialService.newClientMessageId();
+    }
+    setState(() => _sending = true);
+    try {
+      await SocialService.sendMessage(
+        token,
+        widget.conversation.id,
+        id,
+        _shareClientId!,
+        activityShare: true,
+      );
+      _shareActivityId = null;
+      _shareClientId = null;
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+        await _load(showProgress: false);
+      }
+    }
+  }
+
   Future<void> _send() async {
     final body = _input.text.trim();
     final token = AuthScope.of(context).token;
-    if (body.isEmpty || token == null || _sending) return;
+    if (body.isEmpty ||
+        token == null ||
+        _sending ||
+        _conversationStatus != 'active') {
+      return;
+    }
     if (_editingMessage != null) {
       final editing = _editingMessage!;
       setState(() => _sending = true);
@@ -6398,6 +6545,8 @@ class _ChatPageState extends State<ChatPage> {
             const Duration(minutes: 5);
     final canEdit =
         mine &&
+        message.messageType == 'text' &&
+        _conversationStatus == 'active' &&
         DateTime.now().difference(message.createdAt) <=
             const Duration(minutes: 15);
     await showModalBottomSheet<void>(
@@ -6406,18 +6555,20 @@ class _ChatPageState extends State<ChatPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.reply),
-              title: Text(context.tr('replyMessage')),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                setState(() {
-                  _replyingTo = message;
-                  _editingMessage = null;
-                  _input.clear();
-                });
-              },
-            ),
+            if (_conversationStatus == 'active' &&
+                message.messageType != 'activity_share')
+              ListTile(
+                leading: const Icon(Icons.reply),
+                title: Text(context.tr('replyMessage')),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  setState(() {
+                    _replyingTo = message;
+                    _editingMessage = null;
+                    _input.clear();
+                  });
+                },
+              ),
             if (canRecall)
               ListTile(
                 leading: const Icon(Icons.undo),
@@ -6945,6 +7096,12 @@ class ProfilePage extends StatelessWidget {
                 icon: Icons.people_outline,
                 title: context.tr('memberFollowing'),
                 onTap: () => _openMemberLibrary(context, following: true),
+              ),
+              const Divider(height: 1, indent: 58),
+              _Menu(
+                icon: Icons.group_outlined,
+                title: context.tr('friendList'),
+                onTap: () => _openFriends(context, auth.token!),
               ),
               const Divider(height: 1, indent: 58),
               _Menu(

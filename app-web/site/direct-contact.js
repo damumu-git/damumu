@@ -1,6 +1,6 @@
 export function createDirectContact({
   show, node, button, actionLink, request, requireLogin, handleForm, showError,
-  showReport, renderAvatar, refreshUnread,
+  showReport, renderAvatar, refreshUnread, friends,
 }) {
   function compose(kind, eventId, userId) {
     requireLogin(() => {
@@ -47,6 +47,7 @@ export function createDirectContact({
       } else if (state.request_event_id) {
         actions.append(button("申请私聊", () => compose("attended", state.request_event_id, id)));
       }
+      friends.profileActions(id, content, actions, state, () => profileActions(id, content, actions));
     } catch (error) {
       if (actions.isConnected) showError(content, error);
     }

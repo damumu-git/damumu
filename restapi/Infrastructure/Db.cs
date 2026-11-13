@@ -121,6 +121,28 @@ public sealed class Db(NpgsqlDataSource dataSource)
                 throw new ApiException(403, "direct_consent_required", "当前无法发送私信");
         }
 
+        if (messageType == "activity_share")
+        {
+            await using var share = new NpgsqlCommand(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM event e JOIN app_user host ON host.id=e.organizer_user_id
+                    WHERE e.id=@activityId AND e.visibility='public' AND e.deleted_at IS NULL
+                      AND e.status IN ('published','full','completed') AND host.status='active' AND host.deleted_at IS NULL
+                ) AND EXISTS (
+                    SELECT 1 FROM conversation_member peer
+                    JOIN friendship f ON f.first_id=least(@userId,peer.user_id)
+                        AND f.second_id=greatest(@userId,peer.user_id)
+                    WHERE peer.conversation_id=@conversationId AND peer.left_at IS NULL
+                )
+                """, connection, transaction);
+            share.Parameters.AddWithValue("activityId", Guid.Parse(body!));
+            share.Parameters.AddWithValue("userId", userId);
+            share.Parameters.AddWithValue("conversationId", conversationId);
+            if (conversationType != "direct" || await share.ExecuteScalarAsync(cancellationToken) is not true)
+                throw new ApiException(403, "activity_share_unavailable", "只能向好友分享公开活动");
+        }
+
         if (replyToMessageId is not null)
         {
             await using var reply = new NpgsqlCommand(

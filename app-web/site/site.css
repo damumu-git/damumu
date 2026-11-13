@@ -1510,6 +1510,35 @@ a.activity-organizer::after {
 .chat-composer .form-error {
   margin: 0.5rem 0 0;
 }
+.friend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.friend-search {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 24rem;
+  margin-block: 1rem;
+}
+.friend-compose {
+  min-width: min(18rem, 100%);
+}
+.chat-composer .friend-share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.friend-share-results {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  max-height: 9rem;
+  overflow: auto;
+}
 @media (max-width: 700px) {
   .chat-layout {
     grid-template-columns: minmax(0, 1fr);

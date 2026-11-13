@@ -183,6 +183,7 @@ api.MapActivitySeriesEndpoints();
 api.MapActivityEndpoints();
 api.MapSocialEndpoints();
 api.MapDirectContactEndpoints();
+api.MapFriendEndpoints();
 api.MapSafetyEndpoints();
 api.MapGovernanceEndpoints();
 api.MapFeedbackEndpoints();

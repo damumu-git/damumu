@@ -73,6 +73,12 @@ public sealed class AccountDeletionService(
             DELETE FROM activity_series WHERE owner_id=@userId;
             DELETE FROM activity_recap WHERE event_id IN (SELECT id FROM event WHERE organizer_user_id=@userId);
             DELETE FROM direct_contact_request WHERE sender_id=@userId OR recipient_id=@userId;
+            DELETE FROM notification n USING friend_request r
+                WHERE (r.sender_id=@userId OR r.recipient_id=@userId)
+                    AND n.notification_type='friend_request' AND n.data->>'requestId'=r.id::text;
+            DELETE FROM notification WHERE notification_type='friend_accepted' AND data->>'userId'=@userId::text;
+            DELETE FROM friend_request WHERE sender_id=@userId OR recipient_id=@userId;
+            DELETE FROM friendship WHERE first_id=@userId OR second_id=@userId;
             DELETE FROM direct_contact_preference WHERE user_id=@userId;
             DELETE FROM web_bookmark WHERE user_id=@userId;
             DELETE FROM push_device WHERE user_id=@userId;

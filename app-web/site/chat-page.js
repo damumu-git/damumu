@@ -53,13 +53,18 @@ export function createChatPage({
     }
     const choices = node("ul", null, "chat-choices");
     const requestsLink = actionLink("联系请求", "/messages/requests", "chat-group chat-requests-link");
+    const friendLink = actionLink("好友申请", "/messages/friend-requests", "chat-group chat-requests-link");
+    const friendBadge = node("span", null, "message-count");
+    friendBadge.hidden = true;
+    friendLink.hidden = true;
+    friendLink.append(friendBadge);
     const requestsBadge = node("span", null, "message-count");
     requestsBadge.hidden = true;
     requestsLink.hidden = true;
     requestsLink.append(requestsBadge);
     const listStatus = node("p", "正在加载会话…", "chat-list-status meta");
     listStatus.setAttribute("role", "status");
-    sidebar.append(heading, groups, requestsLink, listStatus, choices);
+    sidebar.append(heading, groups, requestsLink, friendLink, listStatus, choices);
     const panel = node("div", null, "chat-panel");
     const placeholder = node("div", null, "chat-placeholder");
     const prompt = node("p", "选择一个会话查看消息。");
@@ -94,6 +99,7 @@ export function createChatPage({
       const requested = params.get("type");
       const group = selected?.group ?? (groupLinks.has(requested) ? requested : "event");
       requestsLink.hidden = group !== "direct";
+      friendLink.hidden = group !== "direct";
       for (const [key, { link }] of groupLinks) {
         if (key === group) link.setAttribute("aria-current", "page");
         else link.removeAttribute("aria-current");
@@ -134,7 +140,7 @@ export function createChatPage({
           refreshUnread();
         },
         sent(message) {
-          selected.preview.textContent = message.body || "暂无文字消息";
+          selected.preview.textContent = message.message_type === "activity_share" ? "分享了一场活动" : message.body || "暂无文字消息";
           selected.date.textContent = previewTime(message.created_at);
           choices.prepend(selected.entry);
         },
@@ -146,10 +152,14 @@ export function createChatPage({
       const isAnnouncement = group === "announcement";
       const id = isAnnouncement ? "announcement:" + item.id : item.id.toLowerCase();
       const count = isAnnouncement ? Number(!item.read_at) : item.unread_count ?? 0;
-      const snippet = (isAnnouncement ? item.body : item.last_message_body) || "暂无文字消息";
+      const snippet = item.last_message_type === "activity_share" ? "分享了一场活动"
+        : (isAnnouncement ? item.body : item.last_message_body) || "暂无文字消息";
       const timestamp = previewTime(isAnnouncement ? item.created_at : item.last_message_at);
       const existing = rows.get(id);
       if (existing) {
+        if (existing.item.status !== item.status || existing.item.is_friend !== item.is_friend)
+          existing.link.removeAttribute("aria-current");
+        existing.item = item;
         renderMessageCount(existing.unread, count);
         existing.preview.textContent = snippet;
         existing.date.textContent = timestamp;
@@ -214,12 +224,15 @@ export function createChatPage({
       if (!content.isConnected) return;
       const counts = messageGroups.map(([, , field]) => event.detail?.[field] ?? 0);
       const pendingRequests = event.detail?.contact_request_count ?? 0;
-      counts[1] += pendingRequests;
+      const pendingFriends = event.detail?.friend_request_count ?? 0;
+      counts[1] += pendingRequests + pendingFriends;
       renderMessageCount(requestsBadge, pendingRequests);
+      renderMessageCount(friendBadge, pendingFriends);
       for (const [index, [group]] of messageGroups.entries())
         renderMessageCount(groupLinks.get(group).badge, counts[index]);
       const nextCounts = counts.join(":");
-      if (previousCounts !== undefined && previousCounts !== nextCounts) loadRows();
+      if (previousCounts !== undefined &&
+          (previousCounts !== nextCounts || rows.get(activeId)?.group === "direct")) loadRows();
       previousCounts = nextCounts;
     });
     async function loadRows() {
@@ -249,6 +262,9 @@ export function createChatPage({
     window.addEventListener("popstate", () => {
       if (content.isConnected) selectFromLocation(true);
     });
+    document.addEventListener("visibilitychange", () => {
+      if (content.isConnected && !document.hidden) loadRows();
+    });
     await loadRows();
   };
 
@@ -260,8 +276,9 @@ export function createChatPage({
     title.id = "chat-title";
     title.tabIndex = -1;
     thread.setAttribute("aria-labelledby", title.id);
-    const subtitle = conversation.conversation_type === "direct" ? "私信" : "活动群聊";
-    header.append(back, title, node("p", conversation.status === "active" ? subtitle : subtitle + " · 只读", "meta"));
+    const subtitle = conversation.is_friend ? "好友私信" : conversation.conversation_type === "direct" ? "私信" : "活动群聊";
+    const statusLine = node("p", subtitle, "meta");
+    header.append(back, title, statusLine);
     const feedback = node("p", null, "chat-feedback");
     feedback.setAttribute("role", "status");
     header.append(feedback);
@@ -313,8 +330,13 @@ export function createChatPage({
       }
       const bubble = node("div", null, "chat-bubble");
       const text = node("p", message.recalled_at ? "消息已撤回" : message.body || "附件请在搭慕 App 内查看", "chat-bubble-text");
-      bubble.append(text);
-      if (!message.recalled_at && message.body) {
+      if (!message.recalled_at && message.message_type === "activity_share") {
+        bubble.append(node("p", "分享的活动", "meta"));
+        bubble.append(message.activity_id && message.activity_title
+          ? actionLink(message.activity_title, "/activities/" + encodeURIComponent(message.activity_id))
+          : node("p", "活动暂不可查看", "meta"));
+      } else bubble.append(text);
+      if (!message.recalled_at && message.body && message.message_type !== "activity_share") {
         text.id = "chat-text-" + message.id;
         let expanded = false;
         const toggle = button("展开", () => {
@@ -374,6 +396,7 @@ export function createChatPage({
       try {
         const result = await fetchMessages(historyPage ? nextPage : undefined);
         if (!thread.isConnected) return;
+        if (result.status) setStatus(result.status, result.isFriend);
         const before = viewport.scrollHeight;
         const top = viewport.scrollTop;
         const entries = [...result.items].reverse().map(showMessage).filter(Boolean);
@@ -416,13 +439,73 @@ export function createChatPage({
       if (event.deltaY < 0 && viewport.scrollTop <= historyEdge) loadMessages(true);
     }, { passive: true });
 
+    const composer = node("div", null, "chat-composer");
+    const setStatus = (status, isFriend = conversation.is_friend) => {
+      composer.hidden = status !== "active";
+      const label = conversation.conversation_type === "direct" ? isFriend ? "好友私信" : "私信" : subtitle;
+      statusLine.textContent = status === "active" ? label : label + " · 只读";
+      if (shareButton) shareButton.hidden = !isFriend;
+      if (sharePicker && !isFriend) sharePicker.hidden = true;
+    };
+    let shareButton;
+    let sharePicker;
     let submit;
-    if (conversation.status === "active") {
-      const composer = node("div", null, "chat-composer");
+    {
       const form = node("form", null, "form");
       form.innerHTML = '<label><span class="sr-only">发送文字消息</span><textarea name="body" placeholder="输入消息…" rows="2" maxlength="4000" required></textarea></label><button class="button primary" type="submit">发送</button>';
       composer.append(form);
       thread.append(composer);
+      setStatus(conversation.status);
+      if (conversation.conversation_type === "direct") {
+        const picker = node("form", null, "form friend-share");
+        sharePicker = picker;
+        picker.hidden = true;
+        const field = node("label", "搜索公开活动");
+        const search = node("input");
+        search.type = "search";
+        search.name = "query";
+        search.maxLength = 100;
+        field.append(search);
+        const searchButton = node("button", "搜索", "button");
+        searchButton.type = "submit";
+        const results = node("div", null, "friend-share-results");
+        picker.append(field, searchButton, results);
+        shareButton = button("分享活动", () => {
+          picker.hidden = !picker.hidden;
+          if (!picker.hidden) search.focus();
+        });
+        composer.append(shareButton, picker);
+        setStatus(conversation.status);
+        handleForm(picker, picker, async ({ query }) => {
+          const page = await request("/activities?" + new URLSearchParams({ q: query.trim(), limit: 8 }), { signal });
+          results.replaceChildren();
+          if (!page.items.length) results.append(node("p", "没有找到活动。", "meta"));
+          for (const item of page.items) {
+            const clientMessageId = crypto.randomUUID();
+            results.append(button(item.title, async (event) => {
+              const control = event.currentTarget;
+              control.disabled = true;
+              try {
+                const message = await request(base + "/messages", {
+                  auth: true, data: { messageType: "activity_share", body: item.id, clientMessageId },
+                });
+                updates.sent(message);
+                if (!thread.isConnected) return;
+                const entry = showMessage({ ...message, activity_id: item.id, activity_title: item.title });
+                if (entry) messages.append(entry);
+                empty.hidden = true;
+                picker.hidden = true;
+                setScroll(viewport.scrollHeight);
+              } catch (error) {
+                feedback.textContent = error.message;
+                control.disabled = false;
+                const latest = await fetchMessages().catch(() => null);
+                if (latest?.status) setStatus(latest.status, latest.isFriend);
+              }
+            }));
+          }
+        });
+      }
       submit = form.querySelector('button[type="submit"]');
       submit.disabled = true;
       let draft;
@@ -430,7 +513,11 @@ export function createChatPage({
         const body = values.body.trim();
         if (!body) throw new Error("请输入消息。");
         if (draft?.body !== body) draft = { body, clientMessageId: crypto.randomUUID() };
-        const message = await request(base + "/messages", { auth: true, data: { messageType: "text", ...draft } });
+        const message = await request(base + "/messages", { auth: true, data: { messageType: "text", ...draft } }).catch(async (error) => {
+          const latest = await fetchMessages().catch(() => null);
+          if (latest?.status) setStatus(latest.status, latest.isFriend);
+          throw error;
+        });
         updates.sent(message);
         if (!thread.isConnected) return;
         draft = null;

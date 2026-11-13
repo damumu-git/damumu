@@ -24,6 +24,13 @@ public static class DirectContactEndpoints
             var viewer = ApiSupport.RequireUserId(context);
             var options = await db.QueryOneAsync($"""
                 SELECT direct_chat_allowed(@viewer,@peer) AS can_chat,
+                       EXISTS(SELECT 1 FROM friendship WHERE first_id=least(@viewer,@peer)
+                              AND second_id=greatest(@viewer,@peer)) AS is_friend,
+                       friend_request_eligible(@viewer,@peer) AS can_request_friend,
+                       (SELECT CASE WHEN sender_id=@viewer THEN 'outgoing' ELSE 'incoming' END
+                        FROM friend_request WHERE least(sender_id,recipient_id)=least(@viewer,@peer)
+                        AND greatest(sender_id,recipient_id)=greatest(@viewer,@peer) AND status='pending'
+                        AND direct_contact_visible(@viewer,@peer)) AS friend_request_direction,
                        EXISTS(SELECT 1 FROM web_follow WHERE user_id=@viewer AND target_id=@peer) AS following,
                        (SELECT e.id {SharedAttendance}
                         AND direct_contact_visible(@viewer,@peer)

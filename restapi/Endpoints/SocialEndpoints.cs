@@ -30,7 +30,12 @@ public static class SocialEndpoints
                        COALESCE(event_avatar.image_url,organizer.avatar_url) AS event_avatar,
                        other_member.nickname AS peer_nickname,
                        other_member.avatar_url AS peer_avatar,
-                       lm.id AS last_message_id, lm.body AS last_message_body,
+                       other_member.user_id AS peer_id,
+                       EXISTS(SELECT 1 FROM friendship WHERE first_id=least(@userId,other_member.user_id)
+                              AND second_id=greatest(@userId,other_member.user_id)) AS is_friend,
+                       lm.id AS last_message_id,
+                       CASE WHEN lm.message_type='activity_share' AND lm.body IS NOT NULL THEN '分享了一场活动'
+                            ELSE lm.body END AS last_message_body,
                        lm.message_type AS last_message_type, lm.created_at AS last_message_at,
                        lm.sender_name AS last_message_sender,
                        (SELECT count(*) FROM conversation_member active_member
@@ -93,7 +98,7 @@ public static class SocialEndpoints
                 WHERE direct_chat_allowed(@userId,@peer)
                 """, new { userId, peer = request.OtherUserId }, ct);
             if (conversationId == Guid.Empty)
-                throw new ApiException(403, "direct_consent_required", "互相关注或接受联系请求后才能私聊");
+                throw new ApiException(403, "direct_consent_required", "成为好友、互相关注或接受联系请求后才能私聊");
             var conversation = await db.QueryOneAsync("""
                 SELECT id,conversation_type,status,created_at FROM conversation WHERE id=@conversationId
                 """, new { conversationId }, ct);
@@ -105,21 +110,36 @@ public static class SocialEndpoints
             int? limit, int? recentDays, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
-            var member = await db.ScalarAsync<long>(
+            var access = await db.QueryOneAsync(
                 """
-                SELECT count(*) FROM conversation_member
-                WHERE conversation_id=@id AND user_id=@userId AND left_at IS NULL
+                SELECT CASE WHEN c.conversation_type='direct' AND NOT EXISTS (
+                    SELECT 1 FROM conversation_member peer
+                    WHERE peer.conversation_id=c.id AND peer.user_id<>@userId AND peer.left_at IS NULL
+                        AND direct_chat_allowed(@userId,peer.user_id)
+                ) THEN 'read_only' ELSE c.status END AS status,
+                EXISTS (
+                    SELECT 1 FROM conversation_member peer JOIN friendship f
+                        ON f.first_id=least(@userId,peer.user_id) AND f.second_id=greatest(@userId,peer.user_id)
+                    WHERE peer.conversation_id=c.id AND peer.left_at IS NULL AND c.conversation_type='direct'
+                ) AS is_friend
+                FROM conversation_member cm JOIN conversation c ON c.id=cm.conversation_id
+                WHERE cm.conversation_id=@id AND cm.user_id=@userId AND cm.left_at IS NULL
                 """, new { id, userId }, ct);
-            if (member == 0) throw new ApiException(403, "forbidden", "无权访问该会话");
+            if (access is null) throw new ApiException(403, "forbidden", "无权访问该会话");
             var take = Math.Clamp(limit ?? 50, 1, 100);
             var position = MessageCursor.Decode(cursor);
             var rows = await db.QueryAsync(
                 """
-                SELECT m.id, m.sender_user_id, m.message_type, m.body, m.media_asset_id,
-                       m.reply_to_message_id, m.client_message_id,
+                SELECT m.id, m.sender_user_id, m.message_type,
+                       CASE WHEN m.message_type='activity_share' AND m.body IS NOT NULL
+                            THEN COALESCE(shared.title,'活动暂不可查看') ELSE m.body END AS body,
+                       m.media_asset_id, m.reply_to_message_id, m.client_message_id,
+                       shared.id AS activity_id, shared.title AS activity_title,
                        m.edited_at, m.recalled_at, m.created_at,
                        up.nickname AS sender_name, COALESCE(sa.image_url,up.avatar_url) AS sender_avatar,
-                       reply.body AS reply_to_body, reply.recalled_at AS reply_to_recalled_at,
+                       CASE WHEN reply.message_type='activity_share' AND reply.body IS NOT NULL
+                            THEN '分享了一场活动' ELSE reply.body END AS reply_to_body,
+                       reply.recalled_at AS reply_to_recalled_at,
                        CASE WHEN ma.id IS NULL THEN NULL ELSE '/uploads/' || ma.storage_key END AS media_url,
                        CASE WHEN ma.id IS NULL THEN NULL ELSE '/uploads/' || COALESCE(ma.thumbnail_storage_key, ma.storage_key) END AS media_thumbnail_url,
                        ma.mime_type AS media_mime_type
@@ -129,6 +149,12 @@ public static class SocialEndpoints
                 LEFT JOIN message reply ON reply.id=m.reply_to_message_id
                     AND reply.created_at > now()-interval '3 months'
                 LEFT JOIN media_asset ma ON ma.id=m.media_asset_id AND ma.deleted_at IS NULL
+                LEFT JOIN event shared ON m.message_type='activity_share' AND shared.id=CASE
+                    WHEN m.message_type='activity_share' THEN m.body::uuid END
+                    AND shared.visibility='public' AND shared.deleted_at IS NULL
+                    AND shared.status IN ('published','full','completed')
+                    AND EXISTS(SELECT 1 FROM app_user host WHERE host.id=shared.organizer_user_id
+                        AND host.status='active' AND host.deleted_at IS NULL)
                 WHERE m.conversation_id=@id AND m.deleted_at IS NULL
                   AND m.created_at > now()-interval '3 months'
                   AND (CAST(@before AS timestamptz) IS NULL OR m.created_at < @before)
@@ -158,7 +184,11 @@ public static class SocialEndpoints
                 nextCursor = MessageCursor.Encode((DateTime)last["created_at"]!, (Guid)last["id"]!);
             }
             var historyBefore = hasMore && rows.Count == 0 ? recentFrom : null;
-            return ApiSupport.Ok(new { items = rows, nextCursor, hasMore, historyBefore });
+            return ApiSupport.Ok(new
+            {
+                items = rows, nextCursor, hasMore, historyBefore,
+                status = access["status"], isFriend = access["is_friend"]
+            });
         });
 
         api.MapPost("/conversations/{id:guid}/media", async (
@@ -172,6 +202,11 @@ public static class SocialEndpoints
                 JOIN conversation c ON c.id=cm.conversation_id
                 WHERE cm.conversation_id=@id AND cm.user_id=@userId
                   AND cm.left_at IS NULL AND c.status='active'
+                  AND (c.conversation_type<>'direct' OR EXISTS (
+                      SELECT 1 FROM conversation_member peer
+                      WHERE peer.conversation_id=c.id AND peer.user_id<>@userId AND peer.left_at IS NULL
+                            AND direct_chat_allowed(@userId,peer.user_id)
+                  ))
                 """, new { id, userId }, ct);
             if (allowed == 0) throw new ApiException(403, "forbidden", "无权在该会话上传附件");
             if (image.Length is <= 0 or > 1500 * 1024)
@@ -268,9 +303,15 @@ public static class SocialEndpoints
         {
             var userId = ApiSupport.RequireUserId(context);
             var messageType = request.MessageType ?? "text";
-            if (messageType is not ("text" or "image" or "file"))
+            if (messageType is not ("text" or "image" or "file" or "activity_share"))
                 throw new ApiException(400, "reserved_message_type", "不能发送系统活动通知");
             var body = request.Body?.Trim();
+            if (messageType == "activity_share")
+            {
+                if (request.MediaAssetId is not null || !Guid.TryParse(body, out var activityId))
+                    throw new ApiException(400, "invalid_activity_share", "请选择要分享的公开活动");
+                body = activityId.ToString();
+            }
             if (string.IsNullOrWhiteSpace(body) && request.MediaAssetId is null)
                 throw new ApiException(400, "empty_message", "消息不能为空");
             if (body?.Length > 4000)
@@ -286,7 +327,8 @@ public static class SocialEndpoints
                     new { conversationId = id, messageId }, ct);
                 var pushRecipients = result.RecipientIds.Where(recipientId => recipientId != userId);
                 await push.SendToUsersAsync(db, pushRecipients, "收到新消息",
-                    string.IsNullOrWhiteSpace(body) ? "收到一条新消息" : body,
+                    messageType == "activity_share" ? "收到一张活动卡片" :
+                        string.IsNullOrWhiteSpace(body) ? "收到一条新消息" : body,
                     new Dictionary<string, string>
                     {
                         ["type"] = "message.created",
@@ -474,6 +516,9 @@ public static class SocialEndpoints
                        (SELECT count(*) FROM direct_contact_request
                         WHERE recipient_id=@userId AND status='pending'
                           AND direct_contact_visible(sender_id,recipient_id)) AS contact_request_count,
+                       (SELECT count(*) FROM friend_request
+                        WHERE recipient_id=@userId AND status='pending'
+                          AND direct_contact_visible(sender_id,recipient_id)) AS friend_request_count,
                        (SELECT count(*) FROM unread_messages) AS message_count,
                        (SELECT count(*) FROM unread_messages WHERE conversation_type='event') AS activity_message_count,
                        (SELECT count(*) FROM unread_messages WHERE conversation_type<>'event') AS general_message_count

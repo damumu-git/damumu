@@ -267,7 +267,9 @@ export function createMemberPages(ui) {
         }
         const id = data?.conversationId ?? data?.eventId;
         const href =
-          item.notification_type === "contact_request"
+          item.notification_type === "friend_request" ? "/messages/friend-requests"
+            : item.notification_type === "friend_accepted" ? "/me/friends"
+            : item.notification_type === "contact_request"
             ? "/messages/requests"
             : typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)
             ? data.conversationId
@@ -339,7 +341,8 @@ export function createMemberPages(ui) {
   memberPage("/settings/privacy", "隐私设置", async (content) => {
     const settings = settingsCard(content, "已屏蔽用户");
     const actions = node("div", null, "section-nav");
-    actions.append(actionLink("编辑常驻区域可见性", "/settings/profile"), actionLink("阅读隐私政策", "/privacy"));
+    actions.append(actionLink("编辑常驻区域可见性", "/settings/profile"),
+      actionLink("好友申请设置", "/messages/friend-requests"), actionLink("阅读隐私政策", "/privacy"));
     settings.append(actions);
     const blocked = await request("/me/blocks", { auth: true });
     addList(

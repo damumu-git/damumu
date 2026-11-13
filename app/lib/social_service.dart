@@ -35,6 +35,7 @@ class ConversationItem {
     this.avatarUrl,
     this.eventStartsAt,
     this.eventCategories = const {},
+    this.isFriend = false,
   });
 
   final String id;
@@ -51,6 +52,7 @@ class ConversationItem {
   final String? avatarUrl;
   final DateTime? eventStartsAt;
   final Map<String, List<String>> eventCategories;
+  final bool isFriend;
 
   factory ConversationItem.fromJson(
     Map<String, dynamic> json,
@@ -61,6 +63,7 @@ class ConversationItem {
     unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
     memberCount: (json['member_count'] as num?)?.toInt() ?? 0,
     status: '${json['status'] ?? 'active'}',
+    isFriend: json['is_friend'] == true,
     avatarUrl: json['peer_avatar'] as String?,
     eventStartsAt: DateTime.tryParse('${json['event_starts_at'] ?? ''}'),
     eventCategories: {
@@ -99,6 +102,8 @@ class ChatMessage {
     this.mediaAssetId,
     this.mediaUrl,
     this.mediaThumbnailUrl,
+    this.activityTitle,
+    this.activityId,
     this.pending = false,
     this.failed = false,
   });
@@ -117,6 +122,8 @@ class ChatMessage {
   final String? mediaAssetId;
   final String? mediaUrl;
   final String? mediaThumbnailUrl;
+  final String? activityTitle;
+  final String? activityId;
   final bool pending;
   final bool failed;
 
@@ -136,6 +143,8 @@ class ChatMessage {
     mediaAssetId: mediaAssetId,
     mediaUrl: mediaUrl,
     mediaThumbnailUrl: mediaThumbnailUrl,
+    activityTitle: activityTitle,
+    activityId: activityId,
     pending: pending ?? this.pending,
     failed: failed ?? this.failed,
   );
@@ -156,6 +165,8 @@ class ChatMessage {
     'media_asset_id': mediaAssetId,
     'media_url': mediaUrl,
     'media_thumbnail_url': mediaThumbnailUrl,
+    'activity_title': activityTitle,
+    'activity_id': activityId,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -172,6 +183,8 @@ class ChatMessage {
     editedAt: DateTime.tryParse('${json['edited_at'] ?? ''}')?.toLocal(),
     recalledAt: DateTime.tryParse('${json['recalled_at'] ?? ''}')?.toLocal(),
     mediaAssetId: json['media_asset_id']?.toString(),
+    activityTitle: json['activity_title'] as String?,
+    activityId: json['activity_id'] as String?,
     mediaUrl: _absoluteMediaUrl(json['media_url']?.toString()),
     mediaThumbnailUrl: _absoluteMediaUrl(
       json['media_thumbnail_url']?.toString(),
@@ -192,10 +205,14 @@ class ChatMessagePage {
     required this.items,
     this.nextCursor,
     required this.hasMore,
+    this.status,
+    this.isFriend,
   });
   final List<ChatMessage> items;
   final String? nextCursor;
   final bool hasMore;
+  final String? status;
+  final bool? isFriend;
 }
 
 class NotificationItem {
@@ -417,6 +434,54 @@ class SocialService {
           as Map)['allowAttendedRequests'] ==
       true;
 
+  static Future<List<Map<String, dynamic>>> friends(
+    String token, {
+    bool requests = false,
+  }) async =>
+      (await _request(token, requests ? '/friend-requests' : '/me/friends')
+              as List)
+          .map((item) => (item as Map).cast<String, dynamic>())
+          .toList();
+
+  static Future<void> requestFriend(String token, String userId, String body) =>
+      _request(
+        token,
+        '/friend-requests',
+        method: 'POST',
+        body: {'userId': userId, 'body': body},
+      );
+
+  static Future<void> respondToFriend(
+    String token,
+    String id,
+    String decision,
+  ) => _request(
+    token,
+    '/friend-requests/$id/respond',
+    method: 'POST',
+    body: {'decision': decision},
+  );
+
+  static Future<void> removeFriend(String token, String id) =>
+      _request(token, '/me/friends/$id', method: 'DELETE');
+
+  static Future<bool> friendPreference(String token) async =>
+      (await _request(token, '/me/friends/preferences') as Map)['allow'] ==
+      true;
+
+  static Future<void> setFriendPreference(String token, bool allow) => _request(
+    token,
+    '/me/friends/preferences',
+    method: 'PUT',
+    body: {'allow': allow},
+  );
+
+  static Future<int> pendingFriendRequests(String token) async =>
+      ((await _request(token, '/unread-summary') as Map)['friend_request_count']
+              as num?)
+          ?.toInt() ??
+      0;
+
   static Future<void> setContactPreference(String token, bool value) =>
       _request(
         token,
@@ -509,6 +574,8 @@ class SocialService {
       items: items,
       nextCursor: envelope['nextCursor']?.toString(),
       hasMore: envelope['hasMore'] == true,
+      status: envelope['status'] as String?,
+      isFriend: envelope['isFriend'] as bool?,
     );
   }
 
@@ -519,6 +586,7 @@ class SocialService {
     String clientMessageId, {
     String? replyToMessageId,
     String? mediaAssetId,
+    bool activityShare = false,
   }) async {
     final data =
         (await _request(
@@ -526,7 +594,11 @@ class SocialService {
                   '/conversations/$conversationId/messages',
                   method: 'POST',
                   body: {
-                    'messageType': mediaAssetId == null ? 'text' : 'image',
+                    'messageType': activityShare
+                        ? 'activity_share'
+                        : mediaAssetId == null
+                        ? 'text'
+                        : 'image',
                     'body': body,
                     'clientMessageId': clientMessageId,
                     'replyToMessageId': replyToMessageId,

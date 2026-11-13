@@ -7,6 +7,13 @@ public sealed class PrivacyRetentionService(
     {
         await db.ExecuteAsync("SELECT muda_purge_expired_personal_data()", cancellationToken: ct);
         await db.ExecuteAsync("""
+            WITH expired AS (
+                DELETE FROM friend_request WHERE created_at<=now()-interval '3 months' RETURNING id
+            )
+            DELETE FROM notification n USING expired r
+            WHERE n.notification_type='friend_request' AND n.data->>'requestId'=r.id::text
+            """, cancellationToken: ct);
+        await db.ExecuteAsync("""
             UPDATE direct_contact_request SET body=NULL,
                 status=CASE WHEN status='pending' THEN 'declined' ELSE status END,
                 responded_at=COALESCE(responded_at,now())

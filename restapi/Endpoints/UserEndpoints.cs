@@ -475,7 +475,8 @@ public static class UserEndpoints
         });
 
         api.MapPost("/blocks/{blockedUserId:guid}", async (
-            Guid blockedUserId, HttpContext context, BlockRequest request, Db db, CancellationToken ct) =>
+            Guid blockedUserId, HttpContext context, BlockRequest request, Db db,
+            RealtimeConnectionManager realtime, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             await db.ExecuteAsync(
@@ -485,6 +486,7 @@ public static class UserEndpoints
                 ON CONFLICT (blocker_user_id, blocked_user_id)
                 DO UPDATE SET reason_code=EXCLUDED.reason_code
                 """, new { userId, blockedUserId, reasonCode = request.ReasonCode }, ct);
+            await realtime.PublishAsync([userId, blockedUserId], "conversation.changed", new { }, ct);
             return ApiSupport.Ok(new { blockedUserId, blocked = true });
         });
 

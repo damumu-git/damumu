@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'friends.dart';
 import 'l10n.dart';
 import 'social_service.dart';
 
@@ -126,6 +127,47 @@ class _DirectContactActionsState extends State<DirectContactActions> {
     return Wrap(
       spacing: 8,
       children: [
+        if (options['is_friend'] == true)
+          Chip(label: Text(context.tr('friendAdded')))
+        else if (options['friend_request_direction']
+            case final String direction)
+          OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () => _run(() async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => FriendsPage(
+                          token: widget.token,
+                          requests: true,
+                          onOpen: widget.onOpen,
+                        ),
+                      ),
+                    );
+                    await _load();
+                  }),
+            child: Text(
+              context.tr(
+                direction == 'incoming' ? 'friendRequests' : 'contactSent',
+              ),
+            ),
+          )
+        else if (options['can_request_friend'] == true)
+          FilledButton(
+            onPressed: _busy
+                ? null
+                : () => _run(() async {
+                    final note = await friendNote(context);
+                    if (note == null || !mounted) return;
+                    await SocialService.requestFriend(
+                      widget.token,
+                      widget.userId,
+                      note,
+                    );
+                    await _load();
+                  }),
+            child: Text(context.tr('friendAdd')),
+          ),
         OutlinedButton(
           onPressed: _busy
               ? null

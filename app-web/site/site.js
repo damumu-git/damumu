@@ -5,6 +5,7 @@ import { createBrowseFilters } from "/browse-filters.js";
 import { dateQuery } from "/seoul-dates.js";
 import { setupSchedulePicker } from "/date-picker.js";
 import { createDirectContact } from "/direct-contact.js";
+import { createFriends } from "/friends.js";
 import { createActivitySeries } from "/activity-series.js";
 import { installSelectMenus } from "/select-menu.js";
 const apiRoot = "https://api.damumu.com";
@@ -76,7 +77,7 @@ async function refreshUnread() {
     const summary = await request("/unread-summary", { auth: true, signal: controller.signal });
     if (controller.signal.aborted) return;
     renderMessageCount(messageCount, (summary?.message_count ?? 0) +
-      (summary?.announcement_count ?? 0) + (summary?.contact_request_count ?? 0));
+      (summary?.announcement_count ?? 0) + (summary?.contact_request_count ?? 0) + (summary?.friend_request_count ?? 0));
     document.dispatchEvent(new CustomEvent("damu-unread", { detail: summary }));
   } catch {
     // A later refresh can recover without interrupting the page.
@@ -1426,6 +1427,7 @@ async function showSettings() {
   const shortcuts = node("div", null, "section-nav personal-shortcuts");
   shortcuts.append(
     actionLink("我的关注", "/me/following"),
+    actionLink("我的好友", "/me/friends"),
     actionLink("我的收藏", "/me/saved"),
     actionLink("查看公开主页", "/people/" + user.id),
     button("退出登录", () => {
@@ -1892,6 +1894,8 @@ async function route() {
   if (person) return showPerson(person[1]);
   if (path === "/me/activities") return requireLogin(showMine);
   if (path === "/messages/requests") return requireLogin(directContact.showRequests);
+  if (path === "/messages/friend-requests") return requireLogin(friends.showRequests);
+  if (path === "/me/friends") return requireLogin(friends.showFriends);
   if (path === "/messages" || conversationRoute.test(path))
     return requireLogin(showMessages);
   if (path === "/settings/profile") return requireLogin(showSettings);
@@ -2011,9 +2015,10 @@ const showMessages = createChatPage({
   renderMessageCount,
   refreshUnread,
 });
+const friends = createFriends({ show, node, button, actionLink, request, handleForm, showError, renderAvatar, refreshUnread });
 const directContact = createDirectContact({
   show, node, button, actionLink, request, requireLogin, handleForm, showError,
-  showReport, renderAvatar, refreshUnread,
+  showReport, renderAvatar, refreshUnread, friends,
 });
 const activitySeries = createActivitySeries({
   show, node, button, actionLink, request, requireLogin, handleForm, showError,
