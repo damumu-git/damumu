@@ -35,7 +35,7 @@ public static class EventEndpoints
                        e.cover_media_id,
                        {ActivityQueries.CoverThumbnail},
                        {ActivityQueries.CoverCategoryCodes},
-                       e.published_at,
+                       e.published_at, e.confirmed_at,
                        c.id AS category_id,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
                        c.icon AS category_icon, (SELECT ea.image_url FROM emoji_asset ea WHERE ea.is_active AND (ea.key=c.icon_key OR ea.emoji=replace(replace(c.icon,'️',''),'︎','')) ORDER BY (ea.key=c.icon_key) DESC NULLS LAST LIMIT 1) AS category_icon_url,
@@ -265,6 +265,23 @@ public static class EventEndpoints
                     """, new { id }, ct)
                 : null;
             return ApiSupport.Ok(new { item, schedules, tags, members, feedback, customFeedbackTags });
+        });
+
+        api.MapPut("/events/{id:guid}/confirmation", async (
+            Guid id, EventConfirmationRequest input, HttpContext context, Db db, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var item = await db.QueryOneAsync(
+                """
+                UPDATE event
+                SET confirmed_at=CASE WHEN @confirmed THEN COALESCE(confirmed_at,now()) ELSE NULL END
+                WHERE id=@id AND organizer_user_id=@userId AND deleted_at IS NULL
+                  AND status IN ('published','full')
+                RETURNING id,confirmed_at,row_version
+                """, new { id, userId, input.Confirmed }, ct);
+            if (item is null)
+                throw new ApiException(404, "event_not_found", "活动不存在或当前不能修改确认状态");
+            return ApiSupport.Ok(item);
         });
 
         api.MapGet("/users/{id:guid}/public-profile", async (
@@ -881,6 +898,8 @@ public static class EventEndpoints
                 ["eventId"] = eventId.ToString()
             }, ct);
     }
+
+    public sealed record EventConfirmationRequest(bool Confirmed);
 }
 
 public sealed record PlaceRequest(

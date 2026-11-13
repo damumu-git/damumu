@@ -81,7 +81,7 @@ export function createFriends({ show, node, button, actionLink, request, handleF
         actions.append(
           action(content, "发消息", () => openChat(friend.id), "button primary"),
           action(content, "解除好友", async () => {
-            if (!window.confirm("解除好友后，只有仍符合其他私聊条件才能继续发送消息。确定解除？")) return;
+            if (!window.confirm("解除好友后，双方私信将变为只读。确定解除？")) return;
             await request("/me/friends/" + friend.id, { auth: true, method: "DELETE" });
             row.remove();
             render();
@@ -137,8 +137,17 @@ export function createFriends({ show, node, button, actionLink, request, handleF
           checkbox.disabled = false;
         }
       });
+      const tabs = node("div", null, "request-tabs");
+      const pages = [];
       for (const incoming of [true, false]) {
-        panel.append(node("h2", incoming ? "收到的申请" : "发出的申请"));
+        const page = node("section", null, "request-tab-panel");
+        pages.push(page);
+        const tab = button(incoming ? "收到的申请" : "发出的申请", () => {
+          pages.forEach((item, index) => item.hidden = index !== (incoming ? 0 : 1));
+          [...tabs.children].forEach((item, index) => item.setAttribute("aria-selected", String(index === (incoming ? 0 : 1))));
+        }, "button");
+        tab.setAttribute("role", "tab");
+        tabs.append(tab);
         const list = node("ul", null, "contact-list");
         for (const item of items.filter((entry) => entry.incoming === incoming)) {
           const row = node("li", null, "activity-section");
@@ -165,8 +174,12 @@ export function createFriends({ show, node, button, actionLink, request, handleF
           }
           list.append(row);
         }
-        panel.append(list.childElementCount ? list : node("p", "暂无申请。", "meta"));
+        page.append(list.childElementCount ? list : node("p", "暂无申请。", "meta"));
       }
+      panel.append(tabs, ...pages);
+      pages[1].hidden = true;
+      tabs.children[0].setAttribute("aria-selected", "true");
+      tabs.children[1].setAttribute("aria-selected", "false");
       if (previous) content.querySelector(".friend-requests").replaceWith(panel);
       else content.append(panel);
     } catch (error) {

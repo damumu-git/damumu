@@ -135,6 +135,11 @@ public static class SocialEndpoints
                             THEN COALESCE(shared.title,'活动暂不可查看') ELSE m.body END AS body,
                        m.media_asset_id, m.reply_to_message_id, m.client_message_id,
                        shared.id AS activity_id, shared.title AS activity_title,
+                       shared_schedule.starts_at AS activity_starts_at,
+                       shared_category.name_zh_cn AS activity_category,
+                       shared_organizer.nickname AS activity_organizer,
+                       CASE WHEN shared_cover.id IS NULL THEN NULL ELSE '/uploads/' ||
+                           COALESCE(shared_cover.thumbnail_storage_key,shared_cover.storage_key) END AS activity_cover_url,
                        m.edited_at, m.recalled_at, m.created_at,
                        up.nickname AS sender_name, COALESCE(sa.image_url,up.avatar_url) AS sender_avatar,
                        CASE WHEN reply.message_type='activity_share' AND reply.body IS NOT NULL
@@ -155,6 +160,13 @@ public static class SocialEndpoints
                     AND shared.status IN ('published','full','completed')
                     AND EXISTS(SELECT 1 FROM app_user host WHERE host.id=shared.organizer_user_id
                         AND host.status='active' AND host.deleted_at IS NULL)
+                LEFT JOIN category shared_category ON shared_category.id=shared.category_id
+                LEFT JOIN user_profile shared_organizer ON shared_organizer.user_id=shared.organizer_user_id
+                LEFT JOIN media_asset shared_cover ON shared_cover.id=shared.cover_media_id AND shared_cover.deleted_at IS NULL
+                LEFT JOIN LATERAL (
+                    SELECT starts_at FROM event_schedule
+                    WHERE event_id=shared.id AND status='scheduled' ORDER BY starts_at LIMIT 1
+                ) shared_schedule ON true
                 WHERE m.conversation_id=@id AND m.deleted_at IS NULL
                   AND m.created_at > now()-interval '3 months'
                   AND (CAST(@before AS timestamptz) IS NULL OR m.created_at < @before)

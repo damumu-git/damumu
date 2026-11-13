@@ -25,6 +25,7 @@ export function createChatPage({
   actionLink,
   handleForm,
   request,
+  requestPrivateImage,
   reasonDialog,
   dialog,
   session,
@@ -64,7 +65,7 @@ export function createChatPage({
     requestsLink.append(requestsBadge);
     const listStatus = node("p", "正在加载会话…", "chat-list-status meta");
     listStatus.setAttribute("role", "status");
-    sidebar.append(heading, groups, requestsLink, friendLink, listStatus, choices);
+    sidebar.append(heading, groups, listStatus, choices);
     const panel = node("div", null, "chat-panel");
     const placeholder = node("div", null, "chat-placeholder");
     const prompt = node("p", "选择一个会话查看消息。");
@@ -98,8 +99,6 @@ export function createChatPage({
       const selected = rows.get(id);
       const requested = params.get("type");
       const group = selected?.group ?? (groupLinks.has(requested) ? requested : "event");
-      requestsLink.hidden = group !== "direct";
-      friendLink.hidden = group !== "direct";
       for (const [key, { link }] of groupLinks) {
         if (key === group) link.setAttribute("aria-current", "page");
         else link.removeAttribute("aria-current");
@@ -225,7 +224,7 @@ export function createChatPage({
       const counts = messageGroups.map(([, , field]) => event.detail?.[field] ?? 0);
       const pendingRequests = event.detail?.contact_request_count ?? 0;
       const pendingFriends = event.detail?.friend_request_count ?? 0;
-      counts[1] += pendingRequests + pendingFriends;
+      // Friend/contact requests live in the notification center, not the DM list.
       renderMessageCount(requestsBadge, pendingRequests);
       renderMessageCount(friendBadge, pendingFriends);
       for (const [index, [group]] of messageGroups.entries())
@@ -248,8 +247,10 @@ export function createChatPage({
       if (conversations.status === "fulfilled") {
         errors.delete("event");
         errors.delete("direct");
-        for (const item of conversations.value)
+        for (const item of conversations.value) {
+          if (item.conversation_type === "direct" && !item.is_friend) continue;
           addRow(item, item.conversation_type === "event" ? "event" : "direct");
+        }
       } else {
         for (const group of ["event", "direct"]) errors.set(group, conversations.reason.message);
       }
@@ -318,8 +319,14 @@ export function createChatPage({
       const metadata = [senderName, time(message.created_at)];
       const body = node("div", null, "chat-message-body");
       let avatar;
-      if (conversation.conversation_type === "event" && message.sender_user_id &&
-          message.message_type !== "event_cancelled") {
+      const isSystem = !message.sender_user_id || ["event_cancelled", "system"].includes(message.message_type);
+      if (isSystem) {
+        entry.className = "chat-message system";
+        entry.append(node("p", "平台提醒：" + (message.body || "活动状态已更新"), "chat-system-text"));
+        visible.set(message.id, entry);
+        return entry;
+      }
+      if (message.sender_user_id) {
         entry.classList.add("with-avatar");
         avatar = node("span", null, "account-avatar chat-sender-avatar");
         avatar.setAttribute("aria-hidden", "true");
@@ -331,10 +338,34 @@ export function createChatPage({
       const bubble = node("div", null, "chat-bubble");
       const text = node("p", message.recalled_at ? "消息已撤回" : message.body || "附件请在搭慕 App 内查看", "chat-bubble-text");
       if (!message.recalled_at && message.message_type === "activity_share") {
-        bubble.append(node("p", "分享的活动", "meta"));
-        bubble.append(message.activity_id && message.activity_title
+        bubble.classList.add("activity-share-card");
+        if (message.activity_cover_url) {
+          const image = node("img", null, "activity-share-cover");
+          image.src = message.activity_cover_url;
+          image.alt = "";
+          bubble.append(image);
+        }
+        const details = node("div", null, "activity-share-details");
+        details.append(node("p", "分享的活动", "meta"));
+        details.append(message.activity_id && message.activity_title
           ? actionLink(message.activity_title, "/activities/" + encodeURIComponent(message.activity_id))
           : node("p", "活动暂不可查看", "meta"));
+        const facts = [message.activity_starts_at ? time(message.activity_starts_at) : null,
+          message.activity_category, message.activity_organizer].filter(Boolean).join(" · ");
+        if (facts) details.append(node("p", facts, "meta"));
+        bubble.append(details);
+      } else if (!message.recalled_at && message.message_type === "image" &&
+          (message.media_thumbnail_url || message.media_url)) {
+        const image = node("img", null, "chat-message-image");
+        image.alt = "聊天图片";
+        bubble.append(image);
+        requestPrivateImage(message.media_thumbnail_url || message.media_url, signal)
+          .then((url) => {
+            if (!image.isConnected) return URL.revokeObjectURL(url);
+            image.src = url;
+            signal.addEventListener("abort", () => URL.revokeObjectURL(url), { once: true });
+          })
+          .catch(() => image.replaceWith(node("p", "图片暂时无法加载", "meta")));
       } else bubble.append(text);
       if (!message.recalled_at && message.body && message.message_type !== "activity_share") {
         text.id = "chat-text-" + message.id;
@@ -359,14 +390,16 @@ export function createChatPage({
       }
       body.append(node("p", metadata.filter(Boolean).join(" · "), "meta chat-sender"), bubble);
       if (message.sender_user_id && !own && !message.recalled_at) {
-        body.append(button("举报消息", () => reasonDialog("举报消息", async (description) => {
+        const report = button("举报消息", () => reasonDialog("举报消息", async (description) => {
           await request(base + "/messages/" + encodeURIComponent(message.id) + "/report", {
             auth: true,
             data: { categoryCode: "inappropriate_content", description },
           });
           dialog.close();
           feedback.textContent = "举报已提交。";
-        }), "chat-report"));
+        }), "chat-report");
+        report.prepend("⚠ ");
+        body.append(report);
       }
       entry.append(body);
       if (avatar) body.prepend(avatar);
@@ -453,7 +486,56 @@ export function createChatPage({
     {
       const form = node("form", null, "form");
       form.innerHTML = '<label><span class="sr-only">发送文字消息</span><textarea name="body" placeholder="输入消息…" rows="2" maxlength="4000" required></textarea></label><button class="button primary" type="submit">发送</button>';
-      composer.append(form);
+      const addMenu = node("div", null, "chat-add-menu");
+      const addButton = button("＋", () => {
+        addMenu.hidden = !addMenu.hidden;
+      }, "button chat-add-button");
+      addButton.type = "button";
+      addButton.setAttribute("aria-label", "添加内容");
+      addMenu.hidden = true;
+      const cameraInput = node("input");
+      cameraInput.type = "file";
+      cameraInput.accept = "image/*";
+      cameraInput.capture = "environment";
+      cameraInput.hidden = true;
+      const galleryInput = node("input");
+      galleryInput.type = "file";
+      galleryInput.accept = "image/*";
+      galleryInput.hidden = true;
+      async function uploadImage(input) {
+        const file = input.files?.[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) {
+          feedback.textContent = "图片不能超过 10 MB。";
+          input.value = "";
+          return;
+        }
+        const data = new FormData();
+        data.append("image", file);
+        try {
+          const uploaded = await request(base + "/media", { auth: true, data });
+          const message = await request(base + "/messages", { auth: true, data: {
+            messageType: "image", body: "", mediaAssetId: uploaded.mediaAssetId,
+            clientMessageId: crypto.randomUUID(),
+          }});
+          const entry = showMessage(message);
+          if (entry) messages.append(entry);
+          empty.hidden = true;
+          setScroll(viewport.scrollHeight);
+          addMenu.hidden = true;
+        } catch (error) {
+          feedback.textContent = error.message;
+        } finally {
+          input.value = "";
+        }
+      }
+      cameraInput.addEventListener("change", () => uploadImage(cameraInput));
+      galleryInput.addEventListener("change", () => uploadImage(galleryInput));
+      addMenu.append(
+        button("相机", () => cameraInput.click(), "button"),
+        button("图片", () => galleryInput.click(), "button"),
+      );
+      composer.append(addButton, addMenu, cameraInput, galleryInput, form);
       thread.append(composer);
       setStatus(conversation.status);
       if (conversation.conversation_type === "direct") {
@@ -474,7 +556,8 @@ export function createChatPage({
           picker.hidden = !picker.hidden;
           if (!picker.hidden) search.focus();
         });
-        composer.append(shareButton, picker);
+        addMenu.append(shareButton);
+        composer.append(picker);
         setStatus(conversation.status);
         handleForm(picker, picker, async ({ query }) => {
           const page = await request("/activities?" + new URLSearchParams({ q: query.trim(), limit: 8 }), { signal });
@@ -482,7 +565,7 @@ export function createChatPage({
           if (!page.items.length) results.append(node("p", "没有找到活动。", "meta"));
           for (const item of page.items) {
             const clientMessageId = crypto.randomUUID();
-            results.append(button(item.title, async (event) => {
+            const result = button("", async (event) => {
               const control = event.currentTarget;
               control.disabled = true;
               try {
@@ -491,7 +574,9 @@ export function createChatPage({
                 });
                 updates.sent(message);
                 if (!thread.isConnected) return;
-                const entry = showMessage({ ...message, activity_id: item.id, activity_title: item.title });
+                const entry = showMessage({ ...message, activity_id: item.id, activity_title: item.title,
+                  activity_starts_at: item.starts_at, activity_category: item.category_name,
+                  activity_organizer: item.organizer_name, activity_cover_url: item.cover_thumbnail_url });
                 if (entry) messages.append(entry);
                 empty.hidden = true;
                 picker.hidden = true;
@@ -502,7 +587,20 @@ export function createChatPage({
                 const latest = await fetchMessages().catch(() => null);
                 if (latest?.status) setStatus(latest.status, latest.isFriend);
               }
-            }));
+            }, "friend-share-result");
+            if (item.cover_thumbnail_url) {
+              const image = node("img");
+              image.src = item.cover_thumbnail_url;
+              image.alt = "";
+              result.append(image);
+            }
+            const details = node("span");
+            details.append(node("strong", item.title), node("small", [
+              item.starts_at ? time(item.starts_at) : "时间待定", item.category_name,
+              item.organizer_name ? "发布者：" + item.organizer_name : null,
+            ].filter(Boolean).join(" · ")));
+            result.append(details);
+            results.append(result);
           }
         });
       }

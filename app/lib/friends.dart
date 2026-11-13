@@ -72,6 +72,7 @@ class _FriendsPageState extends State<FriendsPage> {
   String _query = '';
   bool _allow = true;
   bool _busy = false;
+  int _requestTab = 0;
 
   @override
   void initState() {
@@ -133,61 +134,79 @@ class _FriendsPageState extends State<FriendsPage> {
       ),
       body: items == null && _error == null
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                children: [
-                  if (_error case final error?)
-                    ListTile(
-                      title: Text(error),
-                      onTap: _load,
-                      trailing: const Icon(Icons.refresh),
-                    ),
-                  if (widget.requests && items != null) ...[
-                    SwitchListTile(
-                      title: Text(context.tr('friendPreference')),
-                      value: _allow,
-                      onChanged: _busy
-                          ? null
-                          : (value) => _run(
-                              () => SocialService.setFriendPreference(
-                                widget.token,
-                                value,
-                              ),
-                            ),
-                    ),
-                    for (final incoming in [true, false]) ...[
-                      ListTile(
-                        title: Text(
-                          context.tr(
-                            incoming ? 'friendIncoming' : 'friendOutgoing',
-                          ),
-                        ),
+          : Column(
+              children: [
+                if (widget.requests)
+                  SegmentedButton<int>(
+                    segments: [
+                      ButtonSegment(
+                        value: 0,
+                        label: Text(context.tr('friendIncoming')),
                       ),
-                      if (!items.any((item) => item['incoming'] == incoming))
-                        ListTile(title: Text(context.tr('friendNoRequests'))),
-                      for (final item in items.where(
-                        (item) => item['incoming'] == incoming,
-                      ))
-                        _requestRow(item),
+                      ButtonSegment(
+                        value: 1,
+                        label: Text(context.tr('friendOutgoing')),
+                      ),
                     ],
-                  ] else if (results != null) ...[
-                    TextField(
-                      onChanged: (value) =>
-                          setState(() => _query = value.trim().toLowerCase()),
-                      decoration: InputDecoration(
-                        labelText: context.tr('friendSearch'),
-                        prefixIcon: const Icon(Icons.search),
-                      ),
+                    selected: {_requestTab},
+                    onSelectionChanged: (value) =>
+                        setState(() => _requestTab = value.first),
+                  ),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _load,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        if (_error case final error?)
+                          ListTile(
+                            title: Text(error),
+                            onTap: _load,
+                            trailing: const Icon(Icons.refresh),
+                          ),
+                        if (widget.requests && items != null) ...[
+                          SwitchListTile(
+                            title: Text(context.tr('friendPreference')),
+                            value: _allow,
+                            onChanged: _busy
+                                ? null
+                                : (value) => _run(
+                                    () => SocialService.setFriendPreference(
+                                      widget.token,
+                                      value,
+                                    ),
+                                  ),
+                          ),
+                          if (!items.any(
+                            (item) => item['incoming'] == (_requestTab == 0),
+                          ))
+                            ListTile(
+                              title: Text(context.tr('friendNoRequests')),
+                            ),
+                          for (final item in items.where(
+                            (item) => item['incoming'] == (_requestTab == 0),
+                          ))
+                            _requestRow(item),
+                        ] else if (results != null) ...[
+                          TextField(
+                            onChanged: (value) => setState(
+                              () => _query = value.trim().toLowerCase(),
+                            ),
+                            decoration: InputDecoration(
+                              labelText: context.tr('friendSearch'),
+                              prefixIcon: const Icon(Icons.search),
+                            ),
+                          ),
+                          if (results.isEmpty)
+                            ListTile(title: Text(context.tr('friendNone'))),
+                          for (final item in results) _friendRow(item),
+                        ],
+                      ],
                     ),
-                    if (results.isEmpty)
-                      ListTile(title: Text(context.tr('friendNone'))),
-                    for (final item in results) _friendRow(item),
-                  ],
-                ],
-              ),
+                  ),
+                ),
+              ],
             ),
     );
   }
@@ -389,7 +408,33 @@ class _ShareActivityDialogState extends State<ShareActivityDialog> {
                 children: [
                   for (final item in _items)
                     ListTile(
+                      leading: item['cover_thumbnail_url'] == null
+                          ? const Icon(Icons.event_outlined)
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                '${item['cover_thumbnail_url']}',
+                                width: 52,
+                                height: 52,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
                       title: Text(item['title'] as String),
+                      subtitle: Text(
+                        [
+                              if (item['starts_at'] != null)
+                                '${item['starts_at']}'
+                                    .replaceFirst('T', ' ')
+                                    .split('.')
+                                    .first,
+                              item['category_name'],
+                              item['organizer_name'],
+                            ]
+                            .whereType<Object>()
+                            .map((value) => '$value')
+                            .where((value) => value.isNotEmpty)
+                            .join(' · '),
+                      ),
                       trailing: const Icon(Icons.send_outlined),
                       onTap: () => Navigator.pop(context, item),
                     ),

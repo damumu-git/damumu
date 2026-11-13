@@ -143,7 +143,15 @@ export function createCommunityPages(ui) {
     const field = node("label", "选择自己发起的活动");
     const select = node("select");
     select.name = "eventId";
-    for (const item of own) select.add(new Option(item.title, item.id));
+    for (const item of own) {
+      const date = item.starts_at ? new Intl.DateTimeFormat("zh-CN", {
+        timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+      }).format(new Date(item.starts_at)) : "时间待定";
+      const category = [item.major_category_name, item.minor_category_name, item.category_name]
+        .find(Boolean);
+      select.add(new Option([item.title, date, category, "发布者：" + (session().user.nickname || "我")]
+        .filter(Boolean).join(" · "), item.id));
+    }
     field.append(select);
     const submit = node("button", label, "button primary");
     submit.type = "submit";

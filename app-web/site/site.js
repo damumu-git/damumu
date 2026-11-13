@@ -122,6 +122,15 @@ async function request(
   return payload.data;
 }
 
+async function requestPrivateImage(path, signal) {
+  const response = await fetch(apiRoot + path, {
+    signal,
+    headers: session?.accessToken ? { Authorization: "Bearer " + session.accessToken } : {},
+  });
+  if (!response.ok) throw new Error("图片加载失败");
+  return URL.createObjectURL(await response.blob());
+}
+
 function node(tag, text, className) {
   const element = document.createElement(tag);
   if (text != null) element.textContent = text;
@@ -543,7 +552,6 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
   if (notice) content.append(node("p", notice, "notice"));
   if (register || socialRegistration)
     content.append(node("p", "创建账号后即可报名或发起活动。", "meta"));
-
   const form = node("form", null, "form");
   if (register || socialRegistration) {
     form.insertAdjacentHTML(
@@ -710,6 +718,7 @@ async function renderActivity(id, deferred) {
       facts.append(row);
     };
     addFact("分类", item.category_name);
+    if (item.confirmed_at) addFact("活动状态", "已确定 · 将按计划开展");
     addFact("时间", [starts, ends].filter(Boolean).join(" 至 "));
     addFact("地区", area(item));
     addFact("人均费用", cost(item));
@@ -775,10 +784,20 @@ async function renderActivity(id, deferred) {
       (!schedule?.ends_at || Date.parse(schedule.ends_at) > Date.now());
     const actions = node("div", null, "activity-actions");
     if (owns) {
-      const manage = actionLink(
-        "管理报名", "/organizer/activities/" + id, "button primary",
-      );
-      actions.append(activityAction(manage, "manage"));
+      const confirmation = button(item.confirmed_at ? "取消已确定状态" : "标记为已确定", async (event) => {
+        const control = event.currentTarget;
+        control.disabled = true;
+        try {
+          await request("/events/" + encodeURIComponent(id) + "/confirmation", {
+            method: "PUT", auth: true, data: { confirmed: !item.confirmed_at },
+          });
+          await showActivity(id, content);
+        } catch (error) {
+          showError(content, error);
+          control.disabled = false;
+        }
+      }, "button primary");
+      actions.append(activityAction(confirmation, "manage"));
     }
     if (active && !owns && !membership) {
       const join = button(
@@ -814,10 +833,8 @@ async function renderActivity(id, deferred) {
       });
       actions.append(activityAction(leave, "leave"));
     }
-    actions.append(
-      activityAction(memberPages.bookmark("activity", id), "bookmark"),
-      activityAction(actionLink("活动后评价", eventLink(id) + "/feedback"), "feedback"),
-    );
+    if (!owns) actions.append(activityAction(memberPages.bookmark("activity", id), "bookmark"));
+    actions.append(activityAction(actionLink("活动后评价", eventLink(id) + "/feedback"), "feedback"));
     if (!owns) {
       const report = button("举报活动", () =>
         requireLogin(() =>
@@ -827,6 +844,37 @@ async function renderActivity(id, deferred) {
       actions.append(activityAction(report, "report"));
     }
     participation.append(actions);
+    if (owns) {
+      const management = node("section", null, "inline-member-management");
+      management.append(node("h3", item.approval_mode === "manual" ? "报名申请" : "当前报名成员"));
+      const memberList = node("div", null, "inline-member-list");
+      management.append(memberList);
+      participation.append(management);
+      request("/events/" + encodeURIComponent(id) + "/members", { auth: true })
+        .then((rows) => {
+          memberList.replaceChildren();
+          const visibleRows = rows.filter((entry) => entry.user_id !== session.user.id &&
+            (item.approval_mode === "manual" || ["approved", "attended"].includes(entry.status)));
+          for (const member of visibleRows) {
+            const row = node("div", null, "inline-member-row");
+            const person = actionLink(member.nickname || "搭慕用户", "/people/" + encodeURIComponent(member.user_id));
+            row.append(person, node("p", [membershipLabel(member.status), member.application_note].filter(Boolean).join(" · "), "meta"));
+            if (item.approval_mode === "manual" && ["applied", "waitlisted"].includes(member.status)) {
+              const controls = node("div", null, "detail-actions");
+              const decide = async (approved) => {
+                await request("/events/" + encodeURIComponent(id) + "/members/" + encodeURIComponent(member.user_id) +
+                  (approved ? "/approve" : "/reject"), { auth: true, data: approved ? undefined : { reason: "组织者未通过申请" } });
+                await showActivity(id, content);
+              };
+              controls.append(button("通过", () => decide(true), "button primary"), button("取消", () => decide(false)));
+              row.append(controls);
+            }
+            memberList.append(row);
+          }
+          if (!memberList.children.length) memberList.append(node("p", "暂无报名成员。", "meta"));
+        })
+        .catch((error) => showError(memberList, error));
+    }
     layout.append(participation);
     if (deferred) await activitySeries.activityLinks(id, participation, true);
     else activitySeries.activityLinks(id, participation);
@@ -1388,7 +1436,31 @@ async function showSettings() {
   const avatar = node("div", null, "account-avatar");
   avatar.setAttribute("aria-hidden", "true");
   renderAvatar(avatar, session.user);
-  identity.append(avatar, node("h2", session.user.nickname || "搭慕用户"));
+  const avatarInput = node("input");
+  avatarInput.type = "file";
+  avatarInput.accept = "image/jpeg,image/png,image/webp";
+  avatarInput.hidden = true;
+  const avatarButton = button("更换头像", () => avatarInput.click(), "button ghost");
+  avatarInput.addEventListener("change", async () => {
+    const file = avatarInput.files?.[0];
+    if (!file) return;
+    avatarButton.disabled = true;
+    try {
+      const data = new FormData();
+      data.append("avatar", file);
+      const changed = await request("/me/avatar", { auth: true, data });
+      setSession({ ...session, user: { ...session.user, ...changed } });
+      renderAvatar(avatar, session.user);
+    } catch (error) {
+      showError(info, error);
+    } finally {
+      avatarInput.value = "";
+      avatarButton.disabled = false;
+    }
+  });
+  const identityText = node("div");
+  identityText.append(node("h2", session.user.nickname || "搭慕用户"), avatarButton, avatarInput);
+  identity.append(avatar, identityText);
   info.append(identity);
   const stats = node("dl", null, "personal-stats");
   for (const [label, count] of [
@@ -2015,6 +2087,7 @@ const showMessages = createChatPage({
   actionLink,
   handleForm,
   request,
+  requestPrivateImage,
   reasonDialog,
   dialog,
   session: () => session,

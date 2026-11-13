@@ -104,6 +104,10 @@ class ChatMessage {
     this.mediaThumbnailUrl,
     this.activityTitle,
     this.activityId,
+    this.activityStartsAt,
+    this.activityCategory,
+    this.activityOrganizer,
+    this.activityCoverUrl,
     this.pending = false,
     this.failed = false,
   });
@@ -124,6 +128,10 @@ class ChatMessage {
   final String? mediaThumbnailUrl;
   final String? activityTitle;
   final String? activityId;
+  final DateTime? activityStartsAt;
+  final String? activityCategory;
+  final String? activityOrganizer;
+  final String? activityCoverUrl;
   final bool pending;
   final bool failed;
 
@@ -145,6 +153,10 @@ class ChatMessage {
     mediaThumbnailUrl: mediaThumbnailUrl,
     activityTitle: activityTitle,
     activityId: activityId,
+    activityStartsAt: activityStartsAt,
+    activityCategory: activityCategory,
+    activityOrganizer: activityOrganizer,
+    activityCoverUrl: activityCoverUrl,
     pending: pending ?? this.pending,
     failed: failed ?? this.failed,
   );
@@ -167,6 +179,10 @@ class ChatMessage {
     'media_thumbnail_url': mediaThumbnailUrl,
     'activity_title': activityTitle,
     'activity_id': activityId,
+    'activity_starts_at': activityStartsAt?.toUtc().toIso8601String(),
+    'activity_category': activityCategory,
+    'activity_organizer': activityOrganizer,
+    'activity_cover_url': activityCoverUrl,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -185,6 +201,12 @@ class ChatMessage {
     mediaAssetId: json['media_asset_id']?.toString(),
     activityTitle: json['activity_title'] as String?,
     activityId: json['activity_id'] as String?,
+    activityStartsAt: DateTime.tryParse(
+      '${json['activity_starts_at'] ?? ''}',
+    )?.toLocal(),
+    activityCategory: json['activity_category'] as String?,
+    activityOrganizer: json['activity_organizer'] as String?,
+    activityCoverUrl: _absoluteMediaUrl(json['activity_cover_url']?.toString()),
     mediaUrl: _absoluteMediaUrl(json['media_url']?.toString()),
     mediaThumbnailUrl: _absoluteMediaUrl(
       json['media_thumbnail_url']?.toString(),

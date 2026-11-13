@@ -2823,6 +2823,7 @@ class EventDetailPage extends StatefulWidget {
 class _EventDetailPageState extends State<EventDetailPage> {
   bool _saved = false;
   bool _joining = false;
+  bool _confirming = false;
   bool _detailStarted = false;
   Map<String, dynamic>? _detail;
   List<Map<String, dynamic>> _members = const [];
@@ -2926,6 +2927,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
                         activityText(context, content, 'category', e.category),
                       ),
                       if (cancelled) _Pill(context.tr('eventCancelled')),
+                      if ((_detail?['confirmed_at'] ??
+                              e.localizedContent?['confirmed_at']) !=
+                          null)
+                        _Pill(context.tr('eventConfirmed'), green: true),
                       if (e.isExpired) _Pill(context.tr('pastActivity')),
                       if (!cancelled && e.isInProgress)
                         _Pill(context.tr('activityInProgress'), green: true),
@@ -3024,6 +3029,26 @@ class _EventDetailPageState extends State<EventDetailPage> {
                             composeContact(context, token, 'inquiry', e.apiId!);
                           }
                         },
+                      ),
+                    ),
+                  if (e.isOwned &&
+                      ['published', 'full'].contains(_detail?['status']))
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        icon: Icon(
+                          _detail?['confirmed_at'] == null
+                              ? Icons.verified_outlined
+                              : Icons.undo,
+                        ),
+                        label: Text(
+                          context.tr(
+                            _detail?['confirmed_at'] == null
+                                ? 'markEventConfirmed'
+                                : 'unmarkEventConfirmed',
+                          ),
+                        ),
+                        onPressed: _confirming ? null : _toggleConfirmation,
                       ),
                     ),
                   const SizedBox(height: 20),
@@ -3187,6 +3212,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                 const SizedBox(width: 12),
               ],
               if (e.apiId != null &&
+                  !e.isOwned &&
                   _detail?['visibility'] == 'public' &&
                   [
                     'published',
@@ -3254,6 +3280,26 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
   String? get _organizerUserId =>
       _detail?['organizer_user_id']?.toString() ?? widget.event.organizerUserId;
+
+  Future<void> _toggleConfirmation() async {
+    final token = AuthScope.of(context).token;
+    final id = widget.event.apiId;
+    if (token == null || id == null || _confirming) return;
+    setState(() => _confirming = true);
+    try {
+      await ActivitySeriesService.request(
+        '/events/$id/confirmation',
+        token: token,
+        method: 'PUT',
+        data: {'confirmed': _detail?['confirmed_at'] == null},
+      );
+      await _loadDetail();
+    } catch (error) {
+      if (mounted) _showMessageError(context, '$error');
+    } finally {
+      if (mounted) setState(() => _confirming = false);
+    }
+  }
 
   bool get _canLeave =>
       _membershipStatus == 'approved' ||
@@ -5275,7 +5321,6 @@ class _MessagesPageState extends State<MessagesPage> {
   String? _error;
   List<ConversationItem> _conversations = const [];
   List<NotificationItem> _notifications = const [];
-  int _pendingFriends = 0;
   StreamSubscription<RealtimeEvent>? _realtimeSubscription;
   StreamSubscription<void>? _pushSubscription;
   Timer? _refreshTimer;
@@ -5333,13 +5378,11 @@ class _MessagesPageState extends State<MessagesPage> {
       final results = await Future.wait([
         SocialService.conversations(token),
         SocialService.notifications(token),
-        SocialService.pendingFriendRequests(token).catchError((Object _) => 0),
       ]);
       if (!mounted) return;
       setState(() {
         _conversations = results[0] as List<ConversationItem>;
         _notifications = results[1] as List<NotificationItem>;
-        _pendingFriends = results[2] as int;
         _hasLoadedInbox = true;
         _error = null;
         _loading = false;
@@ -5401,15 +5444,11 @@ class _MessagesPageState extends State<MessagesPage> {
               spacing: 8,
               runSpacing: 8,
               children: List.generate(
-                3,
+                2,
                 (index) => ChoiceChip(
                   label: _segmentLabel(
-                    context.tr(
-                      ['eventChats', 'directMessages', 'notifications'][index],
-                    ),
-                    index == 2
-                        ? _notifications.where((item) => !item.read).length
-                        : _chatUnread(index == 0 ? 'event' : 'direct'),
+                    context.tr(['eventChats', 'directMessages'][index]),
+                    _chatUnread(index == 0 ? 'event' : 'direct'),
                   ),
                   selected: _segment == index,
                   onSelected: (_) => _selectSegment(index),
@@ -5438,11 +5477,9 @@ class _MessagesPageState extends State<MessagesPage> {
     ],
   );
 
-  int _chatUnread(String type) =>
-      (type == 'direct' ? _pendingFriends : 0) +
-      _conversations
-          .where((item) => item.type == type)
-          .fold(0, (total, item) => total + item.unreadCount);
+  int _chatUnread(String type) => _conversations
+      .where((item) => item.type == type && (type != 'direct' || item.isFriend))
+      .fold(0, (total, item) => total + item.unreadCount);
 
   Widget _segmentLabel(String label, int unread) => Row(
     mainAxisSize: MainAxisSize.min,
@@ -5468,7 +5505,11 @@ class _MessagesPageState extends State<MessagesPage> {
     }
     if (_segment == 2) return _notices();
     final type = _segment == 0 ? 'event' : 'direct';
-    final items = _conversations.where((item) => item.type == type).toList();
+    final items = _conversations
+        .where(
+          (item) => item.type == type && (type != 'direct' || item.isFriend),
+        )
+        .toList();
     if (items.isEmpty && _segment == 0) {
       return Center(child: Text(context.tr('noConversations')));
     }
@@ -5478,22 +5519,6 @@ class _MessagesPageState extends State<MessagesPage> {
         key: PageStorageKey('messages-$_segment'),
         padding: const EdgeInsets.symmetric(horizontal: 20),
         children: [
-          if (_segment == 1)
-            ListTile(
-              leading: const Icon(Icons.mark_chat_unread_outlined),
-              title: Text(context.tr('contactRequests')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _openContactRequests,
-            ),
-          if (_segment == 1)
-            ListTile(
-              leading: const Icon(Icons.person_add_alt_1_outlined),
-              title: Text(context.tr('friendRequests')),
-              trailing: _pendingFriends == 0
-                  ? const Icon(Icons.chevron_right)
-                  : Badge(label: Text('$_pendingFriends')),
-              onTap: () => _openFriendsFromInbox(requests: true),
-            ),
           if (items.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
@@ -6109,6 +6134,20 @@ class _ChatPageState extends State<ChatPage> {
                     if (message.messageType == 'event_cancelled') {
                       return EventCancellationNotice(reason: message.body);
                     }
+                    if (message.senderUserId == null ||
+                        message.messageType == 'system') {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Center(
+                          child: Text(
+                            '${context.tr('platformReminder')}: ${message.body}',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: Colors.black54),
+                          ),
+                        ),
+                      );
+                    }
                     final viewer = AuthScope.of(context).user;
                     final mine = message.senderUserId == viewer?.id;
                     final Widget bubble =
@@ -6119,14 +6158,41 @@ class _ChatPageState extends State<ChatPage> {
                                 ? Alignment.centerRight
                                 : Alignment.centerLeft,
                             child: Card(
+                              clipBehavior: Clip.antiAlias,
                               child: ListTile(
-                                leading: const Icon(Icons.event_outlined),
+                                leading: message.activityCoverUrl == null
+                                    ? const Icon(Icons.event_outlined)
+                                    : ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(
+                                          message.activityCoverUrl!,
+                                          width: 58,
+                                          height: 58,
+                                          fit: BoxFit.cover,
+                                          headers: privateImageHeaders(
+                                            context,
+                                            message.activityCoverUrl!,
+                                          ),
+                                        ),
+                                      ),
                                 title: Text(
                                   message.activityTitle ??
                                       context.tr('friendActivityUnavailable'),
                                 ),
                                 subtitle: Text(
-                                  context.tr('friendSharedActivity'),
+                                  [
+                                        if (message.activityStartsAt != null)
+                                          MaterialLocalizations.of(
+                                            context,
+                                          ).formatMediumDate(
+                                            message.activityStartsAt!,
+                                          ),
+                                        message.activityCategory,
+                                        message.activityOrganizer,
+                                      ]
+                                      .whereType<String>()
+                                      .where((value) => value.isNotEmpty)
+                                      .join(' · '),
                                 ),
                                 onTap: message.activityId == null
                                     ? null
@@ -6159,8 +6225,7 @@ class _ChatPageState extends State<ChatPage> {
                                 ? () => _deliverPending(message)
                                 : () => _showMessageActions(message),
                           );
-                    if (widget.conversation.type != 'event' ||
-                        message.senderUserId == null) {
+                    if (message.senderUserId == null) {
                       return bubble;
                     }
                     final avatar = UserAvatarImage(
@@ -6237,15 +6302,10 @@ class _ChatPageState extends State<ChatPage> {
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: _sending ? null : _chooseChatImageSource,
+                    tooltip: context.tr('chatAddAttachment'),
+                    onPressed: _sending ? null : _showAttachmentMenu,
                     icon: const Icon(Icons.add_circle_outline),
                   ),
-                  if (_isFriend)
-                    IconButton(
-                      tooltip: context.tr('friendShareActivity'),
-                      onPressed: _sending ? null : _shareActivity,
-                      icon: const Icon(Icons.event_outlined),
-                    ),
                   Expanded(
                     child: TextField(
                       controller: _input,
@@ -6378,9 +6438,37 @@ class _ChatPageState extends State<ChatPage> {
     if (mounted) setState(() => _sending = false);
   }
 
-  Future<void> _chooseChatImageSource() async {
-    final source = await _chooseImageSource(context);
-    if (source != null && mounted) await _pickChatImage(source);
+  Future<void> _showAttachmentMenu() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(context.tr('takePhoto')),
+              onTap: () => Navigator.pop(sheetContext, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(context.tr('chooseFromGallery')),
+              onTap: () => Navigator.pop(sheetContext, 'gallery'),
+            ),
+            if (_isFriend)
+              ListTile(
+                leading: const Icon(Icons.event_outlined),
+                title: Text(context.tr('friendShareActivity')),
+                onTap: () => Navigator.pop(sheetContext, 'activity'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'activity') return _shareActivity();
+    await _pickChatImage(
+      action == 'camera' ? ImageSource.camera : ImageSource.gallery,
+    );
   }
 
   Future<void> _pickChatImage(ImageSource source) async {
@@ -6596,8 +6684,11 @@ class _ChatPageState extends State<ChatPage> {
               ),
             if (!mine)
               ListTile(
-                leading: const Icon(Icons.flag_outlined),
-                title: Text(context.tr('reportMessage')),
+                leading: const Icon(Icons.error_outline, color: Colors.red),
+                title: Text(
+                  context.tr('reportMessage'),
+                  style: const TextStyle(color: Colors.red),
+                ),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _report(message);
