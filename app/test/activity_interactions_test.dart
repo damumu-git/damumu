@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,56 @@ http.Response jsonResponse(String body, int status) => http.Response(
 );
 
 void main() {
+  testWidgets('my activities keeps its list and offset while refreshing', (
+    tester,
+  ) async {
+    final response = Completer<http.Response>();
+    var requests = 0;
+    final activities = jsonEncode({
+      'data': [
+        for (var i = 0; i < 35; i++)
+          {
+            'id': 'activity-$i',
+            'title': 'Activity $i',
+            'event_status': 'published',
+          },
+      ],
+    });
+    final client = MockClient((_) async {
+      if (++requests == 1) return jsonResponse(activities, 200);
+      return response.future;
+    });
+    await http.runWithClient(() async {
+      await tester.pumpWidget(
+        const DaziApp(home: MyActivitiesPage(token: 'token')),
+      );
+      await tester.pumpAndSettle();
+      final list = find.byKey(const PageStorageKey('current'));
+      await tester.drag(list, const Offset(0, -700));
+      await tester.pumpAndSettle();
+      final scrollable = find.descendant(
+        of: list,
+        matching: find.byType(Scrollable),
+      );
+      final position = tester.state<ScrollableState>(scrollable).position;
+      final offset = position.pixels;
+      expect(offset, greaterThan(0));
+      final refresh = tester.widget<RefreshIndicator>(
+        find.byType(RefreshIndicator).first,
+      );
+      final pending = refresh.onRefresh();
+      await tester.pump();
+      expect(
+        tester.state<ScrollableState>(scrollable).position,
+        same(position),
+      );
+      response.complete(jsonResponse(activities, 200));
+      await pending;
+      await tester.pumpAndSettle();
+      expect(position.pixels, offset);
+    }, () => client);
+  });
+
   testWidgets('profile avatar opens a zoomable preview and closes', (
     tester,
   ) async {

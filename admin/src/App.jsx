@@ -6,7 +6,7 @@ import CategoryCoverEditor, { CategoryCoverPreview } from './CategoryCoverEditor
 import { FilePicker } from './AdminControls.jsx'
 import { useAdminDialog } from './admin-dialog-context'
 import { EmojiIcon, EmojiAssetManager, EmojiAssetSelect } from './EmojiAssets.jsx'
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { API_BASE, api, mediaUrl } from './api'
 import { ListPager, PagedItems } from './ListPager.jsx'
 import './App.css'
@@ -94,27 +94,48 @@ const compactNumber = (value) =>
 function useResource(loader, dependencies = []) {
   const [state, setState] = useState({ data: null, loading: true, error: '' })
   const requestId = useRef(0)
-  const load = useCallback(async () => {
+  const load = useCallback(async (keepData = false) => {
     const id = ++requestId.current
-    setState((current) => ({ ...current, loading: true, error: '' }))
+    setState((current) => ({ data: keepData ? current.data : null, loading: true, error: '' }))
     try {
       const response = await loader()
       if (id === requestId.current) setState({ data: response, loading: false, error: '' })
     } catch (error) {
-      if (id === requestId.current) setState({ data: null, loading: false, error: error.message })
+      if (id === requestId.current) setState((current) => ({ ...current, loading: false, error: error.message }))
     }
   // The dependency list is supplied by each resource page.
-  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/use-memo
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencies)
   useEffect(() => {
     load()
     return () => { requestId.current += 1 }
   }, [load])
-  return { ...state, reload: load }
+  const reload = useCallback(() => load(true), [load])
+  return { ...state, reload }
 }
 
 function Status({ value }) {
   return <span className={`status status-${value}`}>{statusText[value] ?? value ?? '未知'}</span>
+}
+
+function useListDetail() {
+  const [selectedId, setSelected] = useState(null)
+  const saved = useRef(null)
+  const setSelectedId = (id) => {
+    if (id && !selectedId) {
+      const table = document.querySelector('.management-table')
+      saved.current = { top: window.scrollY, tableTop: table?.scrollTop, tableLeft: table?.scrollLeft }
+    }
+    setSelected(id)
+  }
+  useLayoutEffect(() => {
+    if (selectedId || !saved.current) return
+    const { top, tableTop, tableLeft } = saved.current
+    saved.current = null
+    document.querySelector('.management-table')?.scrollTo({ top: tableTop, left: tableLeft, behavior: 'instant' })
+    window.scrollTo({ top, behavior: 'instant' })
+  }, [selectedId])
+  return [selectedId, setSelectedId]
 }
 
 function usePagedResource(loader, filters) {
@@ -132,11 +153,11 @@ function usePagedResource(loader, filters) {
   }
 }
 
-function PageState({ loading, error, empty, onRetry, children }) {
-  if (loading) {
+function PageState({ data, loading, error, empty, onRetry, children }) {
+  if (loading && !data) {
     return <div className="page-state"><span className="spinner" /><p>正在读取业务数据…</p></div>
   }
-  if (error) {
+  if (error && !data) {
     return (
       <div className="page-state error-state">
         <strong>暂时无法连接 REST API</strong>
@@ -146,10 +167,10 @@ function PageState({ loading, error, empty, onRetry, children }) {
       </div>
     )
   }
-  if (empty) {
-    return <div className="page-state"><span className="empty-icon">○</span><strong>暂无数据</strong><p>符合当前条件的记录会显示在这里。</p></div>
-  }
-  return children
+  return <>
+    {empty ? <div className="page-state"><span className="empty-icon">○</span><strong>暂无数据</strong><p>符合当前条件的记录会显示在这里。</p></div> : children}
+    {error && <div role="alert" className="page-state error-state"><p>{error}</p><button className="button secondary" onClick={onRetry}>重试更新</button></div>}
+  </>
 }
 
 function FilterBar({ search, setSearch, placeholder, children }) {
@@ -353,7 +374,7 @@ function Users() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [role, setRole] = useState('')
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useListDetail()
   const [notice, setNotice] = useState('')
   const { resource, pager } = usePagedResource(api.users, { q: search, status, role })
   const rows = resource.data?.data ?? []
@@ -581,7 +602,7 @@ function Events({ pendingCovers, onOpenMessages }) {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [coverReview, setCoverReview] = useState('')
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useListDetail()
   const [notice, setNotice] = useState('')
   const [selection, setSelection] = useState({ scope: '', ids: [] })
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -735,7 +756,7 @@ function Messages({ messageEventFilter, onClearMessageEventFilter }) {
   const [status, setStatus] = useState('')
   const [days, setDays] = useState('30')
   const [reportedOnly, setReportedOnly] = useState(false)
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useListDetail()
   const [conversationFilter, setConversationFilter] = useState(null)
   const [cursors, setCursors] = useState([null])
   const cursor = cursors.at(-1)

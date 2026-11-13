@@ -201,10 +201,10 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
       if (error.name !== "AbortError") window.prompt("复制活动链接", url);
     }
   }
-  async function activityLinks(id, content) {
+  async function activityLinks(id, content, deferred = false) {
     try {
       const item = await request(endpoint(id) + "/story");
-      if (!content.isConnected) return;
+      if (!deferred && !content.isConnected) return;
       const actions = node("div", null, "section-nav");
       actions.append(button("分享活动", () => share(id, item.title)));
       if (item.series_id) actions.append(actionLink(item.series_title, "/series/" + (item.series_slug || item.series_id)));

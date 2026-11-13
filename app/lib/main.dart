@@ -2243,31 +2243,27 @@ class _DiscoverPageState extends State<DiscoverPage> {
     setState(() {
       _regionalLoading = true;
       _regionalFailed = false;
-      if (!append) {
-        _regionalEvents = [];
-        _regionalHasMore = false;
-        _regionalCursor = null;
-      }
     });
     try {
       final page = _following
           ? await EventService.list(
               city: _city,
               district: _ward ?? _district,
-              cursor: _regionalCursor,
+              cursor: append ? _regionalCursor : null,
               followingToken: AuthScope.of(context).token!,
             )
           : await widget.regionalLoader!(
               city: _city,
               district: _ward ?? _district,
               limit: 20,
-              cursor: _regionalCursor,
+              cursor: append ? _regionalCursor : null,
             );
       if (!mounted || request != _regionalRequest) return;
       final events = page.items
           .map((item) => _eventFromApi(context, item))
           .toList();
       setState(() {
+        if (!append) _regionalEvents = [];
         final loaded = _regionalEvents.map((event) => event.apiId).toSet();
         _regionalEvents.addAll(
           events.where((event) => loaded.add(event.apiId)),
@@ -2294,6 +2290,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
       _category = null;
       _regionalRequest++;
       _regionalLoading = false;
+      _regionalEvents = [];
+      _regionalHasMore = false;
+      _regionalCursor = null;
     });
     _loadRegional();
   }
@@ -2537,11 +2536,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
           ),
           const SizedBox(height: 14),
           if (_usesRegionalFeed
-              ? _regionalLoading && !_regionalHasMore
+              ? _regionalLoading && _regionalEvents.isEmpty
               : widget.loading)
             const Center(child: CircularProgressIndicator())
           else if (_usesRegionalFeed
-              ? _regionalFailed && !_regionalHasMore
+              ? _regionalFailed && _regionalEvents.isEmpty
               : widget.loadFailed)
             LoadFailure(
               onRetry: _usesRegionalFeed
@@ -5280,6 +5279,7 @@ class _MessagesPageState extends State<MessagesPage> {
 
   int _segment = 0;
   bool _loading = true;
+  bool _hasLoadedInbox = false;
   bool _readingAll = false;
   String? _error;
   List<ConversationItem> _conversations = const [];
@@ -5330,7 +5330,7 @@ class _MessagesPageState extends State<MessagesPage> {
       if (mounted) setState(() => _loading = false);
       return;
     }
-    if (mounted && showProgress) {
+    if (mounted && showProgress && !_hasLoadedInbox) {
       setState(() {
         _loading = true;
         _error = null;
@@ -5345,6 +5345,8 @@ class _MessagesPageState extends State<MessagesPage> {
       setState(() {
         _conversations = results[0] as List<ConversationItem>;
         _notifications = results[1] as List<NotificationItem>;
+        _hasLoadedInbox = true;
+        _error = null;
         _loading = false;
       });
       await widget.onUnreadChanged();
@@ -5352,8 +5354,11 @@ class _MessagesPageState extends State<MessagesPage> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = '$error';
+          if (!_hasLoadedInbox) _error = '$error';
         });
+        if (_hasLoadedInbox && showProgress) {
+          _showMessageError(context, '$error');
+        }
       }
     }
   }
@@ -5473,6 +5478,7 @@ class _MessagesPageState extends State<MessagesPage> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        key: PageStorageKey('messages-$_segment'),
         padding: const EdgeInsets.symmetric(horizontal: 20),
         children: [
           if (_segment == 1)
@@ -5548,6 +5554,7 @@ class _MessagesPageState extends State<MessagesPage> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        key: const PageStorageKey('message-notices'),
         padding: const EdgeInsets.symmetric(horizontal: 20),
         children: _notifications
             .map(
@@ -7366,7 +7373,8 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
     body: FutureBuilder<List<Map<String, dynamic>>>(
       future: _future,
       builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
+        if (!snapshot.hasData &&
+            snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
@@ -7384,6 +7392,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
           return _activityList(
             organized,
             context.tr('noPreviousEvents'),
+            storageKey: 'organized',
             isOrganizer: true,
           );
         }
@@ -7400,12 +7409,18 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
             _activityList(
               rows.where((row) => !history.contains(row)).toList(),
               context.tr('myActivityEmpty'),
+              storageKey: 'current',
             ),
             _activityList(
               rows.where((row) => row['feedback_pending'] == true).toList(),
               context.tr('myActivityEmpty'),
+              storageKey: 'feedback',
             ),
-            _activityList(history.toList(), context.tr('myActivityEmpty')),
+            _activityList(
+              history.toList(),
+              context.tr('myActivityEmpty'),
+              storageKey: 'history',
+            ),
           ],
         );
       },
@@ -7415,6 +7430,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
   Widget _activityList(
     List<Map<String, dynamic>> rows,
     String emptyText, {
+    required String storageKey,
     bool isOrganizer = false,
   }) {
     if (rows.isEmpty) return Center(child: Text(emptyText));
@@ -7426,6 +7442,7 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
         await _future;
       },
       child: ListView.separated(
+        key: PageStorageKey(storageKey),
         padding: const EdgeInsets.all(20),
         itemCount: rows.length,
         separatorBuilder: (_, _) => const SizedBox(height: 12),
@@ -7931,7 +7948,8 @@ class _OrganizerApplicationsState extends State<_OrganizerApplications> {
               ],
             ),
             const SizedBox(height: 10),
-            if (snapshot.connectionState == ConnectionState.waiting)
+            if (!snapshot.hasData &&
+                snapshot.connectionState == ConnectionState.waiting)
               const Center(child: CircularProgressIndicator())
             else if (snapshot.hasError)
               LoadFailure(onRetry: _reload)

@@ -421,8 +421,7 @@ async function loadFeed(append = false) {
   }
 }
 
-function show(title, layout = "reading", modal = false) {
-  dialogRequest++;
+function show(title, layout = "reading", modal = false, deferred = false) {
   const content = node(
     "section",
     null,
@@ -431,6 +430,8 @@ function show(title, layout = "reading", modal = false) {
   const heading = node(modal ? "h2" : "h1", title);
   heading.id = modal ? "dialog-title" : "page-title";
   content.append(heading);
+  if (deferred) return content;
+  dialogRequest++;
   if (modal) {
     panel.replaceChildren(content);
     if (!dialog.open) dialog.showModal();
@@ -443,6 +444,25 @@ function show(title, layout = "reading", modal = false) {
     document.title = title + " · 搭慕 DAMU";
   }
   return content;
+}
+
+async function refreshCurrentPage(previous, render) {
+  if (!previous?.isConnected) return;
+  const path = currentPage();
+  const refreshed = await render();
+  if (!refreshed || !previous.isConnected || currentPage() !== path) return;
+  const focused = document.activeElement;
+  const hadFocus = previous.contains(focused) || dialog.contains(focused);
+  if (dialog.open) dialog.close();
+  const top = window.scrollY;
+  const left = window.scrollX;
+  previous.replaceWith(refreshed);
+  if (hadFocus) {
+    refreshed.tabIndex = -1;
+    refreshed.focus({ preventScroll: true });
+  }
+  document.title = refreshed.querySelector("h1").textContent + " · 搭慕 DAMU";
+  window.scrollTo({ top, left, behavior: "instant" });
 }
 
 function actionLink(label, href, style = "button ghost") {
@@ -475,7 +495,7 @@ function safeReturn(value) {
     : "/";
 }
 function requireLogin(action) {
-  if (session) action();
+  if (session) return action();
   else location.assign("/login?next=" + encodeURIComponent(currentPage()));
 }
 function finishLogin(result) {
@@ -636,8 +656,13 @@ function activityAction(control, kind) {
   return control;
 }
 
-async function showActivity(id) {
-  const content = show("活动详情", "activity-page");
+async function showActivity(id, previous) {
+  if (previous) return refreshCurrentPage(previous, () => renderActivity(id, true));
+  return renderActivity(id, false);
+}
+
+async function renderActivity(id, deferred) {
+  const content = show("活动详情", "activity-page", false, deferred);
   const marker = dialogRequest;
   const loading = node("p", "正在加载活动详情…", "meta");
   content.append(loading);
@@ -649,7 +674,7 @@ async function showActivity(id) {
     if (marker !== dialogRequest) return;
     loading.remove();
     $("h1", content).textContent = item.title;
-    document.title = item.title + " · 搭慕 DAMU";
+    if (!deferred) document.title = item.title + " · 搭慕 DAMU";
     const layout = node("div", null, "invitation");
     const details = node("section", null, "activity-section");
     layout.append(cover(item, "detail-cover"), details);
@@ -765,7 +790,7 @@ async function showActivity(id) {
             method: "POST",
             auth: true,
           });
-          showActivity(id);
+          await showActivity(id, content);
         } catch (error) {
           showError(content, error);
         } finally {
@@ -788,8 +813,11 @@ async function showActivity(id) {
     }
     participation.append(actions);
     layout.append(participation);
-    activitySeries.activityLinks(id, participation);
+    if (deferred) await activitySeries.activityLinks(id, participation, true);
+    else activitySeries.activityLinks(id, participation);
+    return content;
   } catch (error) {
+    if (deferred) throw error;
     if (marker === dialogRequest) {
       loading.remove();
       showError(content, error);
@@ -798,6 +826,7 @@ async function showActivity(id) {
 }
 
 function showJoin(id) {
+  const previous = page.firstElementChild;
   const content = show("报名参加", "reading", true);
   const form = node("form", null, "form");
   form.innerHTML =
@@ -812,7 +841,7 @@ function showJoin(id) {
         shareContact: false,
       },
     });
-    showActivity(id);
+    await showActivity(id, previous);
   });
 }
 
@@ -1170,8 +1199,13 @@ function membershipLabel(value) {
   );
 }
 
-async function showOrganizer(id) {
-  const content = show("组织者工作台", "workspace-page");
+async function showOrganizer(id, previous) {
+  if (previous) return refreshCurrentPage(previous, () => renderOrganizer(id, true));
+  return renderOrganizer(id, false);
+}
+
+async function renderOrganizer(id, deferred) {
+  const content = show("组织者工作台", "workspace-page", false, deferred);
   const marker = dialogRequest;
   const base = "/events/" + encodeURIComponent(id);
   try {
@@ -1219,7 +1253,7 @@ async function showOrganizer(id) {
               data: approved ? undefined : { reason },
             },
           );
-          showOrganizer(id);
+          await showOrganizer(id, content);
         }
         actions.append(
           button(
@@ -1254,12 +1288,14 @@ async function showOrganizer(id) {
         button("取消活动", () =>
           reasonDialog("取消活动", async (reason) => {
             await request(base + "/cancel", { auth: true, data: { reason } });
-            showOrganizer(id);
+            await showOrganizer(id, content);
           }),
         ),
       );
     }
+    return content;
   } catch (error) {
+    if (deferred) throw error;
     if (marker === dialogRequest) showError(content, error);
   }
 }
@@ -1917,6 +1953,7 @@ more.addEventListener("click", () => loadFeed(true));
 $("#close").addEventListener("click", () => dialog.close());
 const memberPages = createMemberPages({
   show,
+  refreshCurrentPage,
   node,
   button,
   actionLink,
@@ -1937,6 +1974,7 @@ const memberPages = createMemberPages({
 });
 const communityPages = createCommunityPages({
   show,
+  refreshCurrentPage,
   node,
   button,
   actionLink,

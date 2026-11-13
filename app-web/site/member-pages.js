@@ -1,6 +1,7 @@
 export function createMemberPages(ui) {
   const {
     show,
+    refreshCurrentPage,
     node,
     button,
     actionLink,
@@ -36,9 +37,15 @@ export function createMemberPages(ui) {
   };
 
   function memberPage(path, title, render) {
-    pages.set(path, () =>
+    pages.set(path, (previous) =>
       requireLogin(async () => {
-        const content = show(title, path.startsWith("/settings/") ? "settings-page" : "workspace-page");
+        const layout = path.startsWith("/settings/") ? "settings-page" : "workspace-page";
+        if (previous) return refreshCurrentPage(previous, async () => {
+          const content = show(title, layout, false, true);
+          await render(content);
+          return content;
+        });
+        const content = show(title, layout);
         try {
           await render(content);
         } catch (error) {
@@ -191,7 +198,9 @@ export function createMemberPages(ui) {
             "/me/saved/" + item.kind + "/" + encodeURIComponent(item.target),
             { method: "DELETE", auth: true },
           );
-          pages.get("/me/saved")();
+          const row = trigger.closest("li");
+          row.remove();
+          if (!list.children.length) list.replaceWith(node("p", "还没有收藏。", "meta"));
         } catch (error) {
           showError(content, error);
           trigger.disabled = false;
@@ -227,7 +236,7 @@ export function createMemberPages(ui) {
             method: "POST",
             auth: true,
           });
-          pages.get("/notifications")();
+          await pages.get("/notifications")(content);
         } catch (error) {
           showError(content, error);
         }
@@ -274,7 +283,7 @@ export function createMemberPages(ui) {
                   method: "POST",
                   auth: true,
                 });
-                pages.get("/notifications")();
+                await pages.get("/notifications")(content);
               } catch (error) {
                 showError(content, error);
               }
@@ -345,7 +354,7 @@ export function createMemberPages(ui) {
                 method: "DELETE",
                 auth: true,
               });
-              pages.get("/settings/privacy")();
+              await pages.get("/settings/privacy")(content);
             } catch (error) {
               showError(content, error);
             }
@@ -387,7 +396,7 @@ export function createMemberPages(ui) {
         auth: true,
         data: { text: values.text.trim() },
       });
-      pages.get("/feedback")();
+      await pages.get("/feedback")(content);
     });
     const history = await request("/me/suggestions", { auth: true });
     addList(

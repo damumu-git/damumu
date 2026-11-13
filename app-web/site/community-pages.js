@@ -3,6 +3,7 @@ import { datePresets, dateQuery, dateRange, dayInSeoul, shiftDay } from "/seoul-
 export function createCommunityPages(ui) {
   const {
     show,
+    refreshCurrentPage,
     node,
     button,
     actionLink,
@@ -123,7 +124,7 @@ export function createCommunityPages(ui) {
     });
   }
 
-  async function attachEvent(content, endpoint, label, activeOnly) {
+  async function attachEvent(content, endpoint, label, activeOnly, refresh) {
     const activities = await request("/me/activities", { auth: true });
     const own = activities.filter(
       (item) =>
@@ -150,12 +151,17 @@ export function createCommunityPages(ui) {
     content.append(form);
     handleForm(form, content, async (values) => {
       await request(endpoint, { method: "PUT", auth: true, data: values });
-      location.reload();
+      await refresh();
     });
   }
 
-  async function intentDetail(id) {
-    const content = show("意向征集", "guide-article");
+  async function intentDetail(id, previous) {
+    if (previous) return refreshCurrentPage(previous, () => renderIntent(id, true));
+    return renderIntent(id, false);
+  }
+
+  async function renderIntent(id, deferred) {
+    const content = show("意向征集", "guide-article", false, deferred);
     try {
       const { item, votes } = await request("/web/intents/" + id, {
         auth: true,
@@ -175,7 +181,7 @@ export function createCommunityPages(ui) {
               "button primary",
             ),
           );
-        return;
+        return content;
       }
       content.append(
         node("p", "这是意向征集。提交时段后仍需等正式活动开放报名。", "notice"),
@@ -193,7 +199,7 @@ export function createCommunityPages(ui) {
                   auth: true,
                   data: { slot },
                 });
-                intentDetail(id);
+                await intentDetail(id, content);
               } catch (error) {
                 showError(content, error);
               }
@@ -214,7 +220,7 @@ export function createCommunityPages(ui) {
                   method: "DELETE",
                   auth: true,
                 });
-                intentDetail(id);
+                await intentDetail(id, content);
               } catch (error) {
                 showError(content, error);
               }
@@ -229,14 +235,22 @@ export function createCommunityPages(ui) {
           "/web/intents/" + id + "/event",
           "关联正式活动",
           true,
+          () => intentDetail(id, content),
         );
+      return content;
     } catch (error) {
+      if (deferred) throw error;
       showError(content, error);
     }
   }
 
-  async function groupDetail(id) {
-    const content = show("活动小组", "workspace-page");
+  async function groupDetail(id, previous) {
+    if (previous) return refreshCurrentPage(previous, () => renderGroup(id, true));
+    return renderGroup(id, false);
+  }
+
+  async function renderGroup(id, deferred) {
+    const content = show("活动小组", "workspace-page", false, deferred);
     try {
       const { item, events, members } = await request("/web/groups/" + id, {
         auth: true,
@@ -262,7 +276,7 @@ export function createCommunityPages(ui) {
                     method: item.joined ? "DELETE" : "PUT",
                     auth: true,
                   });
-                  groupDetail(id);
+                  await groupDetail(id, content);
                 } catch (error) {
                   showError(content, error);
                 }
@@ -298,8 +312,11 @@ export function createCommunityPages(ui) {
           "/web/groups/" + id + "/events",
           "加入小组活动列表",
           false,
+          () => groupDetail(id, content),
         );
+      return content;
     } catch (error) {
+      if (deferred) throw error;
       showError(content, error);
     }
   }
