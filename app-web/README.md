@@ -41,4 +41,4 @@ docker compose -f app-web/compose.yaml up --build
 
 在 Google Cloud 建立 Web application 类型的 OAuth 客户端，加入对应回调地址。Kakao 在现有原生登录使用的同一 Kakao 应用内启用登录，将对应回调加到使用的 REST API key，并启用该 key 的 Client secret。两种密钥都只填写在服务器配置。配置完成后运行 `damumu-deploy`，分别用提供方测试账号验证首次注册和再次登录。
 
-第三方首次登录沿用搭慕已有账号规则，需确认年龄和隐私政策。网页不触发定位、相机或通知授权。
+登录页和注册页均在邮箱提交按钮下方提供带品牌图标的 Google/Kakao 入口；未启用的提供方显示明确提示。第三方首次登录沿用搭慕已有账号规则，需确认年龄和隐私政策。网页不触发定位、相机或通知授权。

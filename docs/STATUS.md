@@ -1,7 +1,9 @@
 # DAMUMU 当前项目状态
 
+- 2026-11-16 网页注册页新增 Google/Kakao 注册入口，复用现有服务端 OAuth 和首次授权后的资料补全、年龄及政策确认。登录页和注册页的邮箱提交按钮下方统一显示「或者 / or」，再显示带本地品牌图标的 Google/Kakao 按钮。已发布网页版镜像；JavaScript 语法、DOM 按钮顺序/两家授权入口/回跳地址/未配置提示/补全确认及公网页面与静态资源检查通过。没有浏览器渲染或真实第三方授权验收；下一步完成提供方控制台配置后验证首次注册及已有账号登录。本次先拉取最新 `origin/main` 再提交，无数据库迁移。
+
 - 2026-11-16 已交换并在当前 Lightsail 服务器发布公开域名：`www.damumu.com` 为活动网页版，`app.damumu.com` 为产品介绍、隐私政策和账号删除说明；根域名仍跳转到 `www`。API 分享与网页 OAuth、App 内置链接及 Admin 默认封面来源已同步。旧 `www` 政策与账号删除路径保留跳转。
-- 本次四服务镜像构建、Admin lint/生产构建、隔离网页 OAuth 检查、Nginx 配置检查及公网 HTTPS/政策跳转/真实活动分享/API 健康/Admin 保护检查通过。无数据库迁移。App 本机缺少 Flutter SDK，未运行 Flutter 分析、测试或安装包构建。任务分支 `fix/swap-public-domains` 已本地提交；推送因本机缺少 GitHub HTTPS 凭据失败。下一步恢复 GitHub 认证、推送并将任务分支合并到 `main`，在 Google/Kakao 控制台登记 `www` 回调并验收真实授权，使用 Flutter 发布环境重新构建 App；浏览器用户须在新域名重新登录。
+- 本次四服务镜像构建、Admin lint/生产构建、隔离网页 OAuth 检查、Nginx 配置检查及公网 HTTPS/政策跳转/真实活动分享/API 健康/Admin 保护检查通过。无数据库迁移。App 本机缺少 Flutter SDK，未运行 Flutter 分析、测试或安装包构建。最新 `origin/main` 拉取成功，但 GitHub HTTPS 推送仍缺少写入凭据；域名交换与网页注册入口修改整合到本地 `main`，远端同步受阻。下一步恢复写入认证并推送 `main`，在 Google/Kakao 控制台登记 `www` 回调并验收真实授权，使用 Flutter 发布环境重新构建 App；浏览器用户须在新域名重新登录。
 
 - Web 和 App 支持好友申请、好友列表搜索、关闭申请、解除好友和在同一私聊中分享公开活动。隔离 PostGIS 已验证申请、权限、未读、屏蔽及活动卡片。部署前应用迁移 039，然后发布 API、网页和新的 App 构建。
 

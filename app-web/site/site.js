@@ -543,37 +543,6 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
   if (notice) content.append(node("p", notice, "notice"));
   if (register || socialRegistration)
     content.append(node("p", "创建账号后即可报名或发起活动。", "meta"));
-  if (!register && !socialRegistration) {
-    const social = node("div", null, "social");
-    for (const [provider, title] of [
-      ["google", "使用 Google 登录"],
-      ["kakao", "使用 Kakao 登录"],
-    ]) {
-      social.append(
-        button(
-          title,
-          async () => {
-            try {
-              options = await request(oauth + "/options", { sameOrigin: true });
-              if (!options[provider])
-                throw new Error(
-                  title.slice(3, -3) + " 尚未在服务器启用，请先使用邮箱登录。",
-                );
-              sessionStorage.setItem(
-                "damu-return",
-                safeReturn(new URLSearchParams(location.search).get("next")),
-              );
-              location.assign(oauth + "/" + provider + "/start");
-            } catch (error) {
-              showError(content, error);
-            }
-          },
-          "button " + (provider === "kakao" ? "kakao" : "ghost"),
-        ),
-      );
-    }
-    content.append(social, node("p", "或使用邮箱", "meta"));
-  }
 
   const form = node("form", null, "form");
   if (register || socialRegistration) {
@@ -611,6 +580,45 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
   submit.type = "submit";
   form.append(submit);
   content.append(form);
+  if (!socialRegistration) {
+    const social = node("div", null, "social");
+    for (const [provider, title] of [
+      ["google", register ? "使用 Google 注册" : "使用 Google 登录"],
+      ["kakao", register ? "使用 Kakao 注册" : "使用 Kakao 登录"],
+    ]) {
+      const control = button(
+        title,
+        async () => {
+          try {
+            options = await request(oauth + "/options", { sameOrigin: true });
+            if (!options[provider])
+              throw new Error(
+                (provider === "google" ? "Google" : "Kakao") +
+                  " 尚未在服务器启用，请先使用邮箱" +
+                  (register ? "注册。" : "登录。"),
+              );
+            sessionStorage.setItem(
+              "damu-return",
+              safeReturn(new URLSearchParams(location.search).get("next")),
+            );
+            location.assign(oauth + "/" + provider + "/start");
+          } catch (error) {
+            showError(content, error);
+          }
+        },
+        "button " + (provider === "kakao" ? "kakao" : "ghost"),
+      );
+      const icon = node("img");
+      icon.src = "/assets/" + provider + ".svg";
+      icon.alt = "";
+      icon.width = 20;
+      icon.height = 20;
+      control.prepend(icon);
+      social.append(control);
+    }
+    content.append(node("p", "或者 / or", "auth-divider"), social);
+  }
+
   if (!socialRegistration)
     content.append(
       button(
