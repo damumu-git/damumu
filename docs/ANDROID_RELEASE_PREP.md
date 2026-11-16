@@ -52,7 +52,7 @@ keytool -printcert -jarfile build\app\outputs\bundle\release\app-release.aab
 4. 使用原邮箱和密码登录必须失败；删除前取得的旧 Bearer Token 也必须立即返回 `account_unavailable`；数据库中 `user_credential`、`push_device`、通知、兴趣、安全联系人及安全定位记录必须不存在。
 5. `app_user` 状态必须为 `deleted`，资料只保留“已注销用户”匿名占位；历史活动和聊天不能再显示原昵称、头像、邮箱或联系方式。
 6. 该用户尚未开始的活动必须取消；其他用户的历史活动和会话仍可正常读取。
-7. 验证 `https://www.damumu.com/account-deletion.html` 无需登录即可访问，邮件删除请求流程能在承诺的 7 日内完成。
+7. 验证 `https://app.damumu.com/account-deletion.html` 无需登录即可访问，邮件删除请求流程能在承诺的 7 日内完成。
 
 ## 4. 隐私与合规核对步骤
 

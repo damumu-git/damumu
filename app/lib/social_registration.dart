@@ -61,8 +61,8 @@ class _SocialRegistrationDialogState extends State<SocialRegistrationDialog> {
               onPressed: () => launchUrl(
                 Uri.parse(
                   Localizations.localeOf(context).languageCode == 'ko'
-                      ? 'https://www.damumu.com/privacy-ko.html'
-                      : 'https://www.damumu.com/privacy.html',
+                      ? 'https://app.damumu.com/privacy-ko.html'
+                      : 'https://app.damumu.com/privacy.html',
                 ),
                 mode: LaunchMode.externalApplication,
               ),

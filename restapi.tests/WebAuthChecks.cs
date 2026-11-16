@@ -59,7 +59,7 @@ internal static class WebAuthChecks
             var url = start.Headers.Location!;
             var query = QueryHelpers.ParseQuery(url.Query);
             Check(start.StatusCode == HttpStatusCode.Redirect && url.Host == expectedHost &&
-                query["redirect_uri"] == $"https://app.damumu.com{path}/{provider}/callback" &&
+                query["redirect_uri"] == $"https://www.damumu.com{path}/{provider}/callback" &&
                 query["state"].ToString().Length >= 40 && !query.ContainsKey("client_secret"),
                 "Invalid authorization redirect");
             Check(provider != "google" || (query["code_challenge_method"] == "S256" &&

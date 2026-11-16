@@ -532,7 +532,7 @@ class _MemberLibraryPageState extends State<MemberLibraryPage> {
             await widget.openPerson(context, id);
           } else if (guide) {
             await launchUrl(
-              Uri.https('app.damumu.com', '/guides/$id'),
+              Uri.https('www.damumu.com', '/guides/$id'),
               mode: LaunchMode.externalApplication,
             );
           } else {

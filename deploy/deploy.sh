@@ -304,8 +304,8 @@ fi
 
 if [[ "$CHECK_PUBLIC" == true ]]; then
   log "Checking public HTTPS routes"
-  curl --fail --silent --show-error --max-time 20 https://www.damumu.com/healthz >/dev/null
   curl --fail --silent --show-error --max-time 20 https://app.damumu.com/healthz >/dev/null
+  curl --fail --silent --show-error --max-time 20 https://www.damumu.com/healthz >/dev/null
   curl --fail --silent --show-error --max-time 20 https://api.damumu.com/api/v1/health >/dev/null
   curl --fail --silent --show-error --max-time 20 \
     https://api.damumu.com/uploads/system-avatars/green-sprout.jpg >/dev/null
@@ -324,7 +324,7 @@ log "Deployment succeeded"
 compose ps
 printf '%s\n' "$NEW_REVISION" >"$STATE_FILE"
 printf '\nRevision: %s\n' "$(git rev-parse HEAD)"
-printf 'Public site: https://www.damumu.com\n'
+printf 'Public site: https://app.damumu.com\n'
 printf 'Public API:  https://api.damumu.com/api/v1/health\n'
 printf 'Admin:       https://admin.damumu.com\n'
-printf 'Web app:     https://app.damumu.com\n'
+printf 'Web app:     https://www.damumu.com\n'

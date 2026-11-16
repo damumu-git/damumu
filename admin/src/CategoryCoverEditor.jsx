@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { FilePicker } from './AdminControls.jsx'
 import { api, mediaUrl } from './api'
 
-const bundledCoverBase = import.meta.env.VITE_APP_WEB_ORIGIN || 'https://app.damumu.com'
+const bundledCoverBase = import.meta.env.VITE_APP_WEB_ORIGIN || 'https://www.damumu.com'
 const majors = new Set(['food', 'sports', 'culture', 'outdoors', 'study', 'social', 'other'])
 
 export function CategoryCoverPreview({ category, rows, selectedUrl }) {

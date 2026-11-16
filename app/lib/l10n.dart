@@ -444,7 +444,7 @@ const _strings = <String, Map<String, String>>{
     'activityGuidanceBody': '参加活动前请确认时间、地点和费用，注意人身和财产安全。请组织健康绿色的活动。',
     'privacyAccount': '隐私政策',
     'privacySubtitle': '查看个人信息收集、使用与删除说明',
-    'privacyOpenFailed': '无法打开隐私政策，请访问 www.damumu.com/privacy.html',
+    'privacyOpenFailed': '无法打开隐私政策，请访问 app.damumu.com/privacy.html',
     'deleteAccount': '注销账号',
     'deleteAccountSubtitle': '发起永久删除账号和关联个人信息',
     'deleteAccountTitle': '确定注销账号？',
@@ -942,7 +942,7 @@ const _strings = <String, Map<String, String>>{
     'privacyAccount': 'Privacy policy',
     'privacySubtitle': 'Review data collection, use, and deletion',
     'privacyOpenFailed':
-        'Could not open the privacy policy. Visit www.damumu.com/privacy.html',
+        'Could not open the privacy policy. Visit app.damumu.com/privacy.html',
     'deleteAccount': 'Delete account',
     'deleteAccountSubtitle':
         'Request permanent deletion of your account and associated personal data',
@@ -1417,7 +1417,7 @@ const _strings = <String, Map<String, String>>{
     'privacyAccount': '개인정보 처리방침',
     'privacySubtitle': '개인정보 수집, 이용 및 삭제 안내',
     'privacyOpenFailed':
-        '개인정보 처리방침을 열 수 없습니다. www.damumu.com/privacy-ko.html을 방문해 주세요',
+        '개인정보 처리방침을 열 수 없습니다. app.damumu.com/privacy-ko.html을 방문해 주세요',
     'deleteAccount': '계정 삭제',
     'deleteAccountSubtitle': '계정과 관련 개인정보의 영구 삭제 요청',
     'deleteAccountTitle': '계정을 삭제할까요?',

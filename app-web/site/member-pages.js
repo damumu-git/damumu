@@ -323,7 +323,7 @@ export function createMemberPages(ui) {
     actions.append(
       actionLink(
         "了解账号注销",
-        "https://www.damumu.com/account-deletion.html",
+        "https://app.damumu.com/account-deletion.html",
       ),
       button("注销搭慕账号", () =>
         reasonDialog("注销账号", async (confirmation) => {

@@ -681,7 +681,7 @@ offset 会随列表头部插入/删除发生位置偏移；创建时间与 UUID 
 ### 决定
 
 - 测试环境先使用一台 Ubuntu Lightsail 实例。宿主机 Nginx 是唯一公网入口，Admin 和 API 容器只绑定回环地址，不直接开放容器端口；移动端使用 Flutter `app/`。独立网页版 `app-web/` 使用静态 HTML、CSS 与 JavaScript，复用公共 API。宿主机 Nginx 终止 TLS，网页请求转发到回环端口 8083，网页 OAuth 路由同源代理到 API。
-- 公网按主机名分流：`www.damumu.com` 提供独立产品主页，`api.damumu.com` 提供移动端公共 API，`admin.damumu.com` 提供 Admin 及其同源管理 API 代理，根域名跳转到 `www`。四个容器继续只绑定回环端口，Lightsail 不开放 8080 至 8083。
+- 公网按主机名分流：`app.damumu.com` 提供独立产品主页，`www.damumu.com` 提供独立活动网页版，`api.damumu.com` 提供移动端公共 API，`admin.damumu.com` 提供 Admin 及其同源管理 API 代理，根域名跳转到 `www`。四个容器继续只绑定回环端口，Lightsail 不开放 8080 至 8083。
 - `/api/v1/realtime` 保留 WebSocket Upgrade；`/uploads` 和 API 同源。API 的 `uploads` 使用 Docker 命名卷，在单实例阶段保持持久化。
 - 当前 PostgreSQL 位于 Tailscale 私网，Lightsail 必须加入同一 Tailnet；不得为了部署开放公网 5432。
 - 测试 Admin 在现有静态 API Key 外增加 Nginx Basic Auth。该组合不视为正式生产认证，正式上线前必须改为管理员登录、短时 Cookie、RBAC 和二次验证。
@@ -789,7 +789,7 @@ ADR-007关于只展示Emoji、不读取插画的决定由本条取代；ADR-006�
 
 状态：已采用
 
-Lightsail 宿主机 Nginx 按连接来源 IP 对 `app.damumu.com` 和 `api.damumu.com` 共享请求速率、并发和登录注册限额。健康探针保持可用，认证限额不计入 CORS 预检。账号写入由公共 API 按已验证的账号 ID 限流，消息、发布、上传和举报另有独立限额。账号限流在查询数据库之前执行，拒绝返回 `429` 和 `Retry-After`，避免为每次拦截写入数据库日志。
+Lightsail 宿主机 Nginx 按连接来源 IP 对 `www.damumu.com` 和 `api.damumu.com` 共享请求速率、并发和登录注册限额。健康探针保持可用，认证限额不计入 CORS 预检。账号写入由公共 API 按已验证的账号 ID 限流，消息、发布、上传和举报另有独立限额。账号限流在查询数据库之前执行，拒绝返回 `429` 和 `Retry-After`，避免为每次拦截写入数据库日志。
 
 入口以 `$binary_remote_addr` 为准。目前公网直连宿主机 Nginx。引入 CDN 或其他代理时，需要先配置可信代理来源及客户端地址恢复。账号限额保存在单个 API 进程内，增加 API 实例前需改为跨实例共享的计数。
 
@@ -832,3 +832,10 @@ Lightsail 宿主机 Nginx 按连接来源 IP 对 `app.damumu.com` 和 `api.damum
 好友关系须双方确认。互相关注或同场签到的用户可以申请，接收方可关闭新申请。数据库以无方向的用户对保存关系，串行处理同一用户对的申请、解除和屏蔽。双方互发视为彼此同意。申请记录保留三个月，发送频率限每人滚动 24 小时内 10 条，拒绝、忽略或屏蔽关闭后的再次申请冷却七天。
 
 好友沿用每对用户唯一的一对一会话。解除好友后，其他私聊许可继续有效。屏蔽撤销好友并关闭待处理申请，解除屏蔽后需重新建立好友关系。分享活动只存活动 ID，读取时重新校验公开状态，详情仍按查看者本人权限返回。
+
+## ADR-039：交换公开网站域名
+
+状态：已采用
+日期：2026-11-16
+
+按产品要求，`www.damumu.com` 承载独立活动网页版，`app.damumu.com` 承载产品介绍、隐私政策和账号删除说明。根域名继续跳转到 `www`。API 和 Admin 域名、容器端口及访问保护不变；网页版同源 OAuth 回调和公开分享地址随之迁移到 `www`，原生 App 和后台的跨站链接同步更新。Google/Kakao 控制台须登记新的回调 URL。两个域名的浏览器登录状态和本地存储不会自动互通。

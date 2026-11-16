@@ -1,5 +1,8 @@
 # DAMUMU 当前项目状态
 
+- 2026-11-16 已交换并在当前 Lightsail 服务器发布公开域名：`www.damumu.com` 为活动网页版，`app.damumu.com` 为产品介绍、隐私政策和账号删除说明；根域名仍跳转到 `www`。API 分享与网页 OAuth、App 内置链接及 Admin 默认封面来源已同步。旧 `www` 政策与账号删除路径保留跳转。
+- 本次四服务镜像构建、Admin lint/生产构建、隔离网页 OAuth 检查、Nginx 配置检查及公网 HTTPS/政策跳转/真实活动分享/API 健康/Admin 保护检查通过。无数据库迁移。App 本机缺少 Flutter SDK，未运行 Flutter 分析、测试或安装包构建。任务分支 `fix/swap-public-domains` 已本地提交；推送因本机缺少 GitHub HTTPS 凭据失败。下一步恢复 GitHub 认证、推送并将任务分支合并到 `main`，在 Google/Kakao 控制台登记 `www` 回调并验收真实授权，使用 Flutter 发布环境重新构建 App；浏览器用户须在新域名重新登录。
+
 - Web 和 App 支持好友申请、好友列表搜索、关闭申请、解除好友和在同一私聊中分享公开活动。隔离 PostGIS 已验证申请、权限、未读、屏蔽及活动卡片。部署前应用迁移 039，然后发布 API、网页和新的 App 构建。
 
 - 部署脚本提供 `damumu-deploy-migration` 入口。新增 SQL 发布会先备份宿主机数据库，逐文件提交并记录，再启动新版服务。服务器待安装快捷命令并验证。
@@ -57,11 +60,11 @@
 
 - 2026-11-10 App 与独立网页版支持市／道 → 市／郡／区 → 下辖区；有三级数据时展示第三级。活动 API 保存所选最深地区，市级查询包含下辖区，继续支持历史两级记录。
 
-- 2026-11-10 app.damumu.com 改为独立响应式网站，支持访客浏览、邮箱及网页 OAuth 登录、活动报名、发布与记录。网页 OAuth 需要服务器凭据和提供方回调配置。
+- 2026-11-10 www.damumu.com 改为独立响应式网站，支持访客浏览、邮箱及网页 OAuth 登录、活动报名、发布与记录。网页 OAuth 需要服务器凭据和提供方回调配置。
 
-- 2026-11-10 `damumu-deploy` 纳入 Flutter Web 的源码镜像构建、回环健康检查和 app.damumu.com HTTPS 检查。现有服务器首次启用需设置 DNS 并扩展证书。
+- 2026-11-10 `damumu-deploy` 纳入 Flutter Web 的源码镜像构建、回环健康检查和 www.damumu.com HTTPS 检查。现有服务器首次启用需设置 DNS 并扩展证书。
 
-- 2026-11-10 新增 app.damumu.com 网页发布项目，复用 Flutter 用户端与公共 API。首页按宽度切换活动卡片列数，宽屏采用侧边导航。域名 DNS、证书及部署待服务器配置。
+- 2026-11-10 新增 www.damumu.com 网页发布项目，复用 Flutter 用户端与公共 API。首页按宽度切换活动卡片列数，宽屏采用侧边导航。域名 DNS、证书及部署待服务器配置。
 
 - 2026-11-10 首页推荐按距离与开始时间排序，发现页按城市和地区联动查询，活动卡片及筛选不再展示新手友好，公开用户详情使用轨道评价标签。API 编译、游标测试和 15 项 Flutter 回归测试通过，推荐查询待部署环境验证。
 
@@ -189,7 +192,7 @@
 
 - Lightsail 测试数据库已改为宿主机 PostgreSQL 18/PostGIS；API 容器通过固定的 `172.30.0.0/24` Compose 内网和 `host.docker.internal` 访问，宿主机 `pg_hba.conf` 与 UFW 只允许该网段的 `damumu_app` 连接，公网防火墙不开放 5432。
 
-- Lightsail 单机测试部署配置已进入仓库：产品主页、Admin 和 API 容器只绑定宿主机回环端口，公网由宿主机 Nginx 按 `www.damumu.com`、`admin.damumu.com`、`api.damumu.com` 三个域名分流并强制 HTTPS，根域名跳转到 `www`。Admin 页面和同源管理 API 在现有静态 Key 外增加 Basic Auth，公共 API 域名拒绝管理 API 路径；上传目录使用宿主机持久化绑定目录。Flutter `app/` 保持 Android/iOS 客户端，不部署 Flutter Web。正式上线前仍必须替换为管理员登录、短时 Cookie、RBAC 和二次验证。
+- Lightsail 单机测试部署配置已进入仓库：产品主页、Admin 和 API 容器只绑定宿主机回环端口，公网由宿主机 Nginx 按 `app.damumu.com`、`admin.damumu.com`、`api.damumu.com` 三个域名分流并强制 HTTPS，根域名跳转到 `www`。Admin 页面和同源管理 API 在现有静态 Key 外增加 Basic Auth，公共 API 域名拒绝管理 API 路径；上传目录使用宿主机持久化绑定目录。Flutter `app/` 保持 Android/iOS 客户端，不部署 Flutter Web。正式上线前仍必须替换为管理员登录、短时 Cookie、RBAC 和二次验证。
 
 - Lightsail 更新可通过 `deploy/deploy.sh` 或服务器快捷命令 `damumu-deploy` 完成：脚本只允许干净的 `main` 快进到 `origin/main`，检测新增数据库迁移并要求先备份和人工确认，随后校验配置、构建并启动三个容器、等待健康检查、按需安全更新 Nginx、验证公网 HTTPS，成功后清理悬空镜像；失败时保留数据卷并输出服务状态与最近日志。
 
@@ -230,7 +233,7 @@
 
 - 按 `deploy/README.md` 在 AWS 备份并运行 `deploy/migrate-uploads.sh`，再部署 API/Admin；核对历史活动/聊天图片及新头像上传。确认现有三张本地已删除的预设头像是否需要恢复；这些删除未纳入本次存储改造。
 
-- 在网站部署后验证 `https://www.damumu.com/privacy.html` 和 `https://www.damumu.com/privacy-ko.html` 可公开访问、无需登录且移动端可读；测试 `damumuapp@gmail.com` 的收发与账号恢复设置，把政策中的泛称运营者替换为真实个人或企业主体及必要联系方式，再用于 App Store / Google Play 提交。
+- 在网站部署后验证 `https://app.damumu.com/privacy.html` 和 `https://app.damumu.com/privacy-ko.html` 可公开访问、无需登录且移动端可读；测试 `damumuapp@gmail.com` 的收发与账号恢复设置，把政策中的泛称运营者替换为真实个人或企业主体及必要联系方式，再用于 App Store / Google Play 提交。
 
 - 评审 `branding/tamu-logo-concept-v1.png` 与 `branding/candidates/` 三套新增候选；确认视觉方向后导出 Android adaptive icon、iOS App Icon 和 Web favicon/PWA 图标，并在真机与商店预览中检查小尺寸识别度。
 

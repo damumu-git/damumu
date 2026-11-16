@@ -83,7 +83,7 @@ Future<ImageSource?> _chooseImageSource(BuildContext context) =>
 Future<void> _openPrivacyPolicy(BuildContext context) async {
   final languageCode = Localizations.localeOf(context).languageCode;
   final privacyPolicyUri = Uri.https(
-    'www.damumu.com',
+    'app.damumu.com',
     languageCode == 'ko' ? '/privacy-ko.html' : '/privacy.html',
   );
   try {

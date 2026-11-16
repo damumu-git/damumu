@@ -600,7 +600,7 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
   if (register || socialRegistration) {
     form.insertAdjacentHTML(
       "beforeend",
-      '<label class="check"><input type="checkbox" name="ageConfirmed" required>我已满 14 周岁</label><label class="check"><input type="checkbox" name="privacyAcknowledged" required><span>我已阅读并确认<a href="https://www.damumu.com/privacy.html" target="_blank" rel="noopener">隐私政策</a></span></label>',
+      '<label class="check"><input type="checkbox" name="ageConfirmed" required>我已满 14 周岁</label><label class="check"><input type="checkbox" name="privacyAcknowledged" required><span>我已阅读并确认<a href="https://app.damumu.com/privacy.html" target="_blank" rel="noopener">隐私政策</a></span></label>',
     );
   }
   const submit = node(
@@ -1887,7 +1887,7 @@ async function route() {
     return;
   }
   if (path === "/privacy")
-    return location.replace("https://www.damumu.com/privacy.html");
+    return location.replace("https://app.damumu.com/privacy.html");
   const organizer = /^\/organizer\/activities\/([0-9a-f-]{36})$/i.exec(path);
   if (organizer) return requireLogin(() => showOrganizer(organizer[1]));
   const person = /^\/people\/([0-9a-f-]{36})$/i.exec(path);

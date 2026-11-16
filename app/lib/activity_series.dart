@@ -152,7 +152,7 @@ class _ActivitySeriesPageState extends State<ActivitySeriesPage> {
         if (_region != null)
           TextButton(
             onPressed: () =>
-                launchUrl(Uri.https('app.damumu.com', '/places/$_region')),
+                launchUrl(Uri.https('www.damumu.com', '/places/$_region')),
             child: Text(context.tr('seriesRegionGuide')),
           ),
         DropdownButtonFormField<String>(
@@ -492,7 +492,7 @@ class _SeriesDetailState extends State<_SeriesDetail> {
       if (widget.item['guide_slug'] is String)
         TextButton(
           onPressed: () => launchUrl(
-            Uri.https('app.damumu.com', '/guides/${widget.item['guide_slug']}'),
+            Uri.https('www.damumu.com', '/guides/${widget.item['guide_slug']}'),
           ),
           child: Text(widget.item['guide_title'] as String),
         ),
@@ -818,7 +818,7 @@ class _ActivityRecapPageState extends State<ActivityRecapPage> {
 }
 
 Future<void> copyActivityShare(BuildContext context, String id) async {
-  final url = 'https://app.damumu.com/activities/$id/share';
+  final url = 'https://www.damumu.com/activities/$id/share';
   try {
     await Clipboard.setData(ClipboardData(text: url));
     if (context.mounted) {

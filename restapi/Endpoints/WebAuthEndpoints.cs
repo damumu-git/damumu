@@ -9,7 +9,7 @@ namespace Muda.Api.Endpoints;
 
 public static class WebAuthEndpoints
 {
-    private const string Origin = "https://app.damumu.com";
+    private const string Origin = "https://www.damumu.com";
     private const string Path = "/api/v1/auth/web";
     private const string StateCookie = "__Host-damu-oauth-state";
     private const string IdentityCookie = "__Host-damu-oauth-identity";

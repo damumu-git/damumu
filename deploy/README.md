@@ -91,11 +91,12 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml exec api \
 
 ## DNS 与 Lightsail 防火墙
 
-下列四条 DNS A 记录必须指向绑定到实例的 Lightsail 静态 IP：
+下列五条 DNS A 记录必须指向绑定到实例的 Lightsail 静态 IP：
 
 ```text
 damumu.com        -> 43.201.237.29
 www.damumu.com    -> 43.201.237.29
+app.damumu.com    -> 43.201.237.29
 admin.damumu.com  -> 43.201.237.29
 api.damumu.com    -> 43.201.237.29
 ```
@@ -191,10 +192,10 @@ sudo certbot certonly \
   --cert-name damumu.com \
   --email YOUR_EMAIL --agree-tos --no-eff-email \
   -d damumu.com \
-  -d www.damumu.com \
+  -d app.damumu.com \
   -d admin.damumu.com \
   -d api.damumu.com \
-  -d app.damumu.com
+  -d www.damumu.com
 
 sudo cp deploy/nginx/damumu.conf /etc/nginx/sites-available/damumu
 sudo install -m 755 deploy/nginx/reload-nginx.sh \
@@ -204,29 +205,16 @@ sudo systemctl reload nginx
 sudo certbot renew --dry-run
 ```
 
-## 已有服务器首次启用 app.damumu.com
+## 交换公开域名（已有服务器）
 
-1. 把 `app.damumu.com` 的 DNS 指向现有服务器。首次升级时，先执行
-   `cd /opt/damumu/repo && git pull --ff-only origin main`，让已安装的
-   `damumu-deploy` 命令读取新版脚本。
-2. 如果现有证书尚不覆盖新域名，保留当前 HTTPS 站点，只为 App 域名启用临时 HTTP 验证配置：
+`www.damumu.com` 提供活动网页版，`app.damumu.com` 提供产品介绍、隐私政策和账号删除说明。根域名继续跳转到 `www`。两个域名均须指向本机，现有证书须覆盖两个域名。
 
-   ```bash
-   cd /opt/damumu/repo
-   sudo mkdir -p /var/www/certbot
-   awk '/^server \{/ && ++blocks == 2 {exit} {print}' app-web/app.damumu.com.conf \
-     | sudo tee /etc/nginx/sites-available/damumu-app-acme >/dev/null
-   sudo ln -sfn /etc/nginx/sites-available/damumu-app-acme /etc/nginx/sites-enabled/damumu-app-acme
-   sudo nginx -t && sudo systemctl reload nginx
-   sudo certbot certonly --webroot -w /var/www/certbot --cert-name damumu.com --expand \
-     -d damumu.com -d www.damumu.com -d admin.damumu.com -d api.damumu.com -d app.damumu.com
-   ```
+1. 在 Google/Kakao 控制台登记 `app-web/README.md` 中新的 `www` 回调 URL；服务端密钥无需改变。
+2. 从 `main` 运行 `damumu-deploy`，同时发布 API、网页版、产品介绍页及 Admin，更新宿主机 Nginx。
+3. 验证两个站点正文、公开活动分享、政策及账号删除链接、网页 OAuth；重新发布移动 App 以更新内置链接。
 
-   如果 App 域名已有启用的独立配置且包含 HTTP 验证路由，直接利用它签发即可，无需添加临时配置。
-   证书签发成功后，删除临时启用链接 `/etc/nginx/sites-enabled/damumu-app-acme`（如创建过）。
-3. 如果之前用 ZIP 单独运行了网页版，先停止旧 Compose 项目的 `app-web` 服务以释放 8083，
-   并停用旧的独立 App Nginx 配置，避免同一个域名出现两份配置。
-4. 运行 `damumu-deploy`。部署成功后，后续推送到 `main` 只需再运行这一条命令。
+浏览器登录状态和本地存储按域名隔离，网页版用户需要在 `www` 重新登录。旧 `www` 政策和账号删除地址保留跳转到产品介绍站。
+独立部署示例为 `app-web/www.damumu.com.conf`；统一部署只安装 `deploy/nginx/damumu.conf`，避免重复站点配置。
 
 ## 验证
 
@@ -234,12 +222,12 @@ sudo certbot renew --dry-run
 curl --fail http://127.0.0.1:8081/healthz
 curl --fail http://127.0.0.1:8080/api/v1/health
 curl --fail http://127.0.0.1:8082/healthz
-curl --fail https://www.damumu.com/healthz
+curl --fail https://app.damumu.com/healthz
 curl --fail https://api.damumu.com/api/v1/health
 curl --fail -u damumu-admin https://admin.damumu.com/healthz
 ```
 
-`www.damumu.com` 提供独立产品主页，不提供 Flutter Web App。Admin 位于
+`app.damumu.com` 提供独立产品主页，不提供 Flutter Web App。Admin 位于
 `admin.damumu.com`，整个域名先通过 Nginx Basic Auth；Admin 浏览器使用同源
 `/api/v1` 访问管理 API。公共 `api.damumu.com` 拒绝 `/api/v1/admin/`，Android/iOS
 App 使用 `https://api.damumu.com/api/v1` 及同源 WebSocket 地址。发布 App 时传入：

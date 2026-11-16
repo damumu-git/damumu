@@ -1,6 +1,6 @@
 # 搭慕网页版
 
-`app.damumu.com` 使用独立 HTML、CSS 和 JavaScript。活动、分类、地区和账号数据来自搭慕公共 API；网页版与 Android / iOS 使用相同账号及活动。访客可直接搜索、筛选和查看活动。地区按市／道、市／郡／区、下辖区联动，下辖区仅在目录存在时出现。登录后可报名、退出、发布和查看活动记录，也可读取会话及发送文字消息。聊天附件和原生推送仍通过移动 App 使用。
+`www.damumu.com` 使用独立 HTML、CSS 和 JavaScript。活动、分类、地区和账号数据来自搭慕公共 API；网页版与 Android / iOS 使用相同账号及活动。访客可直接搜索、筛选和查看活动。地区按市／道、市／郡／区、下辖区联动，下辖区仅在目录存在时出现。登录后可报名、退出、发布和查看活动记录，也可读取会话及发送文字消息。聊天附件和原生推送仍通过移动 App 使用。
 
 ## 页面与运营
 
@@ -36,8 +36,8 @@ docker compose -f app-web/compose.yaml up --build
 
 | 提供方 | 回调地址 | 服务器 `deploy/.env` |
 | --- | --- | --- |
-| Google | `https://app.damumu.com/api/v1/auth/web/google/callback` | `GOOGLE_WEB_CLIENT_ID`、`GOOGLE_WEB_CLIENT_SECRET` |
-| Kakao | `https://app.damumu.com/api/v1/auth/web/kakao/callback` | `KAKAO_WEB_REST_KEY`、`KAKAO_WEB_CLIENT_SECRET`、`KAKAO_APP_ID` |
+| Google | `https://www.damumu.com/api/v1/auth/web/google/callback` | `GOOGLE_WEB_CLIENT_ID`、`GOOGLE_WEB_CLIENT_SECRET` |
+| Kakao | `https://www.damumu.com/api/v1/auth/web/kakao/callback` | `KAKAO_WEB_REST_KEY`、`KAKAO_WEB_CLIENT_SECRET`、`KAKAO_APP_ID` |
 
 在 Google Cloud 建立 Web application 类型的 OAuth 客户端，加入对应回调地址。Kakao 在现有原生登录使用的同一 Kakao 应用内启用登录，将对应回调加到使用的 REST API key，并启用该 key 的 Client secret。两种密钥都只填写在服务器配置。配置完成后运行 `damumu-deploy`，分别用提供方测试账号验证首次注册和再次登录。
 
