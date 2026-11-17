@@ -13,6 +13,7 @@ public static class WebAuthEndpoints
     private const string Path = "/api/v1/auth/web";
     private const string StateCookie = "__Host-damu-oauth-state";
     private const string IdentityCookie = "__Host-damu-oauth-identity";
+    private const string HandoffPurpose = IdentityCookie + ":handoff";
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
 
     public static RouteGroupBuilder MapWebAuthEndpoints(this RouteGroupBuilder api)
@@ -32,14 +33,14 @@ public static class WebAuthEndpoints
             privacyVersion = PrivacyRules.NoticeVersion
         }));
 
-        group.MapGet("/{provider}/start", (string provider, HttpContext context,
+        group.MapGet("/{provider}/start", (string provider, bool? register, HttpContext context,
             IConfiguration configuration, IDataProtectionProvider protection) =>
         {
             var settings = ReadProvider(configuration, provider)
                 ?? throw new ApiException(503, "web_login_unavailable", "该网页登录方式尚未配置");
             var state = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
             var verifier = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
-            var transaction = new OAuthTransaction(provider, state, verifier);
+            var transaction = new OAuthTransaction(provider, state, verifier, register == true);
             WriteCookie(context, StateCookie, Protect(protection, StateCookie, transaction), SameSiteMode.Lax);
             context.Response.Cookies.Delete(IdentityCookie, Cookie(SameSiteMode.Strict));
             var parameters = new Dictionary<string, string?>
@@ -69,9 +70,10 @@ public static class WebAuthEndpoints
                     Encoding.UTF8.GetBytes(state), Encoding.UTF8.GetBytes(transaction.State)))
                 return Results.Redirect("/#social-error");
             context.Response.Cookies.Delete(StateCookie, Cookie(SameSiteMode.Lax));
+            var returnPath = transaction.Register ? "/register" : "/login";
             var settings = ReadProvider(configuration, provider);
             if (settings is null || string.IsNullOrWhiteSpace(code) || code.Length > 4096)
-                return Results.Redirect("/#social-error");
+                return Results.Redirect(returnPath + "#social-error");
 
             var form = new Dictionary<string, string>
             {
@@ -87,25 +89,26 @@ public static class WebAuthEndpoints
                 using var content = new FormUrlEncodedContent(form);
                 var client = clients.CreateClient(nameof(WebAuthEndpoints));
                 using var response = await client.PostAsync(settings.Token, content, ct);
-                if (!response.IsSuccessStatusCode) return Results.Redirect("/#social-error");
+                if (!response.IsSuccessStatusCode) return Results.Redirect(returnPath + "#social-error");
                 using var body = await JsonDocument.ParseAsync(
                     await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
                 var tokenKey = provider == "google" ? "id_token" : "access_token";
                 if (!body.RootElement.TryGetProperty(tokenKey, out var value) ||
                     value.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(value.GetString()))
-                    return Results.Redirect("/#social-error");
+                    return Results.Redirect(returnPath + "#social-error");
                 var token = value.GetString()!;
                 var identity = provider == "google"
                     ? await SocialIdentityVerifier.VerifyGoogleAsync(token, settings.ClientId)
                     : await SocialIdentityVerifier.VerifyKakaoAsync(client, token, settings.KakaoAppId, ct);
-                WriteCookie(context, IdentityCookie, Protect(protection, IdentityCookie, identity), SameSiteMode.Strict);
-                return Results.Redirect("/#social-complete");
+                var handoff = new OAuthHandoff(identity, transaction.Register);
+                WriteCookie(context, IdentityCookie, Protect(protection, HandoffPurpose, handoff), SameSiteMode.Strict);
+                return Results.Redirect(returnPath + "#social-complete");
             }
             catch (Exception error) when (error is ApiException or HttpRequestException or JsonException
                 or InvalidOperationException or Google.Apis.Auth.InvalidJwtException
                 || error is OperationCanceledException && !ct.IsCancellationRequested)
             {
-                return Results.Redirect("/#social-error");
+                return Results.Redirect(returnPath + "#social-error");
             }
         });
 
@@ -115,10 +118,20 @@ public static class WebAuthEndpoints
         {
             if (!string.Equals(context.Request.Headers.Origin, Origin, StringComparison.Ordinal))
                 throw new ApiException(403, "web_origin_invalid", "网页登录请求来源无效");
-            var identity = ReadCookie<SocialIdentity>(context, protection, IdentityCookie)
+            var handoff = ReadCookie<OAuthHandoff>(context, protection, IdentityCookie, HandoffPurpose)
                 ?? throw new ApiException(401, "web_login_expired", "登录已失效，请重新授权");
-            var user = await accounts.LoginAsync(identity, new SocialLoginRequest(null, request.Nickname,
-                request.AgeConfirmed, request.PrivacyAcknowledged, request.PrivacyVersion, "zh"), ct);
+            Dictionary<string, object?>? user;
+            try
+            {
+                user = await accounts.LoginAsync(handoff.Identity, new SocialLoginRequest(null, request.Nickname,
+                    request.AgeConfirmed, request.PrivacyAcknowledged, request.PrivacyVersion, "zh"), ct,
+                    registrationOnly: handoff.Register || request.Nickname is not null);
+            }
+            catch (ApiException error) when (error.Code == "social_already_registered")
+            {
+                context.Response.Cookies.Delete(IdentityCookie, Cookie(SameSiteMode.Strict));
+                throw;
+            }
             if (user is null)
                 return ApiSupport.Ok(new { registrationRequired = true, privacyVersion = PrivacyRules.NoticeVersion });
             context.Response.Cookies.Delete(IdentityCookie, Cookie(SameSiteMode.Strict));
@@ -158,12 +171,12 @@ public static class WebAuthEndpoints
         protection.CreateProtector(key).ToTimeLimitedDataProtector()
             .Protect(JsonSerializer.Serialize(value), Lifetime);
 
-    private static T? ReadCookie<T>(HttpContext context, IDataProtectionProvider protection, string key)
+    private static T? ReadCookie<T>(HttpContext context, IDataProtectionProvider protection, string key, string? purpose = null)
     {
         if (!context.Request.Cookies.TryGetValue(key, out var value)) return default;
         try
         {
-            return JsonSerializer.Deserialize<T>(protection.CreateProtector(key)
+            return JsonSerializer.Deserialize<T>(protection.CreateProtector(purpose ?? key)
                 .ToTimeLimitedDataProtector().Unprotect(value));
         }
         catch (Exception error) when (error is CryptographicException or JsonException)
@@ -172,7 +185,8 @@ public static class WebAuthEndpoints
         }
     }
 
-    private sealed record OAuthTransaction(string Provider, string State, string Verifier);
+    private sealed record OAuthTransaction(string Provider, string State, string Verifier, bool Register);
+    private sealed record OAuthHandoff(SocialIdentity Identity, bool Register);
     private sealed record Provider(string ClientId, string ClientSecret, string Authorize, string Token, long KakaoAppId = 0);
 }
 

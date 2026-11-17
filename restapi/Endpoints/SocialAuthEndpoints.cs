@@ -29,7 +29,7 @@ public sealed record SocialLoginRequest(string? Token, string? Nickname = null,
 public sealed class SocialAccountService(NpgsqlDataSource source)
 {
     public async Task<Dictionary<string, object?>?> LoginAsync(SocialIdentity identity,
-        SocialLoginRequest request, CancellationToken ct)
+        SocialLoginRequest request, CancellationToken ct, bool registrationOnly = false)
     {
         await using var connection = await source.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
@@ -49,6 +49,8 @@ public sealed class SocialAccountService(NpgsqlDataSource source)
             find.Parameters.AddWithValue("subject", identity.Subject);
             userId = await find.ExecuteScalarAsync(ct) as Guid?;
         }
+        if (registrationOnly && userId is not null)
+            throw new ApiException(409, "social_already_registered", "此第三方账号已注册，请前往登录。");
         if (userId is null)
         {
             if (request.Nickname is null) return null; // no local account or session yet

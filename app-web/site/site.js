@@ -117,7 +117,9 @@ async function request(
     ) {
       setSession(null);
     }
-    throw new Error(payload?.error?.message ?? "请求失败，请稍后再试。");
+    const error = new Error(payload?.error?.message ?? "请求失败，请稍后再试。");
+    error.code = payload?.error?.code;
+    throw error;
   }
   return payload.data;
 }
@@ -550,7 +552,9 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
     "account-page",
   );
   if (notice) content.append(node("p", notice, "notice"));
-  if (register || socialRegistration)
+  if (socialRegistration)
+    content.append(node("p", "请填写搭慕昵称。注册后可在「个人资料」上传头像、填写简介和常驻区域。", "meta"));
+  else if (register)
     content.append(node("p", "创建账号后即可报名或发起活动。", "meta"));
   const form = node("form", null, "form");
   if (register || socialRegistration) {
@@ -609,7 +613,7 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
               "damu-return",
               safeReturn(new URLSearchParams(location.search).get("next")),
             );
-            location.assign(oauth + "/" + provider + "/start");
+            location.assign(oauth + "/" + provider + "/start" + (register ? "?register=true" : ""));
           } catch (error) {
             showError(content, error);
           }
@@ -646,12 +650,15 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
       values.privacyAcknowledged = Boolean(values.privacyAcknowledged);
       values.privacyVersion = options.privacyVersion;
     }
-    const result = socialRegistration
-      ? await request(oauth + "/complete", { data: values, sameOrigin: true })
-      : await request(register ? "/auth/register" : "/auth/login", {
-          data: values,
-        });
-    finishLogin(result);
+    try {
+      const result = socialRegistration
+        ? await request(oauth + "/complete", { data: values, sameOrigin: true })
+        : await request(register ? "/auth/register" : "/auth/login", { data: values });
+      finishLogin(result);
+    } catch (error) {
+      if (!socialRegistration || error.code !== "social_already_registered") throw error;
+      returnToAuth(true, error.message);
+    }
   });
 }
 
@@ -1231,8 +1238,17 @@ function showPublish(template, seriesId) {
   });
 }
 
-async function finishSocial() {
-  const content = show("正在登录");
+function returnToAuth(register, notice) {
+  const query = new URLSearchParams(location.search);
+  query.delete("register");
+  const next = query.toString();
+  history.replaceState(null, "", (register ? "/register" : "/login") + (next ? "?" + next : ""));
+  sessionStorage.removeItem("damu-return");
+  showLogin(register, false, notice);
+}
+
+async function finishSocial(register) {
+  const content = show(register ? "正在验证注册信息" : "正在登录");
   const marker = dialogRequest;
   try {
     const result = await request(oauth + "/complete", {
@@ -1245,7 +1261,7 @@ async function finishSocial() {
       showLogin(false, true);
     } else finishLogin(result);
   } catch (error) {
-    if (marker === dialogRequest) showLogin(false, false, error.message);
+    if (marker === dialogRequest) returnToAuth(register, error.message);
   }
 }
 
@@ -1409,10 +1425,13 @@ async function showEdit(id) {
 async function showSettings() {
   const content = show("个人资料", "settings-page personal-page");
   const user = session.user;
-  content.append(memberPages.accountLinks());
+  const layout = node("div", null, "settings-layout");
+  const columns = node("div", null, "personal-columns");
+  layout.append(memberPages.accountLinks(), columns);
+  content.append(layout);
   const marker = dialogRequest;
   const loading = node("p", "正在加载个人资料…", "meta");
-  content.append(loading);
+  columns.append(loading);
   const [account, profile, member] = await Promise.all([
     request("/me", { auth: true }).catch(() => null),
     request("/users/" + encodeURIComponent(user.id) + "/public-profile", { auth: true })
@@ -1493,12 +1512,10 @@ async function showSettings() {
     fields.append(entry);
   }
   info.append(fields);
-  const layout = node("div", null, "settings-layout");
   const summary = node("aside", null, "settings-summary");
   const editor = node("div", null, "settings-editor");
   summary.append(info);
-  layout.append(summary, editor);
-  content.append(layout);
+  columns.append(summary, editor);
 
   const form = node("form", null, "form");
   form.innerHTML =
@@ -1823,10 +1840,16 @@ async function route() {
   const legacy = /^#activity\/([0-9a-f-]{36})$/i.exec(hash);
   if (legacy) return location.replace(eventLink(legacy[1]));
   if (hash === "#social-complete" || hash === "#social-error") {
-    history.replaceState(null, "", "/auth/complete");
+    const register = path === "/register";
+    const next = sessionStorage.getItem("damu-return");
+    const query = new URLSearchParams();
+    if (register) query.set("register", "true");
+    if (next && next !== "/") query.set("next", safeReturn(next));
+    const search = query.toString();
+    history.replaceState(null, "", "/auth/complete" + (search ? "?" + search : ""));
     return hash === "#social-complete"
-      ? finishSocial()
-      : showLogin(false, false, "第三方授权未完成，请重试或使用邮箱登录。");
+      ? finishSocial(register)
+      : returnToAuth(register, "第三方授权未完成，请重试或使用邮箱" + (register ? "注册。" : "登录。"));
   }
   if (path === "/" || path === "/explore") {
     browse.hidden = false;
@@ -1890,7 +1913,8 @@ async function route() {
   if (activity) return showActivity(activity[1]);
   if (path === "/login" || path === "/register")
     return showLogin(path === "/register");
-  if (path === "/auth/complete") return finishSocial();
+  if (path === "/auth/complete")
+    return finishSocial(new URLSearchParams(location.search).get("register") === "true");
   if (path === "/guides" || path.startsWith("/guides/"))
     return showGuides(path.split("/")[2]);
   if (path === "/activities/new")

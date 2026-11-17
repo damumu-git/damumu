@@ -123,6 +123,13 @@ internal static class SocialLoginChecks
             Check((await Send("google", "alpha", "Test", true, false, PrivacyRules.NoticeVersion)).StatusCode == HttpStatusCode.BadRequest, "Notice bypass");
             Check((await Send("google", "alpha", "Test", true, true, "old")).StatusCode == HttpStatusCode.BadRequest, "Policy version bypass");
             var created = await UserId(await Send("google", "alpha", "Test", true, true, PrivacyRules.NoticeVersion));
+            var accounts = app.Services.GetRequiredService<SocialAccountService>();
+            var existingIdentity = new SocialIdentity("google", run + "alpha");
+            await Reject(() => accounts.LoginAsync(existingIdentity, new SocialLoginRequest(null),
+                default, registrationOnly: true), 409);
+            await Reject(() => accounts.LoginAsync(existingIdentity,
+                new SocialLoginRequest(null, "Another nickname", true, true, PrivacyRules.NoticeVersion),
+                default, registrationOnly: true), 409);
             Check(await UserId(await Send("google", "alpha")) == created, "Returning user duplicated");
             var kakao = await UserId(await Send("kakao", "alpha", "Test", true, true, PrivacyRules.NoticeVersion));
             Check(kakao != created, "Different providers silently linked");
@@ -139,7 +146,7 @@ internal static class SocialLoginChecks
     }
 
     private static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }
-    private static async Task Reject(Func<Task<SocialIdentity>> operation, int status)
+    private static async Task Reject(Func<Task> operation, int status)
     {
         try { await operation(); throw new Exception("Unsafe provider accepted"); }
         catch (ApiException error) { Check(error.StatusCode == status, $"Unexpected error {error.Code}"); }

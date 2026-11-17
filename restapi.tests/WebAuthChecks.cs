@@ -77,7 +77,7 @@ internal static class WebAuthChecks
                 !rejected.Headers.Contains("Set-Cookie"), "Invalid state must stop before token exchange");
         }
 
-        using var kakaoStart = await client.GetAsync(path + "/kakao/start");
+        using var kakaoStart = await client.GetAsync(path + "/kakao/start?register=true");
         var kakaoState = QueryHelpers.ParseQuery(kakaoStart.Headers.Location!.Query)["state"].ToString();
         var kakaoCookie = kakaoStart.Headers.GetValues("Set-Cookie")
             .Single(value => value.StartsWith("__Host-damu-oauth-state="));
@@ -85,7 +85,7 @@ internal static class WebAuthChecks
             $"{path}/kakao/callback?code=fixture-code&state={kakaoState}");
         kakaoCallback.Headers.TryAddWithoutValidation("Cookie", kakaoCookie.Split(';')[0]);
         using var authorized = await client.SendAsync(kakaoCallback);
-        Check(authorized.Headers.Location?.OriginalString == "/#social-complete" &&
+        Check(authorized.Headers.Location?.OriginalString == "/register#social-complete" &&
             authorized.Headers.GetValues("Set-Cookie").Any(cookie =>
                 cookie.StartsWith("__Host-damu-oauth-identity=") &&
                 cookie.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase) &&
