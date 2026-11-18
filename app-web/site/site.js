@@ -1422,6 +1422,33 @@ async function showEdit(id) {
     if (marker === dialogRequest) showError(content, error);
   }
 }
+async function prepareAvatar(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const photo = node("img");
+    await new Promise((resolve, reject) => {
+      photo.onload = resolve;
+      photo.onerror = () => reject(new Error("浏览器无法读取这张图片，请换一张 JPEG 或 PNG 照片。"));
+      photo.src = url;
+    });
+    const canvas = node("canvas");
+    canvas.width = canvas.height = 512;
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) throw new Error("当前浏览器无法处理头像，请换一个浏览器重试。");
+    const { naturalWidth: width, naturalHeight: height } = photo;
+    const side = Math.min(width, height);
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, 512, 512);
+    context.drawImage(photo, (width - side) / 2, (height - side) / 2, side, side, 0, 0, 512, 512);
+    const jpeg = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    if (!jpeg || jpeg.type !== "image/jpeg" || jpeg.size > 1048576)
+      throw new Error("无法生成可上传的头像，请换一张照片。");
+    return jpeg;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 async function showSettings() {
   const content = show("个人资料", "settings-page personal-page");
   const user = session.user;
@@ -1457,28 +1484,38 @@ async function showSettings() {
   renderAvatar(avatar, session.user);
   const avatarInput = node("input");
   avatarInput.type = "file";
-  avatarInput.accept = "image/jpeg,image/png,image/webp";
+  avatarInput.accept = "image/*";
   avatarInput.hidden = true;
   const avatarButton = button("更换头像", () => avatarInput.click(), "button ghost");
+  const avatarStatus = node("p", null, "meta avatar-status");
+  avatarStatus.setAttribute("role", "status");
   avatarInput.addEventListener("change", async () => {
     const file = avatarInput.files?.[0];
     if (!file) return;
     avatarButton.disabled = true;
+    avatarStatus.classList.remove("form-error");
+    avatarStatus.textContent = "正在处理图片…";
     try {
+      const jpeg = await prepareAvatar(file);
+      if (session?.user.id !== user.id) return;
+      avatarStatus.textContent = "正在上传头像…";
       const data = new FormData();
-      data.append("avatar", file);
-      const changed = await request("/me/avatar", { auth: true, data });
-      setSession({ ...session, user: { ...session.user, ...changed } });
+      data.append("avatar", jpeg, "avatar.jpg");
+      const { avatarUrl, avatarImageUrl } = await request("/me/avatar", { auth: true, data });
+      if (session?.user.id !== user.id) return;
+      setSession({ ...session, user: { ...session.user, avatarUrl, avatarImageUrl } });
       renderAvatar(avatar, session.user);
+      avatarStatus.textContent = "头像已更新。";
     } catch (error) {
-      showError(info, error);
+      avatarStatus.classList.add("form-error");
+      avatarStatus.textContent = error instanceof TypeError ? "头像上传失败，请检查网络后重试。" : error.message;
     } finally {
       avatarInput.value = "";
       avatarButton.disabled = false;
     }
   });
   const identityText = node("div");
-  identityText.append(node("h2", session.user.nickname || "搭慕用户"), avatarButton, avatarInput);
+  identityText.append(node("h2", session.user.nickname || "搭慕用户"), avatarButton, avatarInput, avatarStatus);
   identity.append(avatar, identityText);
   info.append(identity);
   const stats = node("dl", null, "personal-stats");

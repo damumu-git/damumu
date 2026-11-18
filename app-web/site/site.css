@@ -996,6 +996,8 @@ a.activity-organizer::after {
   margin: 0;
   overflow-wrap: anywhere;
 }
+.avatar-status { margin: .5rem 0 0; }
+.avatar-status:empty { margin: 0; padding: 0; }
 .personal-identity .account-avatar {
   width: clamp(54px, 12vw, 68px);
   font-size: 1.45rem;
