@@ -224,76 +224,93 @@ export function createMemberPages(ui) {
     return "damu-notifications-unread:" + session().user.id;
   }
   memberPage("/notifications", "通知中心", async (content) => {
-    const unread =
+    content.classList.add("notifications-page");
+    const unreadOnly = (
       new URLSearchParams(location.search).get("unread") ??
-      localStorage.getItem(preferenceKey());
-    content.append(
-      actionLink("全部通知", "/notifications?unread=0"),
-      actionLink("仅看未读", "/notifications?unread=1"),
-      button("全部标为已读", async () => {
-        try {
-          await request("/me/notifications/read-all", {
-            method: "POST",
-            auth: true,
-          });
-          await pages.get("/notifications")(content);
-        } catch (error) {
-          showError(content, error);
-        }
-      }),
-    );
-    const items = await request(
-      "/me/notifications?unreadOnly=" + (unread === "1"),
-      { auth: true },
-    );
-    addList(
-      content,
-      items,
-      (row, item) => {
-        row.append(
-          node("strong", item.title),
-          node("p", item.body, "detail-copy"),
-          node(
-            "p",
-            time(item.created_at) + (item.read_at ? "" : " · 未读"),
-            "meta",
-          ),
-        );
-        let data = item.data;
-        try {
-          if (typeof data === "string") data = JSON.parse(data);
-        } catch {
-          data = null;
-        }
-        const id = data?.conversationId ?? data?.eventId;
-        const href =
-          item.notification_type === "friend_request" ? "/messages/friend-requests"
-            : item.notification_type === "friend_accepted" ? "/me/friends"
-            : item.notification_type === "contact_request"
-            ? "/messages/requests"
-            : typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)
-            ? data.conversationId
-              ? "/messages/" + id
-              : eventLink(id)
+      localStorage.getItem(preferenceKey())
+    ) === "1";
+
+    async function markRead(control, path) {
+      control.disabled = true;
+      try {
+        await request(path, { method: "POST", auth: true });
+        await pages.get("/notifications")(content);
+      } catch (error) {
+        showError(content, error);
+      } finally {
+        control.disabled = false;
+      }
+    }
+
+    const panel = node("section", null, "notifications-panel");
+    const toolbar = node("div", null, "notifications-toolbar");
+    const filters = node("nav", null, "notifications-filters");
+    filters.setAttribute("aria-label", "筛选通知");
+    for (const [label, unread] of [["全部通知", false], ["仅看未读", true]]) {
+      const link = actionLink(label, "/notifications?unread=" + Number(unread), "button");
+      if (unread === unreadOnly) link.setAttribute("aria-current", "page");
+      filters.append(link);
+    }
+    const markAll = button("全部标为已读", () => markRead(markAll, "/me/notifications/read-all"));
+    toolbar.append(filters, markAll);
+    const status = node("p", "正在加载通知…", "notifications-status");
+    status.setAttribute("role", "status");
+    panel.append(toolbar, status);
+    content.append(panel);
+
+    let items;
+    try {
+      items = await request("/me/notifications?unreadOnly=" + unreadOnly, { auth: true });
+    } finally {
+      status.remove();
+    }
+    if (!items.length) {
+      status.textContent = unreadOnly ? "没有未读通知" : "暂无通知";
+      panel.append(status);
+      return;
+    }
+
+    const list = node("ul", null, "notifications-list");
+    for (const item of items) {
+      const row = node("li", null, "notification-row");
+      if (!item.read_at) row.classList.add("notification-unread");
+      const copy = node("div", null, "notification-copy");
+      const heading = node("div", null, "notification-heading");
+      heading.append(node("h2", item.title));
+      if (!item.read_at) heading.append(node("span", "未读", "notification-state"));
+      copy.append(heading);
+      if (item.body) copy.append(node("p", item.body, "notification-body"));
+
+      const aside = node("div", null, "notification-aside");
+      const timestamp = node("time", time(item.created_at), "notification-time");
+      timestamp.dateTime = item.created_at;
+      aside.append(timestamp);
+
+      let data = item.data;
+      try {
+        if (typeof data === "string") data = JSON.parse(data);
+      } catch {
+        data = null;
+      }
+      const id = data?.conversationId ?? data?.eventId;
+      const href =
+        item.notification_type === "friend_request" ? "/messages/friend-requests"
+          : item.notification_type === "friend_accepted" ? "/me/friends"
+          : item.notification_type === "contact_request" ? "/messages/requests"
+          : typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)
+            ? data.conversationId ? "/messages/" + id : eventLink(id)
             : null;
-        if (href) row.append(actionLink("打开", href));
-        if (!item.read_at)
-          row.append(
-            button("标为已读", async () => {
-              try {
-                await request("/me/notifications/" + item.id + "/read", {
-                  method: "POST",
-                  auth: true,
-                });
-                await pages.get("/notifications")(content);
-              } catch (error) {
-                showError(content, error);
-              }
-            }),
-          );
-      },
-      "暂无通知。",
-    );
+      const actions = node("div", null, "notification-actions");
+      if (href) actions.append(actionLink("打开", href, "button notification-open"));
+      if (!item.read_at) {
+        const read = button("标为已读", () => markRead(read, "/me/notifications/" + item.id + "/read"));
+        actions.append(read);
+      }
+      if (actions.children.length) aside.append(actions);
+      row.append(copy, aside);
+      list.append(row);
+    }
+    panel.append(list);
   });
 
   memberPage("/settings/notifications", "通知偏好", async (content) => {
