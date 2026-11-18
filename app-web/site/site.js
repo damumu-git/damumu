@@ -1436,10 +1436,64 @@ async function prepareAvatar(file) {
     const context = canvas.getContext("2d", { alpha: false });
     if (!context) throw new Error("当前浏览器无法处理头像，请换一个浏览器重试。");
     const { naturalWidth: width, naturalHeight: height } = photo;
-    const side = Math.min(width, height);
-    context.fillStyle = "#fff";
-    context.fillRect(0, 0, 512, 512);
-    context.drawImage(photo, (width - side) / 2, (height - side) / 2, side, side, 0, 0, 512, 512);
+    const cropDialog = node("dialog", null, "avatar-crop-dialog");
+    cropDialog.setAttribute("aria-labelledby", "avatar-crop-title");
+    const title = node("h2", "裁剪头像");
+    title.id = "avatar-crop-title";
+    canvas.className = "avatar-crop-preview";
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", "头像裁剪预览");
+
+    const controls = node("div", null, "avatar-crop-controls");
+    function slider(label, min, max, value) {
+      const field = node("label", label);
+      const input = node("input");
+      input.type = "range";
+      input.min = min;
+      input.max = max;
+      input.step = ".01";
+      input.value = value;
+      input.addEventListener("input", draw);
+      field.append(input);
+      controls.append(field);
+      return input;
+    }
+    const zoom = slider("缩放", 1, 3, 1);
+    const horizontal = slider("左右取景", -1, 1, 0);
+    const vertical = slider("上下取景", -1, 1, 0);
+    function draw() {
+      const side = Math.min(width, height) / zoom.valueAsNumber;
+      horizontal.disabled = width <= side;
+      vertical.disabled = height <= side;
+      const x = (width - side) * (horizontal.valueAsNumber + 1) / 2;
+      const y = (height - side) * (vertical.valueAsNumber + 1) / 2;
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, 512, 512);
+      context.drawImage(photo, x, y, side, side, 0, 0, 512, 512);
+    }
+    draw();
+
+    const form = node("form", null, "avatar-crop-actions");
+    form.method = "dialog";
+    for (const [value, label, style] of [
+      ["cancel", "取消", "button ghost"],
+      ["confirm", "确认并上传", "button primary"],
+    ]) {
+      const control = node("button", label, style);
+      control.type = "submit";
+      control.value = value;
+      form.append(control);
+    }
+    cropDialog.append(title, canvas, controls, form);
+    document.body.append(cropDialog);
+    try {
+      const closed = new Promise((resolve) => cropDialog.addEventListener("close", resolve, { once: true }));
+      cropDialog.showModal();
+      await closed;
+      if (cropDialog.returnValue !== "confirm") return null;
+    } finally {
+      cropDialog.remove();
+    }
     const jpeg = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
     if (!jpeg || jpeg.type !== "image/jpeg" || jpeg.size > 1048576)
       throw new Error("无法生成可上传的头像，请换一张照片。");
@@ -1497,7 +1551,10 @@ async function showSettings() {
     avatarStatus.textContent = "正在处理图片…";
     try {
       const jpeg = await prepareAvatar(file);
-      if (session?.user.id !== user.id) return;
+      if (!jpeg || !content.isConnected || session?.user.id !== user.id) {
+        avatarStatus.textContent = "";
+        return;
+      }
       avatarStatus.textContent = "正在上传头像…";
       const data = new FormData();
       data.append("avatar", jpeg, "avatar.jpg");
@@ -1512,6 +1569,8 @@ async function showSettings() {
     } finally {
       avatarInput.value = "";
       avatarButton.disabled = false;
+      if (content.isConnected && document.activeElement === document.body)
+        avatarButton.focus({ preventScroll: true });
     }
   });
   const identityText = node("div");

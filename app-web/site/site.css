@@ -996,6 +996,35 @@ a.activity-organizer::after {
   margin: 0;
   overflow-wrap: anywhere;
 }
+dialog.avatar-crop-dialog {
+  width: min(420px, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: clamp(1rem, 4vw, 1.5rem);
+}
+.avatar-crop-dialog h2 { margin: 0 0 .85rem; font-size: 1.3rem; }
+.avatar-crop-preview {
+  display: block;
+  width: min(100%, 280px, 38dvh);
+  height: auto;
+  margin-inline: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.avatar-crop-controls { display: grid; gap: .35rem; margin-block: .85rem; }
+.avatar-crop-controls label {
+  display: grid;
+  grid-template-columns: 6ch minmax(0, 1fr);
+  align-items: center;
+  gap: .75rem;
+  font-size: .9rem;
+}
+.avatar-crop-controls input { width: 100%; margin: 0; accent-color: var(--blue); }
+.avatar-crop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .5rem;
+}
 .avatar-status { margin: .5rem 0 0; }
 .avatar-status:empty { margin: 0; padding: 0; }
 .personal-identity .account-avatar {
