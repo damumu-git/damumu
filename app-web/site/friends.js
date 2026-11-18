@@ -73,7 +73,9 @@ export function createFriends({ show, node, button, actionLink, request, handleF
       const search = node("input");
       search.type = "search";
       search.placeholder = "输入昵称";
-      field.append(search);
+      const control = node("span", null, "friend-search-control");
+      control.append(search);
+      field.append(control);
       const list = node("ul", null, "contact-list");
       const rows = friends.map((friend) => {
         const row = node("li", null, "activity-section friend-row");
