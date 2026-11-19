@@ -294,8 +294,11 @@ class _GroupDetailState extends State<_GroupDetail> {
             for (final member in members)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text(member['nickname'] as String),
-                subtitle: _levelText(context, member['member_level']),
+                title: RankedMemberName(
+                  member['nickname'] as String,
+                  level: member['member_level'],
+                ),
+                subtitle: MemberLevelBadge(member['member_level']),
                 onTap: () =>
                     widget.actions.openPerson(context, member['id'] as String),
                 trailing: owner && member['id'] != item['owner_id']
@@ -404,18 +407,6 @@ Widget _heading(BuildContext context, String key) => Padding(
   padding: const EdgeInsets.only(top: 18, bottom: 6),
   child: Text(context.tr(key), style: Theme.of(context).textTheme.titleMedium),
 );
-
-Widget? _levelText(BuildContext context, Object? value) {
-  if (value is! int || value < 1 || value > 4) return null;
-  return Wrap(
-    crossAxisAlignment: WrapCrossAlignment.center,
-    spacing: 4,
-    children: [
-      MemberMedal(rank: value, size: 16),
-      Text(context.tr('memberLevel$value')),
-    ],
-  );
-}
 
 class _GroupSummary extends StatelessWidget {
   const _GroupSummary({required this.item, required this.detail});

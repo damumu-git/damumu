@@ -12,7 +12,6 @@ export function createMemberPages(ui) {
     eventLink,
     time,
     libraryRow,
-    libraryEventState,
     renderAvatar,
     card,
     setSession,
@@ -178,18 +177,9 @@ export function createMemberPages(ui) {
   memberPage("/me/saved", "我的收藏", async (content) => {
     content.classList.add("library-page");
     const items = await request("/me/saved", { auth: true });
-    const kind = new URLSearchParams(location.search).get("kind");
-    const navigation = node("nav", null, "section-nav");
-    navigation.setAttribute("aria-label", "收藏类型");
-    for (const [label, value] of [["全部", ""], ["活动", "activity"], ["周末指南", "guide"]]) {
-      const link = actionLink(label, "/me/saved" + (value ? "?kind=" + value : ""));
-      if (value === (kind ?? "")) link.setAttribute("aria-current", "page");
-      navigation.append(link);
-    }
-    content.append(navigation);
+
     const list = node("ul", null, "library-list");
-    for (const item of items.filter((entry) => !kind || entry.kind === kind)) {
-      const guide = item.kind === "guide";
+    for (const item of items.filter((entry) => entry.kind === "guide")) {
       const action = button("取消收藏", async (event) => {
         const trigger = event.currentTarget;
         trigger.disabled = true;
@@ -207,11 +197,10 @@ export function createMemberPages(ui) {
         }
       });
       list.append(libraryRow(
-        guide ? { ...item, cover_category_code: item.guide_cover_category } : item,
+        { ...item, cover_category_code: item.guide_cover_category },
         {
-          href: guide ? "/guides/" + encodeURIComponent(item.target) : eventLink(item.target),
-          categoryName: guide ? "周末指南" : item.category_name,
-          state: guide ? "" : libraryEventState(item),
+          href: "/guides/" + encodeURIComponent(item.target),
+          categoryName: "周末指南",
           summary: item.summary,
           action,
         },

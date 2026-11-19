@@ -357,7 +357,9 @@ class _MemberLibraryPageState extends State<MemberLibraryPage> {
               append ? _items.length : 0,
             )
           : {
-              'items': await SocialService.savedItems(widget.token),
+              'items': (await SocialService.savedItems(widget.token))
+                  .where((item) => item['kind'] == 'guide')
+                  .toList(),
               'hasMore': false,
             };
       if (!mounted) return;

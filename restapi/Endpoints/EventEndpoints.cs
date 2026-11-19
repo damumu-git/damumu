@@ -5,6 +5,14 @@ namespace Muda.Api.Endpoints;
 
 public static class EventEndpoints
 {
+    private const string ActivityChatAccess = """
+        c.event_id=e.id AND c.conversation_type='event' AND c.status<>'archived'
+        AND cm.user_id=@viewerId AND cm.left_at IS NULL
+        AND (e.organizer_user_id=@viewerId OR EXISTS (
+            SELECT 1 FROM event_member m WHERE m.event_id=e.id AND m.user_id=@viewerId
+              AND m.status IN ('approved','attended') AND m.left_at IS NULL))
+        """;
+
     public static RouteGroupBuilder MapEventEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/events", async (
@@ -200,7 +208,12 @@ public static class EventEndpoints
                            FROM event_member viewer_member
                            WHERE viewer_member.event_id=e.id AND viewer_member.user_id=@viewerId
                            LIMIT 1
-                       ) AS viewer_membership_status
+                       ) AS viewer_membership_status,
+                       EXISTS (
+                           SELECT 1 FROM conversation c
+                           JOIN conversation_member cm ON cm.conversation_id=c.id
+                           WHERE {ActivityChatAccess}
+                       ) AS viewer_can_open_chat
                 FROM event e
                 JOIN category c ON c.id=e.category_id
                 {ActivityQueries.CoverCategoryJoins}
@@ -576,18 +589,15 @@ public static class EventEndpoints
         api.MapGet("/events/{id:guid}/conversation", async (
             Guid id, HttpContext context, Db db, CancellationToken ct) =>
         {
-            var userId = ApiSupport.RequireUserId(context);
-            var conversation = await db.QueryOneAsync("""
+            var viewerId = ApiSupport.RequireUserId(context);
+            var conversation = await db.QueryOneAsync($"""
                 SELECT c.id,c.status,c.conversation_type,e.title AS display_title,
                     0 AS unread_count,
                     (SELECT count(*) FROM conversation_member peer WHERE peer.conversation_id=c.id AND peer.left_at IS NULL) AS member_count
-                FROM event e JOIN conversation c ON c.event_id=e.id AND c.conversation_type='event'
-                JOIN conversation_member cm ON cm.conversation_id=c.id AND cm.user_id=@userId AND cm.left_at IS NULL
-                WHERE e.id=@id AND e.deleted_at IS NULL AND c.status<>'archived'
-                  AND (e.organizer_user_id=@userId OR EXISTS (
-                      SELECT 1 FROM event_member m WHERE m.event_id=e.id AND m.user_id=@userId
-                        AND m.status IN ('approved','attended') AND m.left_at IS NULL))
-                """, new { id, userId }, ct)
+                FROM event e JOIN conversation c ON c.event_id=e.id
+                JOIN conversation_member cm ON cm.conversation_id=c.id
+                WHERE e.id=@id AND e.deleted_at IS NULL AND {ActivityChatAccess}
+                """, new { id, viewerId }, ct)
                 ?? throw new ApiException(403, "event_chat_unavailable", "当前无法进入活动群聊，请确认参与状态或是否已退出群聊。");
             return ApiSupport.Ok(conversation);
         });

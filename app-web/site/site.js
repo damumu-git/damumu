@@ -280,9 +280,15 @@ function memberBadge(level) {
   const rank = Number(level);
   const item = memberLevels[rank - 1];
   if (!item) return "";
-  const badge = node("span", null, "member-badge member-level-" + rank);
-  badge.append(memberMedal(rank), node("span", item.name));
-  return badge;
+  return node("span", item.name, "member-badge member-level-" + rank);
+}
+
+function memberName(name, level) {
+  const label = node("span", null, "ranked-member-name");
+  const rank = Number(level);
+  if (memberLevels[rank - 1]) label.append(memberMedal(rank));
+  label.append(node("span", name));
+  return label;
 }
 
 function profileMemberLevel(level) {
@@ -411,7 +417,7 @@ function eventLink(id) {
   return "/activities/" + encodeURIComponent(id);
 }
 function card(item) {
-  const article = node("article", null, "card");
+  const article = node("article", null, "card activity-card");
   const thumbnail = node("a", null, "cover");
   thumbnail.href = eventLink(item.id);
   thumbnail.setAttribute("aria-label", item.title);
@@ -426,12 +432,9 @@ function card(item) {
   link.href = thumbnail.href;
   heading.append(link);
   const host = node("div", null, "host");
-  host.append(
-    node("strong", item.organizer_name || "活动组织者", "host-name"),
-    node("span", cost(item)),
-  );
-  const badge = memberBadge(item.organizer_level);
-  if (badge) host.firstElementChild.append(badge);
+  const name = node("strong", null, "host-name");
+  name.append(memberName(item.organizer_name || "活动组织者", item.organizer_level));
+  host.append(name, memberBadge(item.organizer_level));
   const participation = participationLabel(item);
   article.append(
     thumbnail,
@@ -444,6 +447,7 @@ function card(item) {
     ),
     ...(participation ? [node("p", participation, "meta activity-participation")] : []),
     host,
+    node("p", cost(item), "activity-card-price"),
   );
   return article;
 }
@@ -791,7 +795,7 @@ const activityActionIcons = {
   join: "M12 5v14M5 12h14",
   manage: "M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1",
   leave: "M10 5H5v14h5m3-11 4 4-4 4m-4-4h8",
-  bookmark: "M6 4h12v16l-6-4-6 4z",
+  chat: "M4 5h16v12H9l-5 3zM8 9h8m-8 4h5",
   feedback: "m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.4l6.1-.9z",
   report: "M5 21V4m0 1c4-4 7 3 13 0v10c-6 3-9-4-13 0",
   inquiry: "M4 5h16v12H9l-5 3zM8 9h8m-8 4h5",
@@ -822,7 +826,7 @@ async function renderActivity(id, deferred) {
   const loading = node("p", "正在加载活动详情…", "meta");
   content.append(loading);
   try {
-    const { item, schedules, members, customFeedbackTags } = await request(
+    const { item, schedules, members, feedback: feedbackAccess, customFeedbackTags } = await request(
       "/events/" + encodeURIComponent(id),
       { auth: true },
     );
@@ -867,7 +871,7 @@ async function renderActivity(id, deferred) {
       nickname: organizer,
       avatarImageUrl: item.organizer_avatar,
     });
-    identity.append(organizerAvatar, node("span", organizer), memberBadge(item.organizer_level));
+    identity.append(organizerAvatar, memberName(organizer, item.organizer_level), memberBadge(item.organizer_level));
     addFact("组织者", identity);
     details.append(node("h2", "活动信息"), facts);
     const membership = item.viewer_membership_status;
@@ -903,7 +907,8 @@ async function renderActivity(id, deferred) {
       participation.append(node("p", "确认加入一场活动后，其他时间重叠的待确认申请和候补将自动撤回。", "meta"));
     if (owns && item.recurrence_id)
       participation.append(actionLink("管理定期活动计划", "/me/recurring"));
-    if (owns || approved) {
+    const actions = node("div", null, "activity-actions");
+    if (item.viewer_can_open_chat === true) {
       const chat = button("进入活动群聊", async () => {
         chat.disabled = true;
         try {
@@ -914,7 +919,7 @@ async function renderActivity(id, deferred) {
           chat.disabled = false;
         }
       }, "button primary");
-      participation.append(chat);
+      actions.append(activityAction(chat, "chat"));
     }
     const labels = {
       applied: "等待组织者确认",
@@ -931,7 +936,6 @@ async function renderActivity(id, deferred) {
     const active =
       ["published", "full"].includes(item.status) &&
       (!schedule?.ends_at || Date.parse(schedule.ends_at) > Date.now());
-    const actions = node("div", null, "activity-actions");
     if (owns) {
       const confirmation = button(item.confirmed_at ? "取消已确定状态" : "标记为已确定", async (event) => {
         const control = event.currentTarget;
@@ -982,8 +986,8 @@ async function renderActivity(id, deferred) {
       });
       actions.append(activityAction(leave, "leave"));
     }
-    if (!owns) actions.append(activityAction(memberPages.bookmark("activity", id), "bookmark"));
-    actions.append(activityAction(actionLink("活动后评价", eventLink(id) + "/feedback"), "feedback"));
+    if (feedbackAccess?.eligible === true)
+      actions.append(activityAction(actionLink("活动后评价", eventLink(id) + "/feedback"), "feedback"));
     if (!owns) {
       const report = button("举报活动", () =>
         requireLogin(() =>
@@ -1003,7 +1007,7 @@ async function renderActivity(id, deferred) {
         const avatar = node("span", null, "account-avatar");
         avatar.setAttribute("aria-hidden", "true");
         renderAvatar(avatar, { nickname: member.nickname, avatarImageUrl: member.avatar_url });
-        person.append(avatar, node("span", member.nickname || "搭木木用户"), memberBadge(member.member_level));
+        person.append(avatar, memberName(member.nickname || "搭木木用户", member.member_level), memberBadge(member.member_level));
         entry.append(person);
         list.append(entry);
       }
@@ -1023,7 +1027,8 @@ async function renderActivity(id, deferred) {
             (item.approval_mode === "manual" || ["approved", "attended"].includes(entry.status)));
           for (const member of visibleRows) {
             const row = node("div", null, "inline-member-row");
-            const person = actionLink(member.nickname || "搭木木用户", "/people/" + encodeURIComponent(member.user_id));
+            const person = actionLink("", "/people/" + encodeURIComponent(member.user_id));
+            person.append(memberName(member.nickname || "搭木木用户", member.member_level), memberBadge(member.member_level));
             row.append(person, node("p", [membershipLabel(member.status), member.application_note].filter(Boolean).join(" · "), "meta"));
             if (item.approval_mode === "manual" && ["applied", "waitlisted"].includes(member.status)) {
               const controls = node("div", null, "detail-actions");
@@ -1784,7 +1789,9 @@ async function showSettings() {
     }
   });
   const identityText = node("div");
-  identityText.append(node("h2", session.user.nickname || "搭木木用户"),
+  const nickname = node("h2");
+  nickname.append(memberName(session.user.nickname || "搭木木用户", account?.memberLevel ?? profile?.member_level));
+  identityText.append(nickname,
     profileMemberLevel(account?.memberLevel ?? profile?.member_level), avatarButton, avatarInput, avatarStatus);
   identity.append(avatar, identityText);
   info.append(identity);
@@ -1915,7 +1922,7 @@ async function showPerson(id) {
     );
     if (marker !== dialogRequest) return;
     const heading = $("h1", content);
-    heading.textContent = user.nickname ?? "搭木木用户";
+    heading.replaceChildren(memberName(user.nickname ?? "搭木木用户", user.member_level));
     const layout = node("div", null, "public-profile-layout");
     const identity = node("section", null, "activity-section public-profile-summary");
     const timeline = node("div", null, "public-profile-activity");
@@ -2409,7 +2416,6 @@ const memberPages = createMemberPages({
   eventLink,
   time,
   libraryRow,
-  libraryEventState,
   renderAvatar,
   card,
   setSession,
@@ -2435,6 +2441,7 @@ const communityPages = createCommunityPages({
   renderAvatar,
   prepareCover,
   memberBadge,
+  memberName,
   session: () => session,
 });
 const showMessages = createChatPage({
@@ -2452,6 +2459,7 @@ const showMessages = createChatPage({
   time,
   renderAvatar,
   memberBadge,
+  memberName,
   renderMessageCount,
   refreshUnread,
 });

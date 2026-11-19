@@ -17,6 +17,91 @@ class MemberMedal extends StatelessWidget {
   );
 }
 
+class MemberLevelBadge extends StatelessWidget {
+  const MemberLevelBadge(this.level, {super.key});
+
+  final Object? level;
+
+  @override
+  Widget build(BuildContext context) {
+    final rank = (level as num?)?.toInt();
+    if (rank == null || rank < 1 || rank > 4) return const SizedBox.shrink();
+    const backgrounds = [
+      Color(0xFFE9EDF5),
+      Color(0xFFDAF1E9),
+      Color(0xFFE9E6FF),
+      Color(0xFFFCECCF),
+    ];
+    const foregrounds = [
+      Color(0xFF3E506B),
+      Color(0xFF155B49),
+      Color(0xFF4D3798),
+      Color(0xFF77480B),
+    ];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: backgrounds[rank - 1],
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        child: Text(
+          context.tr('memberLevel$rank'),
+          style: TextStyle(
+            color: foregrounds[rank - 1],
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class RankedMemberName extends StatelessWidget {
+  const RankedMemberName(
+    this.name, {
+    super.key,
+    this.level,
+    this.prefix,
+    this.style,
+    this.textAlign,
+    this.maxLines,
+  });
+
+  final String name;
+  final Object? level;
+  final String? prefix;
+  final TextStyle? style;
+  final TextAlign? textAlign;
+  final int? maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final rank = (level as num?)?.toInt();
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (prefix != null) TextSpan(text: prefix),
+          if (rank != null && rank >= 1 && rank <= 4)
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(end: 3),
+                child: MemberMedal(rank: rank, size: 16),
+              ),
+            ),
+          TextSpan(text: name),
+        ],
+      ),
+      style: style,
+      textAlign: textAlign,
+      maxLines: maxLines,
+      overflow: maxLines == null ? null : TextOverflow.ellipsis,
+    );
+  }
+}
+
 class MemberLevelGuideButton extends StatelessWidget {
   const MemberLevelGuideButton({super.key, this.profileLevel, this.foreground});
 

@@ -17,6 +17,7 @@ export function createCommunityPages(ui) {
     cover,
     prepareCover,
     memberBadge,
+    memberName,
     renderAvatar,
     time,
     session,
@@ -503,7 +504,9 @@ export function createCommunityPages(ui) {
         members,
         (row, member) => {
           const actions = node("div", null, "section-nav group-member");
-          actions.append(actionLink(member.nickname, "/people/" + member.id, "text-button"), memberBadge(member.member_level));
+          const person = actionLink("", "/people/" + member.id, "text-button");
+          person.append(memberName(member.nickname, member.member_level));
+          actions.append(person, memberBadge(member.member_level));
           if (owner && member.id !== item.owner_id)
             actions.append(button("移出小组", () => {
               if (window.confirm("将 " + member.nickname + " 移出小组？"))

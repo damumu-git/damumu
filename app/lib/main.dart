@@ -1471,7 +1471,7 @@ class _HomePageState extends State<HomePage> {
                         crossAxisSpacing: 16,
                         mainAxisSpacing: 20,
                         mainAxisExtent:
-                            (columns == 1 ? 190 : 170) + 168 * textScale,
+                            (columns == 1 ? 190 : 170) + 186 * textScale,
                       ),
                       itemCount: events.length,
                       itemBuilder: (context, index) => _WebEventCard(
@@ -1568,35 +1568,30 @@ class _WebEventCard extends StatelessWidget {
                     style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 5,
+                    runSpacing: 3,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      UserAvatarImage(
-                        nickname: event.host,
-                        avatarUrl: event.organizerAvatar,
-                        radius: 10,
+                      RankedMemberName(
+                        event.host,
+                        level: event.localizedContent?['organizer_level'],
+                        maxLines: 1,
+                        style: theme.textTheme.labelSmall,
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          event.host,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          event.priceAmount == null
-                              ? event.price
-                              : activityPrice(context, event.priceAmount!),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.end,
-                          style: theme.textTheme.labelSmall,
-                        ),
+                      MemberLevelBadge(
+                        event.localizedContent?['organizer_level'],
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    event.priceAmount == null
+                        ? event.price
+                        : activityPrice(context, event.priceAmount!),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -2007,54 +2002,6 @@ class _ActivityCategoryCover extends StatelessWidget {
   }
 }
 
-class _MemberLevelBadge extends StatelessWidget {
-  const _MemberLevelBadge(this.level);
-
-  final Object? level;
-
-  @override
-  Widget build(BuildContext context) {
-    final rank = (level as num?)?.toInt();
-    if (rank == null || rank < 1 || rank > 4) return const SizedBox.shrink();
-    const backgrounds = [
-      Color(0xFFE9EDF5),
-      Color(0xFFDAF1E9),
-      Color(0xFFE9E6FF),
-      Color(0xFFFCECCF),
-    ];
-    const foregrounds = [
-      Color(0xFF3E506B),
-      Color(0xFF155B49),
-      Color(0xFF4D3798),
-      Color(0xFF77480B),
-    ];
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: backgrounds[rank - 1],
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            MemberMedal(rank: rank, size: 16),
-            const SizedBox(width: 3),
-            Text(
-              context.tr('memberLevel$rank'),
-              style: TextStyle(
-                color: foregrounds[rank - 1],
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class EventCard extends StatelessWidget {
   const EventCard({required this.event, required this.onTap, super.key});
   final EventItem event;
@@ -2161,9 +2108,10 @@ class EventCard extends StatelessWidget {
                         const SizedBox(width: 7),
                         ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 140),
-                          child: Text(
+                          child: RankedMemberName(
                             '${event.host} · ★ ${event.hostScore.toStringAsFixed(1)}',
-                            overflow: TextOverflow.ellipsis,
+                            level: event.localizedContent?['organizer_level'],
+                            maxLines: 1,
                             style: const TextStyle(
                               fontSize: 11,
                               color: AppPalette.muted,
@@ -2173,7 +2121,7 @@ class EventCard extends StatelessWidget {
                       ],
                     ),
                     if (event.localizedContent?['organizer_level'] != null)
-                      _MemberLevelBadge(
+                      MemberLevelBadge(
                         event.localizedContent?['organizer_level'],
                       ),
                     Text(
@@ -2183,16 +2131,17 @@ class EventCard extends StatelessWidget {
                         color: AppPalette.muted,
                       ),
                     ),
-                    Text(
-                      event.priceAmount == null
-                          ? event.price
-                          : activityPrice(context, event.priceAmount!),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
                   ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  event.priceAmount == null
+                      ? event.price
+                      : activityPrice(context, event.priceAmount!),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
@@ -2661,11 +2610,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
                             event.time,
                           if (event.area.isNotEmpty) event.area,
                           if (_following) event.host,
-                          event.priceAmount == null
-                              ? event.price
-                              : activityPrice(context, event.priceAmount!),
                           if (canJoin(event)) context.tr('discoverOpen'),
                         ].join(' · '),
+                      ),
+                      Text(
+                        event.priceAmount == null
+                            ? event.price
+                            : activityPrice(context, event.priceAmount!),
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
@@ -2880,7 +2832,6 @@ class EventDetailPage extends StatefulWidget {
 }
 
 class _EventDetailPageState extends State<EventDetailPage> {
-  bool _saved = false;
   bool _joining = false;
   bool _confirming = false;
   bool _openingEventChat = false;
@@ -2959,10 +2910,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
             pinned: true,
             backgroundColor: _mint,
             actions: [
-              IconButton.filledTonal(
-                onPressed: () => setState(() => _saved = !_saved),
-                icon: Icon(_saved ? Icons.bookmark : Icons.bookmark_border),
-              ),
               const _HomeAction(),
               const SizedBox(width: 12),
             ],
@@ -3047,16 +2994,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
                           : 'activityPayAtVenue',
                     ),
                   ),
-                  if (e.isOwned ||
-                      ['approved', 'attended'].contains(_membershipStatus))
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: FilledButton.icon(
-                        onPressed: _openingEventChat ? null : _openEventChat,
-                        icon: const Icon(Icons.forum_outlined),
-                        label: Text(context.tr('openActivityChat')),
-                      ),
-                    ),
                   const Divider(height: 34),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -3074,15 +3011,19 @@ class _EventDetailPageState extends State<EventDetailPage> {
                           e.organizerAvatar,
                       radius: 25,
                     ),
-                    title: Text(
-                      '组织者 · $organizerName',
+                    title: RankedMemberName(
+                      organizerName,
+                      level:
+                          _detail?['organizer_level'] ??
+                          e.localizedContent?['organizer_level'],
+                      prefix: '组织者 · ',
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     subtitle: Wrap(
                       spacing: 6,
                       runSpacing: 4,
                       children: [
-                        _MemberLevelBadge(
+                        MemberLevelBadge(
                           _detail?['organizer_level'] ??
                               e.localizedContent?['organizer_level'],
                         ),
@@ -3183,17 +3124,24 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     runSpacing: 8,
                     children: e.tags.map((t) => _Pill(t)).toList(),
                   ),
-                  if (e.isPast && e.apiId != null && !cancelled)
+                  if ((_feedback?.eligible == true ||
+                          (e.isPast && e.isOwned)) &&
+                      e.apiId != null &&
+                      !cancelled)
                     FeedbackActionGrid(
                       token: AuthScope.of(context).token ?? '',
                       eventId: e.apiId!,
                       targetType: 'activity',
-                      initialEligibility: _feedback,
-                      onPublishSimilar: () => _openSimilarEvent(
-                        context,
-                        e.apiId!,
-                        seriesId: _seriesStory?['series_id'] as String?,
-                      ),
+                      initialEligibility:
+                          _feedback ??
+                          const FeedbackEligibilityData(eligible: false),
+                      onPublishSimilar: e.isOwned
+                          ? () => _openSimilarEvent(
+                              context,
+                              e.apiId!,
+                              seriesId: _seriesStory?['series_id'] as String?,
+                            )
+                          : null,
                     ),
                   const SizedBox(height: 26),
                   Row(
@@ -3216,6 +3164,16 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  if (_detail?['viewer_can_open_chat'] == true)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: FilledButton.icon(
+                        key: const ValueKey('open-activity-chat'),
+                        onPressed: _openingEventChat ? null : _openEventChat,
+                        icon: const Icon(Icons.forum_outlined),
+                        label: Text(context.tr('openActivityChat')),
+                      ),
+                    ),
                   if (_members.isEmpty)
                     const Text('暂无已通过的参加成员')
                   else
@@ -3287,23 +3245,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
                   onPressed: () => copyActivityShare(context, e.apiId!),
                   tooltip: context.tr('seriesShare'),
                   icon: const Icon(Icons.ios_share),
-                ),
-                const SizedBox(width: 12),
-              ],
-              if (e.apiId != null &&
-                  !e.isOwned &&
-                  _detail?['visibility'] == 'public' &&
-                  [
-                    'published',
-                    'full',
-                    'completed',
-                    'cancelled',
-                  ].contains(_detail?['status']) &&
-                  AuthScope.of(context).token != null) ...[
-                ActivityBookmarkButton(
-                  key: ValueKey(e.apiId),
-                  token: AuthScope.of(context).token!,
-                  id: e.apiId!,
                 ),
                 const SizedBox(width: 12),
               ],
@@ -3750,8 +3691,9 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Text(
+                      RankedMemberName(
                         nickname,
+                        level: profile['member_level'],
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(
@@ -3765,7 +3707,7 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                         alignment: WrapAlignment.center,
                         spacing: 4,
                         children: [
-                          _MemberLevelBadge(profile['member_level']),
+                          MemberLevelBadge(profile['member_level']),
                           MemberLevelGuideButton(
                             profileLevel:
                                 (profile['member_level'] as num?)?.toInt(),
@@ -6536,6 +6478,7 @@ class _ChatPageState extends State<ChatPage> {
                                 : context.tr('messageRecalled'),
                             mine: mine,
                             sender: message.senderName,
+                            senderLevel: message.senderLevel,
                             pending: message.pending,
                             failed: message.failed,
                             recalled: message.recalledAt != null,
@@ -6587,7 +6530,7 @@ class _ChatPageState extends State<ChatPage> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 if (message.senderLevel != null)
-                                  _MemberLevelBadge(message.senderLevel),
+                                  MemberLevelBadge(message.senderLevel),
                                 bubble,
                               ],
                             ),
@@ -7144,6 +7087,7 @@ class _Bubble extends StatelessWidget {
     required this.text,
     required this.mine,
     this.sender,
+    this.senderLevel,
     this.pending = false,
     this.failed = false,
     this.recalled = false,
@@ -7156,6 +7100,7 @@ class _Bubble extends StatelessWidget {
   final String text;
   final bool mine;
   final String? sender;
+  final int? senderLevel;
   final bool pending;
   final bool failed;
   final bool recalled;
@@ -7175,8 +7120,9 @@ class _Bubble extends StatelessWidget {
         if (!mine && sender != null)
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 3),
-            child: Text(
+            child: RankedMemberName(
               sender!,
+              level: senderLevel,
               style: const TextStyle(fontSize: 11, color: Colors.black54),
             ),
           ),
@@ -7438,9 +7384,10 @@ class ProfilePage extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          RankedMemberName(
                             user.nickname,
-                            style: TextStyle(
+                            level: user.memberLevel,
+                            style: const TextStyle(
                               fontSize: 21,
                               fontWeight: FontWeight.w800,
                             ),
@@ -7450,7 +7397,7 @@ class ProfilePage extends StatelessWidget {
                             crossAxisAlignment: WrapCrossAlignment.center,
                             spacing: 4,
                             children: [
-                              _MemberLevelBadge(user.memberLevel),
+                              MemberLevelBadge(user.memberLevel),
                               MemberLevelGuideButton(profileLevel: user.memberLevel),
                             ],
                           ),

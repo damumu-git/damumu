@@ -33,6 +33,7 @@ export function createChatPage({
   time,
   renderAvatar,
   memberBadge,
+  memberName,
   renderMessageCount,
   refreshUnread,
 }) {
@@ -346,7 +347,6 @@ export function createChatPage({
       const entry = node("li", null, own ? "chat-message own" : "chat-message");
       visible.set(message.id, entry);
       const senderName = message.sender_name || (own ? viewer.nickname : "");
-      const metadata = [senderName, time(message.created_at)];
       const body = node("div", null, "chat-message-body");
       let avatar;
       const isSystem = !message.sender_user_id || ["event_cancelled", "system"].includes(message.message_type);
@@ -413,8 +413,9 @@ export function createChatPage({
         if (signal.aborted) observer.disconnect();
         else signal.addEventListener("abort", () => observer.disconnect(), { once: true });
       }
-      const byline = node("p", metadata.filter(Boolean).join(" · "), "meta chat-sender");
-      if (message.sender_level != null) byline.append(memberBadge(message.sender_level));
+      const byline = node("p", null, "meta chat-sender");
+      if (senderName) byline.append(memberName(senderName, message.sender_level), " · ");
+      byline.append(time(message.created_at), memberBadge(message.sender_level));
       body.append(byline, bubble);
       if (message.sender_user_id && !own && !message.recalled_at) {
         const report = button("举报消息", () => reasonDialog("举报消息", async (description) => {

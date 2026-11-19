@@ -296,12 +296,18 @@ internal static class ScheduleChecks
                 "Activity cursor repeated a row");
             var search = await Data(await Get(hosts[0], "/api/v1/me/activities?limit=20&q=Adjacent"));
             Check(search.GetProperty("items").GetArrayLength() == 1, "My activity search ignored query");
+            async Task<bool> ShowsEventChat(Guid user) =>
+                (await Data(await Get(user, $"/api/v1/events/{c}"))).GetProperty("item").GetProperty("viewer_can_open_chat").GetBoolean();
+            Check(await ShowsEventChat(hosts[2]), "Organizer detail hid the activity chat entry");
+            Check(await ShowsEventChat(member), "Approved member detail hid the activity chat entry");
+            Check(!await ShowsEventChat(second), "Unapproved detail exposed the activity chat entry");
             Check((await Get(member, $"/api/v1/events/{c}/conversation")).IsSuccessStatusCode, "Approved member cannot open event chat");
             Check((await Get(second, $"/api/v1/events/{c}/conversation")).StatusCode == HttpStatusCode.Forbidden,
                 "Unapproved user accessed event chat");
             await db.ExecuteAsync("UPDATE conversation_member SET left_at=now() WHERE user_id=@member AND conversation_id IN (SELECT id FROM conversation WHERE event_id=@c)", new { member, c });
             Check((await Get(member, $"/api/v1/events/{c}/conversation")).StatusCode == HttpStatusCode.Forbidden,
                 "Chat entry rejoined a voluntarily departed member");
+            Check(!await ShowsEventChat(member), "Detail exposed chat after the member left the conversation");
             var reminder = new RecurringEventReminderService(db, app.Services.GetRequiredService<RealtimeConnectionManager>(),
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<RecurringEventReminderService>.Instance);
             await reminder.RunOnceAsync(default);
