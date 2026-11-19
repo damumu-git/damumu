@@ -249,7 +249,6 @@ public static class EventEndpoints
                 LEFT JOIN system_avatar member_avatar ON up.avatar_url='system:'||member_avatar.id::text
                 WHERE em.event_id=@id AND em.status IN ('approved', 'attended')
                 ORDER BY em.joined_at
-                LIMIT 12
                 """, new { id }, ct);
             FeedbackEligibility? feedback = null;
             if (viewerId.HasValue)
@@ -317,18 +316,21 @@ public static class EventEndpoints
                 LIMIT 3
                 """, new { id }, ct);
             profile["activities"] = await db.QueryAsync($"""
-                SELECT e.id,e.title,e.description,e.price_amount,e.approved_count,e.capacity,
+                SELECT e.id,e.status AS event_status,e.title,e.description,e.price_amount,e.approved_count,e.capacity,
                        COALESCE(e.custom_subcategory, c.name_zh_cn) AS category_name,
                        {ActivityQueries.CoverCategoryCodes},
                        {ActivityQueries.CoverThumbnail},
-                       (SELECT min(starts_at) FROM event_schedule s WHERE s.event_id=e.id AND s.status='scheduled') AS starts_at
+                       (SELECT min(starts_at) FROM event_schedule s WHERE s.event_id=e.id AND s.status='scheduled') AS starts_at,
+                       (SELECT max(ends_at) FROM event_schedule s WHERE s.event_id=e.id) AS ends_at
                 FROM event e JOIN category c ON c.id=e.category_id
                 {ActivityQueries.CoverCategoryJoins}
                 {ActivityQueries.CoverMediaJoin}
                 WHERE e.organizer_user_id=@id AND e.visibility='public' AND e.deleted_at IS NULL
-                  AND e.status IN ('published','full','completed')
-                ORDER BY starts_at DESC NULLS LAST, e.id LIMIT 12
-                """, new { id }, ct);
+                  AND (e.status IN ('published','full','completed') OR (e.status='cancelled' AND @viewerId::uuid=@id))
+                ORDER BY CASE WHEN e.status IN ('published','full') AND
+                    EXISTS (SELECT 1 FROM event_schedule s WHERE s.event_id=e.id AND s.status='scheduled' AND s.ends_at>now())
+                    THEN 0 ELSE 1 END, starts_at DESC NULLS LAST, e.id LIMIT 100
+                """, new { id, viewerId }, ct);
             profile["positive_tags"] = positiveTags;
             if (viewerId.HasValue && eventId.HasValue)
             {

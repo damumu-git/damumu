@@ -738,7 +738,7 @@ async function renderActivity(id, deferred) {
   const loading = node("p", "正在加载活动详情…", "meta");
   content.append(loading);
   try {
-    const { item, schedules, customFeedbackTags } = await request(
+    const { item, schedules, members, customFeedbackTags } = await request(
       "/events/" + encodeURIComponent(id),
       { auth: true },
     );
@@ -892,6 +892,23 @@ async function renderActivity(id, deferred) {
       actions.append(activityAction(report, "report"));
     }
     participation.append(actions);
+    if (approved && !owns) {
+      const roster = node("section", null, "inline-member-management");
+      roster.append(node("h3", "参与人"));
+      const list = node("ul", null, "event-participant-list");
+      for (const member of members ?? []) {
+        const entry = node("li");
+        const person = actionLink("", "/people/" + encodeURIComponent(member.user_id), "event-participant");
+        const avatar = node("span", null, "account-avatar");
+        avatar.setAttribute("aria-hidden", "true");
+        renderAvatar(avatar, { nickname: member.nickname, avatarImageUrl: member.avatar_url });
+        person.append(avatar, node("span", member.nickname || "搭慕用户"));
+        entry.append(person);
+        list.append(entry);
+      }
+      roster.append(list.children.length ? list : node("p", "暂无参与人。", "meta"));
+      participation.append(roster);
+    }
     if (owns) {
       const management = node("section", null, "inline-member-management");
       management.append(node("h3", item.approval_mode === "manual" ? "报名申请" : "当前报名成员"));
@@ -1813,12 +1830,35 @@ async function showPerson(id) {
         ),
       );
     if (actions.children.length) identity.append(actions);
-    timeline.append(node("h2", "公开发起的活动"));
-    if (user.activities?.length) {
-      const grid = node("div", null, "cards");
-      grid.append(...user.activities.map(card));
-      timeline.append(grid);
-    } else timeline.append(node("p", "暂时没有公开活动。", "meta"));
+    timeline.append(node("h2", "发起的活动"));
+    const filters = node("nav", null, "section-nav");
+    filters.setAttribute("aria-label", "活动时间与状态");
+    const grid = node("div", null, "cards");
+    const empty = node("p", null, "meta");
+    const groups = [["upcoming", "当前活动"], ["past", "往期活动"]];
+    if (id === session?.user.id) groups.push(["cancelled", "已取消"]);
+    const activities = user.activities ?? [];
+    const now = Date.now();
+    const state = (item) => {
+      if (item.event_status === "cancelled") return "cancelled";
+      return libraryEventState(item, now) === "已结束" ? "past" : "upcoming";
+    };
+    function selectGroup(key) {
+      for (const control of filters.children)
+        control.setAttribute("aria-pressed", String(control.dataset.group === key));
+      const matches = activities.filter((item) => state(item) === key);
+      grid.replaceChildren(...matches.map(card));
+      empty.hidden = matches.length > 0;
+      empty.textContent = key === "upcoming" ? "暂无当前活动。"
+        : key === "past" ? "暂无往期活动。" : "暂无已取消的活动。";
+    }
+    for (const [key, label] of groups) {
+      const control = button(label, () => selectGroup(key));
+      control.dataset.group = key;
+      filters.append(control);
+    }
+    timeline.append(filters, grid, empty);
+    selectGroup("upcoming");
     activitySeries.organizer(id, timeline);
   } catch (error) {
     if (marker === dialogRequest) showError(content, error);

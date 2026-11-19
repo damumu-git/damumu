@@ -1562,13 +1562,16 @@ dialog.avatar-crop-dialog {
 .activity-share-details > p { margin: 0; line-height: 1.5; }
 .activity-share-link {
   display: block;
+  justify-self: start;
+  white-space: normal;
+  text-align: left;
   color: var(--ink);
   font-weight: 750;
   line-height: 1.5;
   overflow-wrap: anywhere;
   text-decoration: none;
 }
-.activity-share-link:hover { color: var(--blue); text-decoration: underline; }
+.activity-share-link:hover { color: var(--blue); background: #f4f6ff; }
 .activity-share-cover { flex: 0 0 76px; }
 
 .friend-share-result { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: .65rem; width: 100%; text-align: left; }
@@ -2136,3 +2139,9 @@ dialog.avatar-crop-dialog {
 
 .login-preferences { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; }
 .login-preferences .check { margin: 0; font-size: .9rem; }
+
+.public-profile-activity .section-nav [aria-pressed="true"] { background: var(--accent-tint); color: var(--blue); border-color: #cbd3ff; }
+
+.event-participant-list { display: flex; flex-wrap: wrap; gap: .75rem; list-style: none; padding: 0; }
+.event-participant { display: flex; align-items: center; gap: .5rem; color: var(--ink); text-decoration: none; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 12px; }
+.event-participant:hover { background: var(--accent-tint); }

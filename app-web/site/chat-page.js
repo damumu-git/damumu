@@ -329,8 +329,8 @@ export function createChatPage({
       }
       if (message.sender_user_id) {
         entry.classList.add("with-avatar");
-        avatar = node("span", null, "account-avatar chat-sender-avatar");
-        avatar.setAttribute("aria-hidden", "true");
+        avatar = actionLink("", "/people/" + encodeURIComponent(message.sender_user_id), "account-avatar chat-sender-avatar");
+        avatar.setAttribute("aria-label", "查看" + (senderName || "用户") + "的主页");
         renderAvatar(avatar, {
           nickname: senderName,
           avatarImageUrl: message.sender_avatar || (own ? viewer.avatarImageUrl || viewer.avatarUrl : null),
@@ -344,7 +344,7 @@ export function createChatPage({
         const details = node("div", null, "activity-share-details");
         details.append(node("p", "分享的活动", "meta"));
         details.append(message.activity_id && message.activity_title
-          ? actionLink(message.activity_title, "/activities/" + encodeURIComponent(message.activity_id), "activity-share-link")
+          ? actionLink(message.activity_title, "/activities/" + encodeURIComponent(message.activity_id), "button ghost activity-share-link")
           : node("p", "活动暂不可查看", "meta"));
         const facts = [message.activity_starts_at ? time(message.activity_starts_at) : null,
           message.activity_category, message.activity_organizer].filter(Boolean).join(" · ");
