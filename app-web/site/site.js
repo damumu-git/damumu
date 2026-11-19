@@ -260,11 +260,49 @@ function renderAvatar(container, user) {
     container.append(image);
   }
 }
+const memberLevels = [
+  { name: "搭木木成员", condition: "注册后自动获得。", open: 1, recent: 2 },
+  { name: "活动发起人", condition: "成功组织至少 6 场活动。", open: 2, recent: 6 },
+  { name: "信赖发起人", condition: "达到高信誉条件，或通过韩国本人确认。", open: 3, recent: 10, recurring: 4 },
+  { name: "认证领队", condition: "同时达到高信誉条件并通过韩国本人确认。", open: 10, recent: 30, recurring: 12 },
+];
+
 function memberBadge(level) {
-  if (level == null) return "";
   const rank = Number(level);
-  const label = [null, "搭木木成员", "活动发起人", "信赖发起人", "认证领队"][rank];
-  return label ? node("span", label, "member-badge member-level-" + rank) : "";
+  const item = memberLevels[rank - 1];
+  return item ? node("span", item.name, "member-badge member-level-" + rank) : "";
+}
+
+function profileMemberLevel(level) {
+  const row = node("div", null, "profile-member-level");
+  const guide = button("等级说明", () => showMemberLevelGuide(Number(level)), "text-button member-level-help");
+  guide.setAttribute("aria-haspopup", "dialog");
+  row.append(memberBadge(level), guide);
+  return row;
+}
+
+function showMemberLevelGuide(profileLevel) {
+  const content = show("等级说明", "", true);
+  const levels = node("ol", null, "member-guide-levels");
+  memberLevels.forEach((item, index) => {
+    const rank = index + 1;
+    const entry = node("li", null, "member-guide-level");
+    const title = node("h3", rank + "级 · " + item.name);
+    if (rank === profileLevel) title.append(node("span", "资料等级", "member-guide-current"));
+    entry.append(title, node("p", item.condition));
+    entry.append(node("p", `同时开放 ${item.open} 场 · 最近 30 天内最多发布 ${item.recent} 场`, "member-guide-quota"));
+    if (item.recurring)
+      entry.append(node("p", `可创建活动系列、小组和定期活动。每个定期计划最多安排 ${item.recurring} 场。`));
+    levels.append(entry);
+  });
+  content.append(
+    levels,
+    node("h3", "升级怎么计算"),
+    node("p", "成功组织的活动须已结束，且至少有一名参与者（组织者以外）已签到。"),
+    node("p", "高信誉需要成功组织至少 6 场，且这些活动合计获得至少 51 个赞。"),
+    node("p", "取消活动会释放同时开放的名额，该场仍计入最近 30 天的发布配额。"),
+    node("p", "韩国本人确认暂未开放。你仍可以凭活动信誉升为信赖发起人。", "member-guide-note"),
+  );
 }
 
 function cover(item, className = "") {
@@ -1714,7 +1752,7 @@ async function showSettings() {
   });
   const identityText = node("div");
   identityText.append(node("h2", session.user.nickname || "搭木木用户"),
-    memberBadge(account?.memberLevel ?? profile?.member_level), avatarButton, avatarInput, avatarStatus);
+    profileMemberLevel(account?.memberLevel ?? profile?.member_level), avatarButton, avatarInput, avatarStatus);
   identity.append(avatar, identityText);
   info.append(identity);
   const stats = node("dl", null, "personal-stats");
@@ -1857,7 +1895,7 @@ async function showPerson(id) {
       avatar.alt = "";
       identity.append(avatar);
     }
-    identity.append(heading, memberBadge(user.member_level), node("p", "获赞 " + (user.like_count ?? 0), "meta"));
+    identity.append(heading, profileMemberLevel(user.member_level), node("p", "获赞 " + (user.like_count ?? 0), "meta"));
     if (user.bio) identity.append(node("p", user.bio, "detail-copy"));
     if (user.home_region_name)
       identity.append(node("p", "常驻 · " + [user.home_parent_name, user.home_region_name].filter(Boolean).join(" · "), "profile-region"));

@@ -2229,3 +2229,49 @@ dialog.avatar-crop-dialog {
 @media (max-width: 640px) {
   .group-hero { grid-template-columns: 1fr; }
 }
+
+.profile-member-level {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+}
+.member-level-help {
+  font-size: 0.82rem;
+  min-height: 2rem;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+.member-guide-levels {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.9rem 0 1.3rem;
+}
+.member-guide-level {
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  padding: 0.8rem 1rem;
+}
+.member-guide-level h3,
+.member-guide-level p { margin: 0 0 0.3rem; }
+.member-guide-level p:last-child { margin-bottom: 0; }
+.member-guide-current {
+  display: inline-block;
+  margin-inline-start: 0.55rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #e9e6ff;
+  color: #4d3798;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.member-guide-quota { font-weight: 700; }
+.member-guide-note {
+  margin-bottom: 0;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.7rem;
+  background: #eef0ff;
+  color: #253567;
+}

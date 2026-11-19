@@ -22,6 +22,7 @@ import 'activity_series.dart';
 import 'community_groups.dart';
 import 'recurring_activities.dart';
 import 'member_profile.dart';
+import 'member_level_guide.dart';
 import 'user_avatar_image.dart';
 import 'category_service.dart';
 import 'emoji_picture.dart';
@@ -3752,7 +3753,19 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                             ),
                       ),
                       const SizedBox(height: 6),
-                      _MemberLevelBadge(profile['member_level']),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        alignment: WrapAlignment.center,
+                        spacing: 4,
+                        children: [
+                          _MemberLevelBadge(profile['member_level']),
+                          MemberLevelGuideButton(
+                            profileLevel:
+                                (profile['member_level'] as num?)?.toInt(),
+                            foreground: Colors.white,
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 6),
                       Text(
                         '♥ ${context.tr('profileLikes')} ${profile['like_count'] ?? 0}',
@@ -7426,7 +7439,14 @@ class ProfilePage extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          if (user.memberLevel != null) _MemberLevelBadge(user.memberLevel),
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 4,
+                            children: [
+                              _MemberLevelBadge(user.memberLevel),
+                              MemberLevelGuideButton(profileLevel: user.memberLevel),
+                            ],
+                          ),
                           Text(user.email),
                         ],
                       ),
