@@ -261,10 +261,10 @@ function renderAvatar(container, user) {
   }
 }
 const memberLevels = [
-  { name: "搭木木成员", condition: "注册后自动获得。", open: 1, recent: 2 },
-  { name: "活动发起人", condition: "成功组织至少 6 场活动。", open: 2, recent: 6 },
-  { name: "信赖发起人", condition: "达到高信誉条件，或通过韩国本人确认。", open: 3, recent: 10, recurring: 4 },
-  { name: "认证领队", condition: "同时达到高信誉条件并通过韩国本人确认。", open: 10, recent: 30, recurring: 12 },
+  { name: "萌新搭", condition: "注册后自动获得。", open: 2, recent: 4 },
+  { name: "搭主", condition: "成功组织至少 3 场活动。", open: 3, recent: 6 },
+  { name: "信赖搭主", condition: "达到高信誉条件，或通过韩国本人确认。", open: 5, recent: 10, recurring: 4 },
+  { name: "认证搭主", condition: "同时达到高信誉条件并通过韩国本人确认。", open: 10, recent: 30, recurring: 12 },
 ];
 
 function memberBadge(level) {
@@ -299,9 +299,9 @@ function showMemberLevelGuide(profileLevel) {
     levels,
     node("h3", "升级怎么计算"),
     node("p", "成功组织的活动须已结束，且至少有一名参与者（组织者以外）已签到。"),
-    node("p", "高信誉需要成功组织至少 6 场，且这些活动合计获得至少 51 个赞。"),
+    node("p", "高信誉需要成功组织至少 10 场，且这些活动合计获得至少 51 个赞。"),
     node("p", "取消活动会释放同时开放的名额，该场仍计入最近 30 天的发布配额。"),
-    node("p", "韩国本人确认暂未开放。你仍可以凭活动信誉升为信赖发起人。", "member-guide-note"),
+    node("p", "韩国本人确认暂未开放。你仍可以凭活动信誉升为信赖搭主。", "member-guide-note"),
   );
 }
 

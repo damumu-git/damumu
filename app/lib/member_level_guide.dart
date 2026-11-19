@@ -31,9 +31,9 @@ class _MemberLevelGuide extends StatelessWidget {
   final int? profileLevel;
 
   static const limits = [
-    (rank: 1, open: 1, recent: 2, recurring: null),
-    (rank: 2, open: 2, recent: 6, recurring: null),
-    (rank: 3, open: 3, recent: 10, recurring: 4),
+    (rank: 1, open: 2, recent: 4, recurring: null),
+    (rank: 2, open: 3, recent: 6, recurring: null),
+    (rank: 3, open: 5, recent: 10, recurring: 4),
     (rank: 4, open: 10, recent: 30, recurring: 12),
   ];
 

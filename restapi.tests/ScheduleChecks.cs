@@ -93,10 +93,13 @@ internal static class ScheduleChecks
             var owner = hosts[0];
             async Task<int> Level(Guid user) => await db.ScalarAsync<int>("SELECT member_level(@user)", new { user });
             Check(await Level(member) == 1 && await Level(owner) == 3, "Ordinary or verified-only level was wrong");
+            await db.ExecuteAsync("""
+                UPDATE member_identity_verification SET revoked_at=now() WHERE user_id=@owner
+                """, new { owner });
             var legacy = await db.QueryAsync("""
                 INSERT INTO event(organizer_user_id,category_id,title,description,status,capacity,city_code)
                 SELECT @owner,@category,'Reputation fixture','Fixture','published',16,'KR-11'
-                FROM generate_series(1,6)
+                FROM generate_series(1,10)
                 RETURNING id
                 """, new { owner, category });
             var pastIds = legacy.Select(row => (Guid)row["id"]!).ToArray();
@@ -107,11 +110,11 @@ internal static class ScheduleChecks
                     INSERT INTO event_schedule(event_id,starts_at,ends_at) VALUES(@eventId,@at,@at+interval '2 hours');
                     INSERT INTO event_member(event_id,user_id,status,checked_in_at) VALUES(@eventId,@member,'attended',@at);
                     """, new { eventId = pastIds[i], at, member });
+                if (i == 1) Check(await Level(owner) == 1, "Two successful activities prematurely promoted the host");
+                if (i == 2) Check(await Level(owner) == 2, "Three successful activities did not promote the host");
             }
-            await db.ExecuteAsync("""
-                UPDATE member_identity_verification SET revoked_at=now() WHERE user_id=@owner
-                """, new { owner });
-            Check(await Level(owner) == 2, "Successful host did not reach the activity-host level");
+            var lastPastEvent = pastIds[^1];
+            pastIds = pastIds[..^1];
             var reviewers = Enumerable.Range(0, 9).Select(_ => Guid.NewGuid()).ToArray();
             await db.ExecuteAsync("""
                 INSERT INTO app_user(id) SELECT unnest(@reviewers);
@@ -124,6 +127,7 @@ internal static class ScheduleChecks
                 ORDER BY s.event_id,r.user_id LIMIT 50
                 """, new { reviewers, pastIds, owner });
             Check(await Level(owner) == 2, "Exactly 50 activity likes incorrectly qualified for high reputation");
+            await db.ExecuteAsync("UPDATE event SET status='cancelled' WHERE id=@lastPastEvent", new { lastPastEvent });
             await db.ExecuteAsync("""
                 INSERT INTO endorsement(context_event_id,from_user_id,target_type,target_id,target_user_id,tag_code)
                 SELECT s.event_id,r.user_id,'activity',s.event_id,@owner,'well_organized'
@@ -132,15 +136,25 @@ internal static class ScheduleChecks
                     SELECT 1 FROM endorsement WHERE context_event_id=s.event_id AND from_user_id=r.user_id)
                 LIMIT 1
                 """, new { reviewers, pastIds, owner });
-            Check(await Level(owner) == 3, "High reputation without identity should qualify for level three");
+            Check(await Level(owner) == 2, "51 likes on nine successful activities prematurely promoted the host");
+            await db.ExecuteAsync("UPDATE event SET status='published' WHERE id=@lastPastEvent", new { lastPastEvent });
+            Check(await Level(owner) == 3, "Ten successful activities and 51 likes did not qualify for level three");
             await db.ExecuteAsync("UPDATE member_identity_verification SET revoked_at=NULL WHERE user_id=@owner", new { owner });
             Check(await Level(owner) == 4, "Verified high reputation did not reach level four");
 
             var quotaOwner = Guid.NewGuid();
             await db.ExecuteAsync("INSERT INTO app_user(id) VALUES(@quotaOwner)", new { quotaOwner });
             await Create(quotaOwner, Request("Quota fixture", start.AddDays(19)) with { PriceMin = 3000, PriceMax = 3000 });
-            Check((await Send(quotaOwner, "/api/v1/events", Request("Extra active fixture", start.AddDays(20)))).StatusCode
-                  == HttpStatusCode.Conflict, "Ordinary member exceeded the simultaneous activity limit");
+            var secondActive = await Create(quotaOwner, Request("Second active fixture", start.AddDays(20)));
+            Check((await Send(quotaOwner, "/api/v1/events", Request("Extra active fixture", start.AddDays(21)))).StatusCode
+                  == HttpStatusCode.Conflict, "Level one exceeded the two simultaneous activity limit");
+            await db.ExecuteAsync("UPDATE event SET status='cancelled' WHERE id=@secondActive", new { secondActive });
+            var thirdPublication = await Create(quotaOwner, Request("Third publication fixture", start.AddDays(21)));
+            await db.ExecuteAsync("UPDATE event SET status='cancelled' WHERE id=@thirdPublication", new { thirdPublication });
+            var fourthPublication = await Create(quotaOwner, Request("Fourth publication fixture", start.AddDays(22)));
+            await db.ExecuteAsync("UPDATE event SET status='cancelled' WHERE id=@fourthPublication", new { fourthPublication });
+            Check((await Send(quotaOwner, "/api/v1/events", Request("Fifth publication fixture", start.AddDays(23)))).StatusCode
+                  == HttpStatusCode.Conflict, "Level one exceeded the four publications per 30 days limit");
             Check((await Send(second, "/api/v1/events", Request("Ordinary repeating fixture", start, repeat: "weekly", count: 2))).StatusCode
                   == HttpStatusCode.Forbidden, "Ordinary member created recurring activities");
 

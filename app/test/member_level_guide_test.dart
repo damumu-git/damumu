@@ -16,9 +16,14 @@ void main() {
 
     await tester.tap(find.text('Level guide'));
     await tester.pumpAndSettle();
-    expect(find.text('Level 1 · DAMUMU member'), findsOneWidget);
+    expect(find.text('Level 1 · Newcomer'), findsOneWidget);
     expect(find.text('Profile level'), findsOneWidget);
-    expect(find.textContaining('Up to 1 open at once'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Up to 2 open at once · Up to 4 published in any 30 days',
+      ),
+      findsOneWidget,
+    );
 
     final verification = find.textContaining(
       'identity verification is currently unavailable',
