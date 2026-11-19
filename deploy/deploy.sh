@@ -306,6 +306,9 @@ if [[ "$CHECK_PUBLIC" == true ]]; then
   log "Checking public HTTPS routes"
   curl --fail --silent --show-error --max-time 20 https://app.damumu.com/healthz >/dev/null
   curl --fail --silent --show-error --max-time 20 https://www.damumu.com/healthz >/dev/null
+  web_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 https://www.damumu.com/)"
+  [[ "$web_status" == "401" ]] || die "Web preview protection expected HTTP 401, received ${web_status}."
+
   curl --fail --silent --show-error --max-time 20 https://api.damumu.com/api/v1/health >/dev/null
   curl --fail --silent --show-error --max-time 20 \
     https://api.damumu.com/uploads/system-avatars/green-sprout.jpg >/dev/null

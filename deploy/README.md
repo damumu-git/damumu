@@ -300,3 +300,7 @@ Pull Request 创建 revert、合并回 `main`，再运行 `damumu-deploy`。如�
 迁移 027 新增活动翻译缓存、图片审核和用户建议。应用迁移后再部署 API/Admin。发布新 App 后，列表和详情读取当前语言的译文及分类名称。建议先在测试环境使用已加载简体中文 `zh`、英文 `en` 和韩文 `ko` 模型的自托管 LibreTranslate，并将 `ACTIVITY_TRANSLATION_ENDPOINT` 设为容器能访问的完整 `/translate` 地址，再设置 `ACTIVITY_TRANSLATION_ENABLED=true`。如服务要求密钥，在服务器私有 `.env` 中设置 `ACTIVITY_TRANSLATION_API_KEY`。
 
 翻译任务只发送公开活动的标题、描述、自定义分类。译文按语言和原文缓存，更新原文会使旧译文失效。先使用隔离测试数据核对结果。启用外部翻译服务前需先补齐运营侧披露及相关流程。译文暂缺或翻译服务未配置时，App 显示发布者的原文。
+
+## 活动网页版测试访问密码
+
+www.damumu.com 由宿主机 Nginx Basic Auth 保护。凭据文件为 /etc/nginx/.htpasswd-damumu-web，由 root 管理、www-data 组可读，权限0640。新服务器先用 htpasswd 创建此文件再安装配置。凭据和密码哈希不进入仓库。/healthz 返回200，发布流程另验证首页匿名访问返回401。测试者通过入口密码后仍需正常登录搭慕业务账号。
