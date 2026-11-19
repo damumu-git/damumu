@@ -1558,7 +1558,19 @@ dialog.avatar-crop-dialog {
 .chat-system-text { color: var(--muted); font-size: .78rem; }
 .activity-share-card { display: flex; gap: .65rem; align-items: center; min-width: min(24rem, 72vw); }
 .activity-share-cover { width: 76px; height: 76px; object-fit: cover; border-radius: .65rem; }
-.activity-share-details { min-width: 0; }
+.activity-share-details { display: grid; gap: .35rem; min-width: 0; }
+.activity-share-details > p { margin: 0; line-height: 1.5; }
+.activity-share-link {
+  display: block;
+  color: var(--ink);
+  font-weight: 750;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+.activity-share-link:hover { color: var(--blue); text-decoration: underline; }
+.activity-share-cover { flex: 0 0 76px; }
+
 .friend-share-result { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: .65rem; width: 100%; text-align: left; }
 .friend-share-result img { width: 72px; height: 58px; object-fit: cover; border-radius: .5rem; }
 .friend-share-result span { display: grid; gap: .2rem; }

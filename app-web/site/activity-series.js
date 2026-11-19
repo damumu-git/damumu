@@ -46,6 +46,7 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
       const [, rows] = await Promise.all([regionOptions(select, "全部地区"),
         request("/series" + (region ? "?region=" + encodeURIComponent(region) : ""))]);
       select.value = region;
+      select.dispatchEvent(new Event("change"));
       select.onchange = () => location.assign("/series" + (select.value ? "?region=" + encodeURIComponent(select.value) : ""));
       cards(content, rows);
     } catch (error) { showError(content, error); }

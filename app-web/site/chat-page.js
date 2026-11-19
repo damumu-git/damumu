@@ -344,7 +344,7 @@ export function createChatPage({
         const details = node("div", null, "activity-share-details");
         details.append(node("p", "分享的活动", "meta"));
         details.append(message.activity_id && message.activity_title
-          ? actionLink(message.activity_title, "/activities/" + encodeURIComponent(message.activity_id))
+          ? actionLink(message.activity_title, "/activities/" + encodeURIComponent(message.activity_id), "activity-share-link")
           : node("p", "活动暂不可查看", "meta"));
         const facts = [message.activity_starts_at ? time(message.activity_starts_at) : null,
           message.activity_category, message.activity_organizer].filter(Boolean).join(" · ");
