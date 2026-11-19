@@ -338,6 +338,8 @@ function card(item) {
   thumbnail.setAttribute("aria-label", item.title);
   thumbnail.append(cover(item));
   const labels = node("div", null, "activity-card-labels");
+  if (item.is_recurring === true)
+    labels.append(node("span", "定期活动", "activity-label-recurring"));
   appendActivityLabels(labels, item);
   const heading = node("h3");
   const link = node("a", item.title);
@@ -1289,7 +1291,7 @@ function showPublish(template, seriesId) {
       try {
         await request("/series/" + seriesId + "/events/" + item.id, { auth: true, method: "PUT" });
       } catch {
-        window.alert("活动已发布。请从系列管理页手动加入活动。");
+        window.alert("活动已发布。请从定期活动管理页手动加入活动。");
       }
     }
     location.assign(eventLink(item.id));
@@ -2111,7 +2113,7 @@ async function route() {
           throw new Error("只能复办自己发起的活动。");
         regions = areaCatalog;
         categories = categoryCatalog;
-        if (series && !series.item.can_manage) throw new Error("仅系列管理者可添加活动。");
+        if (series && !series.item.can_manage) throw new Error("仅定期活动管理者可添加活动。");
         showPublish(source?.item, series?.item.id);
       } catch (error) {
         showError(show("发起活动"), error);

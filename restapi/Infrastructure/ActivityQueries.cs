@@ -45,6 +45,17 @@ public static class ActivityQueries
         LEFT JOIN category grandparent_category ON grandparent_category.id=parent_category.parent_id
         """;
 
+    internal const string RecurringActivity = """
+        EXISTS (
+            SELECT 1 FROM activity_series_event recurring_event
+            JOIN activity_series recurring_series ON recurring_series.id=recurring_event.series_id
+            LEFT JOIN app_user recurring_owner ON recurring_owner.id=recurring_series.owner_id
+            WHERE recurring_event.event_id=e.id
+              AND (recurring_series.owner_id IS NULL OR
+                   (recurring_owner.status='active' AND recurring_owner.deleted_at IS NULL))
+        ) AS is_recurring
+        """;
+
     private const string Matching = $"""
                 WITH matching AS (
                 SELECT count(*) OVER () AS total_count, e.id, e.created_at, e.title, e.description, e.status, e.visibility, e.approval_mode,
@@ -53,6 +64,7 @@ public static class ActivityQueries
                        e.price_currency, e.city_code, e.district_code, e.language_codes,
                        e.cover_media_id,
                        {CoverThumbnail},
+                       {RecurringActivity},
                        e.published_at,
                        c.id AS category_id,
                        {CoverCategoryCodes},

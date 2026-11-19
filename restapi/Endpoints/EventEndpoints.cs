@@ -34,6 +34,7 @@ public static class EventEndpoints
                        e.price_currency, e.city_code, e.district_code, e.language_codes,
                        e.cover_media_id,
                        {ActivityQueries.CoverThumbnail},
+                       {ActivityQueries.RecurringActivity},
                        {ActivityQueries.CoverCategoryCodes},
                        e.published_at, e.confirmed_at,
                        c.id AS category_id,

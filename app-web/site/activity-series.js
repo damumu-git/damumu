@@ -24,17 +24,17 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
       const copy = node("div", null, "series-card-copy");
       if (item.region_name) copy.append(node("p", item.region_name, "meta"));
       copy.append(node("h2", item.title), node("p", item.description, "detail-copy"));
-      entry.append(copy, actionLink("查看系列", link(item)));
+      entry.append(copy, actionLink("查看定期活动", link(item)));
       grid.append(entry);
     }
-    content.append(items.length ? grid : node("p", "这个地区还没有活动系列。", "meta"));
+    content.append(items.length ? grid : node("p", "这个地区还没有定期活动。", "meta"));
   }
   async function index() {
-    const content = show("活动系列", "workspace-page series-page");
+    const content = show("定期活动", "workspace-page series-page");
     const toolbar = node("div", null, "series-toolbar");
     const actions = node("div", null, "section-nav");
     actions.append(actionLink("搭慕周末", "/series/damu-weekend", "button primary"),
-      actionLink("创建活动系列", "/series/new"), actionLink("组织者招募与场地合作", "/series/participate"));
+      actionLink("创建定期活动", "/series/new"), actionLink("组织者招募与场地合作", "/series/participate"));
     const label = node("label", "按地区浏览", "series-region");
     const select = node("select");
     label.append(select);
@@ -53,10 +53,11 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
   }
   function create(proposal) {
     requireLogin(async () => {
-      const content = show(proposal ? "组织者招募与场地合作" : "创建活动系列", "editor-page series-page");
+      const content = show(proposal ? "组织者招募与场地合作" : "创建定期活动", "editor-page series-page");
+      if (!proposal) content.append(node("p", "创建长期活动主页后，可逐场发布或添加已发布的活动。每场独立报名，订阅者会收到新场次通知。", "meta"));
       const kind = proposal
         ? '<label>合作类型<select name="kind"><option value="organizer">成为组织者</option><option value="venue">场地合作</option></select></label>'
-        : '<label>系列名称<input name="title" required minlength="2" maxlength="100"></label>';
+        : '<label>定期活动名称<input name="title" required minlength="2" maxlength="100"></label>';
       const editor = form(content, kind + '<label>地区<select name="regionCode" required></select></label><label>介绍<textarea name="description" required minlength="2" maxlength="1000"></textarea></label>',
         async ({ title, description, regionCode, kind }) => {
           const item = await request(proposal ? "/series/proposals" : "/series", {
@@ -81,7 +82,7 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
       ended ? "暂无往期活动。" : "下一场暂未确定，欢迎登记方便的时间。", "meta"));
   }
   async function detail(key) {
-    const content = show("活动系列", "workspace-page series-page");
+    const content = show("定期活动", "workspace-page series-page");
     try {
       const { item, events } = await request("/series/" + encodeURIComponent(key), { auth: true });
       if (!content.isConnected) return;
@@ -95,7 +96,7 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
       if (item.guide_slug) actions.append(actionLink(item.guide_title, "/guides/" + item.guide_slug));
       if (item.owner_id) actions.append(actionLink("组织者主页", "/people/" + item.owner_id));
       if (item.can_manage) actions.append(actionLink("添加已发布活动", link(item) + "/manage", "button primary"),
-        actionLink("发布系列活动", "/activities/new?series=" + item.id));
+        actionLink("发布新一期活动", "/activities/new?series=" + item.id));
       if (actions.children.length) summary.append(actions);
       const participation = node("div", null, "series-intro-participation");
       intro.append(summary, participation);
@@ -123,17 +124,17 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
   }
   function manage(key) {
     requireLogin(async () => {
-      const content = show("添加活动到系列", "editor-page series-page");
+      const content = show("添加场次到定期活动", "editor-page series-page");
       try {
         const [{ item, events }, mine] = await Promise.all([
           request("/series/" + encodeURIComponent(key), { auth: true }),
           request("/me/activities", { auth: true }),
         ]);
-        if (!item.can_manage) throw new Error("仅系列管理者可以添加活动。");
+        if (!item.can_manage) throw new Error("仅定期活动管理者可以添加活动。");
         const linked = new Set(events.map((event) => event.id));
         const choices = mine.filter((event) => event.organizer_user_id === session().user.id &&
           ["published", "full", "completed"].includes(event.event_status) && !linked.has(event.id));
-        content.append(actionLink("返回系列", link(item)));
+        content.append(actionLink("返回定期活动", link(item)));
         if (!choices.length) {
           content.append(node("p", "暂无可添加活动。", "meta"), actionLink("发布活动", "/activities/new"));
           return;
@@ -152,7 +153,7 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
       const item = await request(endpoint(id) + "/story");
       const actions = node("div", null, "section-nav");
       actions.append(actionLink("返回活动", eventLink(id)));
-      if (item.series_id) actions.append(actionLink("查看系列", "/series/" + (item.series_slug || item.series_id)));
+      if (item.series_id) actions.append(actionLink("查看定期活动", "/series/" + (item.series_slug || item.series_id)));
       if (item.next_event_id) actions.append(actionLink("查看下一场", eventLink(item.next_event_id), "button primary"));
       content.append(node("h2", item.title), actions);
       const owns = item.organizer_user_id === session()?.user.id;
@@ -222,7 +223,7 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
     try {
       const items = await request("/series?ownerId=" + encodeURIComponent(id));
       if (!content.isConnected || !items.length) return;
-      content.append(node("h2", "组织者的活动系列"));
+      content.append(node("h2", "组织者的定期活动"));
       cards(content, items);
     } catch {
       // Keep the public profile usable if the series directory is unavailable.

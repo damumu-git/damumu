@@ -2122,7 +2122,7 @@ dialog.avatar-crop-dialog {
   gap: .3rem;
   margin-top: .55rem;
 }
-.activity-label-major, .activity-label-minor, .activity-label-owned {
+.activity-label-major, .activity-label-minor, .activity-label-owned, .activity-label-recurring {
   max-width: 100%;
   padding: .15rem .5rem;
   border: 1px solid transparent;
@@ -2145,3 +2145,5 @@ dialog.avatar-crop-dialog {
 .event-participant-list { display: flex; flex-wrap: wrap; gap: .75rem; list-style: none; padding: 0; }
 .event-participant { display: flex; align-items: center; gap: .5rem; color: var(--ink); text-decoration: none; padding: .5rem .75rem; border: 1px solid var(--line); border-radius: 12px; }
 .event-participant:hover { background: var(--accent-tint); }
+
+.activity-label-recurring { color: #6a3890; background: #f5edfc; border-color: #e1ccef; border-radius: 5px; }
