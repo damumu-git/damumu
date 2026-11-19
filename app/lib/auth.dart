@@ -50,6 +50,7 @@ class AuthUser {
     this.avatarImageUrl,
     this.trustScore,
     this.reviewCount,
+    this.memberLevel,
     this.joinedCount,
     this.organizedCount,
     this.attendedCount,
@@ -63,6 +64,7 @@ class AuthUser {
   final String? avatarImageUrl;
   final double? trustScore;
   final int? reviewCount;
+  final int? memberLevel;
   final int? joinedCount;
   final int? organizedCount;
   final int? attendedCount;
@@ -89,6 +91,7 @@ class AuthUser {
     avatarImageUrl: avatarImageUrl ?? this.avatarImageUrl,
     trustScore: trustScore,
     reviewCount: reviewCount,
+    memberLevel: memberLevel,
     joinedCount: joinedCount,
     organizedCount: organizedCount,
     attendedCount: attendedCount,
@@ -97,6 +100,7 @@ class AuthUser {
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
     id: '${json['id'] ?? json['userId']}',
+    memberLevel: (json['memberLevel'] as num?)?.toInt(),
     nickname: '${json['nickname'] ?? ''}',
     email: '${json['email'] ?? ''}',
     avatarUrl: json['avatarUrl'] as String?,
@@ -207,11 +211,13 @@ class AuthApi {
     SocialCredential credential, {
     String? nickname,
     String? locale,
+    bool registrationOnly = false,
   }) => _json(
     '/auth/social/${credential.provider.name}',
     method: 'POST',
     body: {
       'token': credential.token,
+      'registrationOnly': registrationOnly,
       if (nickname != null) ...{
         'nickname': nickname,
         'ageConfirmed': true,
@@ -301,11 +307,13 @@ class AuthController extends ChangeNotifier {
     String? nickname,
     String? locale,
     bool autoLogin = true,
+    bool registrationOnly = false,
   }) async {
     final result = await AuthApi.social(
       credential,
       nickname: nickname,
       locale: locale,
+      registrationOnly: registrationOnly,
     );
     if (result['registrationRequired'] == true) return false;
     await _setAutoLogin(autoLogin);
@@ -955,7 +963,7 @@ class _AuthPageState extends State<AuthPage> {
                       fit: BoxFit.contain,
                       excludeFromSemantics: true,
                     ),
-                    label: Text(context.tr('googleLogin')),
+                    label: Text(context.tr(_register ? 'googleRegister' : 'googleLogin')),
                   ),
                   const SizedBox(height: 8),
                   FilledButton.icon(
@@ -973,7 +981,7 @@ class _AuthPageState extends State<AuthPage> {
                       height: 20,
                       excludeFromSemantics: true,
                     ),
-                    label: Text(context.tr('kakaoLogin')),
+                    label: Text(context.tr(_register ? 'kakaoRegister' : 'kakaoLogin')),
                   ),
                 ],
               ),
@@ -994,7 +1002,7 @@ class _AuthPageState extends State<AuthPage> {
       if (credential == null || !mounted) return;
       final auth = AuthScope.of(context);
       final locale = Localizations.localeOf(context).languageCode;
-      if (await auth.loginSocial(credential, autoLogin: _autoLogin)) return;
+      if (await auth.loginSocial(credential, autoLogin: _autoLogin, registrationOnly: _register)) return;
       if (!mounted) return;
       setState(() => _busy = false);
       final nickname = await showDialog<String>(
@@ -1008,6 +1016,7 @@ class _AuthPageState extends State<AuthPage> {
         nickname: nickname,
         locale: locale,
         autoLogin: _autoLogin,
+        registrationOnly: _register,
       );
     } on SocialLoginException catch (error) {
       if (mounted) {
@@ -1062,6 +1071,7 @@ class _AuthPageState extends State<AuthPage> {
     final failure = error is AuthApiException ? error : null;
     final message = switch (failure?.code) {
       'social_login_unavailable' => context.tr('socialUnavailable'),
+      'social_already_registered' => context.tr('socialAlreadyRegistered'),
       _ when failure != null && failure.message.isNotEmpty => failure.message,
       _ => context.tr(fallback),
     };

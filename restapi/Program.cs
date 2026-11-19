@@ -169,7 +169,8 @@ app.UseStaticFiles(new StaticFileOptions
     {
         context.Context.Response.Headers.CacheControl = context.Context.Request.Path.StartsWithSegments(
             "/uploads/messages", StringComparison.OrdinalIgnoreCase) ||
-            context.Context.Request.Path.StartsWithSegments("/uploads/events", StringComparison.OrdinalIgnoreCase)
+            context.Context.Request.Path.StartsWithSegments("/uploads/events", StringComparison.OrdinalIgnoreCase) ||
+            context.Context.Request.Path.StartsWithSegments("/uploads/groups", StringComparison.OrdinalIgnoreCase)
             ? "private,no-store" : "public,max-age=31536000,immutable";
         context.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     }

@@ -260,6 +260,13 @@ function renderAvatar(container, user) {
     container.append(image);
   }
 }
+function memberBadge(level) {
+  if (level == null) return "";
+  const rank = Number(level);
+  const label = [null, "搭木木成员", "活动发起人", "信赖发起人", "认证领队"][rank];
+  return label ? node("span", label, "member-badge member-level-" + rank) : "";
+}
+
 function cover(item, className = "") {
   const image = node("img", null, className);
   image.alt = "";
@@ -349,9 +356,11 @@ function card(item) {
   heading.append(link);
   const host = node("div", null, "host");
   host.append(
-    node("strong", item.organizer_name || "活动组织者"),
+    node("strong", item.organizer_name || "活动组织者", "host-name"),
     node("span", cost(item)),
   );
+  const badge = memberBadge(item.organizer_level);
+  if (badge) host.firstElementChild.append(badge);
   const participation = participationLabel(item);
   article.append(
     thumbnail,
@@ -479,7 +488,7 @@ function show(title, layout = "reading", modal = false, deferred = false) {
     browse.hidden = true;
     page.hidden = false;
     page.replaceChildren(content);
-    document.title = title + " · 搭慕 DAMU";
+    document.title = title + " · 搭木木 DAMUMU";
   }
   return content;
 }
@@ -499,7 +508,7 @@ async function refreshCurrentPage(previous, render) {
     refreshed.tabIndex = -1;
     refreshed.focus({ preventScroll: true });
   }
-  document.title = refreshed.querySelector("h1").textContent + " · 搭慕 DAMU";
+  document.title = refreshed.querySelector("h1").textContent + " · 搭木木 DAMUMU";
   window.scrollTo({ top, left, behavior: "instant" });
 }
 
@@ -571,12 +580,12 @@ function handleForm(form, content, action) {
 
 function showLogin(register = false, socialRegistration = false, notice = "") {
   const content = show(
-    socialRegistration ? "完成注册" : register ? "创建搭慕账号" : "登录搭慕",
+    socialRegistration ? "完成注册" : register ? "创建搭木木账号" : "登录搭木木",
     "account-page",
   );
   if (notice) content.append(node("p", notice, "notice"));
   if (socialRegistration)
-    content.append(node("p", "请填写搭慕昵称。注册后可在「个人资料」上传头像、填写简介和常驻区域。", "meta"));
+    content.append(node("p", "请填写搭木木昵称。注册后可在「个人资料」上传头像、填写简介和常驻区域。", "meta"));
   else if (register)
     content.append(node("p", "创建账号后即可报名或发起活动。", "meta"));
   const form = node("form", null, "form");
@@ -749,7 +758,7 @@ async function renderActivity(id, deferred) {
     if (marker !== dialogRequest) return;
     loading.remove();
     $("h1", content).textContent = item.title;
-    if (!deferred) document.title = item.title + " · 搭慕 DAMU";
+    if (!deferred) document.title = item.title + " · 搭木木 DAMUMU";
     const layout = node("div", null, "invitation");
     const details = node("section", null, "activity-section");
     layout.append(cover(item, "detail-cover"), details);
@@ -757,7 +766,7 @@ async function renderActivity(id, deferred) {
     const schedule =
       schedules?.find((entry) => entry.status === "scheduled") ??
       schedules?.[0];
-    const organizer = item.organizer_name || "搭慕用户";
+    const organizer = item.organizer_name || "搭木木用户";
     const facts = node("dl", null, "activity-facts");
     const starts = time(schedule?.starts_at);
     const ends = schedule?.ends_at ? time(schedule.ends_at) : "";
@@ -787,7 +796,7 @@ async function renderActivity(id, deferred) {
       nickname: organizer,
       avatarImageUrl: item.organizer_avatar,
     });
-    identity.append(organizerAvatar, node("span", organizer));
+    identity.append(organizerAvatar, node("span", organizer), memberBadge(item.organizer_level));
     addFact("组织者", identity);
     details.append(node("h2", "活动信息"), facts);
     const membership = item.viewer_membership_status;
@@ -923,7 +932,7 @@ async function renderActivity(id, deferred) {
         const avatar = node("span", null, "account-avatar");
         avatar.setAttribute("aria-hidden", "true");
         renderAvatar(avatar, { nickname: member.nickname, avatarImageUrl: member.avatar_url });
-        person.append(avatar, node("span", member.nickname || "搭慕用户"));
+        person.append(avatar, node("span", member.nickname || "搭木木用户"), memberBadge(member.member_level));
         entry.append(person);
         list.append(entry);
       }
@@ -943,7 +952,7 @@ async function renderActivity(id, deferred) {
             (item.approval_mode === "manual" || ["approved", "attended"].includes(entry.status)));
           for (const member of visibleRows) {
             const row = node("div", null, "inline-member-row");
-            const person = actionLink(member.nickname || "搭慕用户", "/people/" + encodeURIComponent(member.user_id));
+            const person = actionLink(member.nickname || "搭木木用户", "/people/" + encodeURIComponent(member.user_id));
             row.append(person, node("p", [membershipLabel(member.status), member.application_note].filter(Boolean).join(" · "), "meta"));
             if (item.approval_mode === "manual" && ["applied", "waitlisted"].includes(member.status)) {
               const controls = node("div", null, "detail-actions");
@@ -1080,7 +1089,7 @@ async function showMine() {
   }
 }
 
-async function uploadCover(file) {
+async function prepareCover(file) {
   if (!file?.size) return null;
   if (file.size > 15 * 1024 * 1024)
     throw new Error("请选择小于 15 MB 的图片。");
@@ -1115,6 +1124,12 @@ async function uploadCover(file) {
     throw new Error("图片压缩后仍超过 1.5 MB。");
   const form = new FormData();
   form.append("cover", jpeg, "cover.jpg");
+  return form;
+}
+
+async function uploadCover(file) {
+  const form = await prepareCover(file);
+  if (!form) return null;
   return (await request("/events/covers", { auth: true, data: form }))
     .coverMediaId;
 }
@@ -1429,7 +1444,7 @@ async function renderOrganizer(id, deferred) {
     )) {
       const row = node("li");
       row.append(
-        node("strong", member.nickname ?? "搭慕用户"),
+        node("strong", member.nickname ?? "搭木木用户"),
         node(
           "p",
           [
@@ -1698,7 +1713,8 @@ async function showSettings() {
     }
   });
   const identityText = node("div");
-  identityText.append(node("h2", session.user.nickname || "搭慕用户"), avatarButton, avatarInput, avatarStatus);
+  identityText.append(node("h2", session.user.nickname || "搭木木用户"),
+    memberBadge(account?.memberLevel ?? profile?.member_level), avatarButton, avatarInput, avatarStatus);
   identity.append(avatar, identityText);
   info.append(identity);
   const stats = node("dl", null, "personal-stats");
@@ -1828,7 +1844,7 @@ async function showPerson(id) {
     );
     if (marker !== dialogRequest) return;
     const heading = $("h1", content);
-    heading.textContent = user.nickname ?? "搭慕用户";
+    heading.textContent = user.nickname ?? "搭木木用户";
     const layout = node("div", null, "public-profile-layout");
     const identity = node("section", null, "activity-section public-profile-summary");
     const timeline = node("div", null, "public-profile-activity");
@@ -1841,7 +1857,7 @@ async function showPerson(id) {
       avatar.alt = "";
       identity.append(avatar);
     }
-    identity.append(heading, node("p", "获赞 " + (user.like_count ?? 0), "meta"));
+    identity.append(heading, memberBadge(user.member_level), node("p", "获赞 " + (user.like_count ?? 0), "meta"));
     if (user.bio) identity.append(node("p", user.bio, "detail-copy"));
     if (user.home_region_name)
       identity.append(node("p", "常驻 · " + [user.home_parent_name, user.home_region_name].filter(Boolean).join(" · "), "profile-region"));
@@ -1965,13 +1981,13 @@ async function showGuides(slug) {
   );
   content.classList.add("guide-page");
   if (!slug) {
-    content.append(node("p", "搭慕编辑部 · 给想出门的人一些灵感。", "meta"));
+    content.append(node("p", "搭木木编辑部 · 给想出门的人一些灵感。", "meta"));
     return loadGuideCards(content, false);
   }
   try {
     const guide = await request("/guides/" + encodeURIComponent(slug));
     $("h1", content).textContent = guide.title;
-    document.title = guide.title + " · 搭慕 DAMU";
+    document.title = guide.title + " · 搭木木 DAMUMU";
     const layout = node("div", null, "guide-reading-layout");
     const copy = node("article", null, "activity-section guide-reading-copy");
     const sidebar = node("aside", null, "activity-section guide-reading-sidebar");
@@ -2041,7 +2057,7 @@ function showNotFound() {
   content.append(actionLink("返回发现活动", "/explore"));
 }
 function showDownload() {
-  const content = show("下载搭慕 App", "reading download-page");
+  const content = show("下载搭木木 App", "reading download-page");
   const card = node("section", null, "download-card");
   const logo = node("img", null, "download-logo");
   logo.src = "/assets/logo.png";
@@ -2127,11 +2143,11 @@ async function route() {
       $(".toolbar").append(actionLink("查看全部", "/explore"));
       const preview = node("section", null, "gallery home-guides");
       preview.append(
-        node("p", "DAMU EDITORIAL", "eyebrow"),
+        node("p", "DAMUMU EDITORIAL", "eyebrow"),
         node("h2", "周末去哪儿？"),
         node("p", "散步、看展，或和新朋友喝一杯咖啡。", "meta"),
         actionLink("浏览周末指南", "/guides"),
-          actionLink("搭慕周末", "/series/damu-weekend"),
+          actionLink("搭木木周末", "/series/damu-weekend"),
       );
       browse.append(preview);
       loadGuideCards(preview, true);
@@ -2208,7 +2224,7 @@ async function route() {
     content.append(
       node(
         "p",
-        "搭慕用于发现和组织线下活动。请准确填写活动内容、报名条件和预计线下人均费用。",
+        "搭木木用于发现和组织线下活动。请准确填写活动内容、报名条件和预计线下人均费用。",
         "detail-copy",
       ),
       node(
@@ -2218,7 +2234,7 @@ async function route() {
       ),
       node(
         "p",
-        "费用由参与者线下处理。搭慕不代收活动费、不提供转账或资金担保。",
+        "费用由参与者线下处理。搭木木不代收活动费、不提供转账或资金担保。",
         "detail-copy",
       ),
       actionLink("阅读隐私政策", "/privacy"),
@@ -2346,6 +2362,8 @@ const communityPages = createCommunityPages({
   area,
   cover,
   renderAvatar,
+  prepareCover,
+  memberBadge,
   session: () => session,
 });
 const showMessages = createChatPage({
@@ -2362,6 +2380,7 @@ const showMessages = createChatPage({
   session: () => session,
   time,
   renderAvatar,
+  memberBadge,
   renderMessageCount,
   refreshUnread,
 });

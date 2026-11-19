@@ -53,7 +53,7 @@ public static class EventEndpoints
                        municipality.name_en_us AS municipality_name_en_us,
                        NULL::text AS place_name, NULL::text AS address_public,
                        s.starts_at, s.ends_at,
-                       u.id AS organizer_user_id, up.nickname AS organizer_name,
+                       u.id AS organizer_user_id, up.nickname AS organizer_name, member_level(u.id) AS organizer_level,
                        COALESCE(organizer_avatar.image_url, CASE
                            WHEN up.avatar_url LIKE '/uploads/%' THEN up.avatar_url
                            ELSE NULL
@@ -185,7 +185,7 @@ public static class EventEndpoints
                            WHERE viewer_member.event_id=e.id AND viewer_member.user_id=@viewerId
                              AND viewer_member.status IN ('approved','attended')
                        ) THEN ST_X(p.public_geo::geometry) END AS public_longitude,
-                       up.nickname AS organizer_name,
+                       up.nickname AS organizer_name, member_level(e.organizer_user_id) AS organizer_level,
                        COALESCE(organizer_avatar.image_url, CASE
                            WHEN up.avatar_url LIKE '/uploads/%' THEN up.avatar_url
                            ELSE NULL
@@ -245,7 +245,7 @@ public static class EventEndpoints
                 """, new { id }, ct);
             var members = await db.QueryAsync(
                 """
-                SELECT em.user_id, em.member_role, em.status, up.nickname, COALESCE(member_avatar.image_url, up.avatar_url) AS avatar_url
+                SELECT em.user_id, em.member_role, em.status, member_level(em.user_id) AS member_level, up.nickname, COALESCE(member_avatar.image_url, up.avatar_url) AS avatar_url
                 FROM event_member em
                 LEFT JOIN user_profile up ON up.user_id=em.user_id
                 LEFT JOIN system_avatar member_avatar ON up.avatar_url='system:'||member_avatar.id::text
@@ -292,7 +292,7 @@ public static class EventEndpoints
             var viewerId = ApiSupport.GetOptionalUserId(context);
             var profile = await db.QueryOneAsync(
                 """
-                SELECT u.id, COALESCE(up.nickname, '用户') AS nickname, COALESCE(member_avatar.image_url, up.avatar_url) AS avatar_url, up.web_public_bio AS bio,
+                SELECT u.id, member_level(u.id) AS member_level, COALESCE(up.nickname, '用户') AS nickname, COALESCE(member_avatar.image_url, up.avatar_url) AS avatar_url, up.web_public_bio AS bio,
                        (SELECT count(*) FROM endorsement en WHERE en.target_user_id=u.id) AS like_count,
                        home.name_zh_cn AS home_region_name, home.name_ko_kr AS home_region_name_ko_kr,
                        home.name_en_us AS home_region_name_en_us,
@@ -783,6 +783,7 @@ public static class EventEndpoints
         Guid? existingRecurrenceId = null, int occurrenceIndex = 0)
     {
         await db.ExecuteAsync("SELECT lock_event_user(@userId)", new { userId }, ct);
+        await MemberPrivileges.CheckPublicationAsync(db, userId, request.RepeatFrequency is not null || existingRecurrenceId.HasValue, ct);
         if (request.ApprovalMode is not (null or "manual" or "auto" or "automatic"))
             throw new ApiException(400, "approval_mode_invalid", "请选择有效的报名方式");
         if (request.EndsAt <= request.StartsAt)

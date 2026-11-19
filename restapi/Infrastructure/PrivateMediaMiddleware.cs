@@ -28,6 +28,18 @@ public sealed class PrivateMediaMiddleware(RequestDelegate next)
             if (!allowed)
                 throw new ApiException(404, "media_not_found", "图片不存在或无权访问");
         }
+        else if (context.Request.Path.StartsWithSegments("/uploads/groups", StringComparison.OrdinalIgnoreCase))
+        {
+            var storageKey = context.Request.Path.Value!["/uploads/".Length..];
+            var allowed = await db.ScalarAsync<bool>("""
+                SELECT EXISTS (
+                    SELECT 1 FROM web_group g JOIN app_user u ON u.id=g.owner_id
+                    WHERE g.cover_storage_key=@storageKey AND u.status='active' AND u.deleted_at IS NULL
+                )
+                """, new { storageKey }, context.RequestAborted);
+            if (!allowed)
+                throw new ApiException(404, "media_not_found", "图片不存在或无权访问");
+        }
         else if (context.Request.Path.StartsWithSegments("/uploads/messages", StringComparison.OrdinalIgnoreCase))
         {
             // Never treat an unguessable filename as authorization.

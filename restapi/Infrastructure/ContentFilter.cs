@@ -37,6 +37,7 @@ public sealed partial class ContentFilter(Db db)
             SubmitFeedbackRequest input when input.FeedbackType?.Trim().Equals("like", StringComparison.OrdinalIgnoreCase) == true
                 => [input.Description, ..input.CustomTags ?? []],
             WebCommunityEndpoints.IntentInput input => [input.Title, input.Description],
+            WebCommunityEndpoints.GroupAnnouncement input => [input.Body],
             WebCommunityEndpoints.GroupInput input => [input.Title, input.Description],
             _ => Array.Empty<string?>()
         }).Where(field => !string.IsNullOrWhiteSpace(field)).ToArray();

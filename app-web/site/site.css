@@ -2154,3 +2154,78 @@ dialog.avatar-crop-dialog {
 
 .my-activity-search { display: flex; align-items: end; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
 .my-activity-search .friend-search { margin: 0; flex: 1 1 15rem; }
+
+.member-badge {
+  display: inline-block;
+  width: fit-content;
+  border-radius: 999px;
+  background: #e9edf5;
+  color: #3e506b;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.member-level-2 { background: #daf1e9; color: #155b49; }
+.member-level-3 { background: #e9e6ff; color: #4d3798; }
+.member-level-4 { background: #fceccf; color: #77480b; }
+.host-name, .group-host {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.chat-sender .member-badge { margin-inline-start: 0.5rem; }
+
+.group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1rem;
+  margin-block: 1.4rem;
+}
+.group-card, .group-hero, .group-management {
+  border: 1px solid var(--line, #dfe3ee);
+  border-radius: 1rem;
+  background: var(--surface, #fff);
+  overflow: hidden;
+}
+.group-card { display: block; color: inherit; text-decoration: none; }
+.group-card:hover { box-shadow: 0 7px 22px rgb(31 42 72 / 12%); }
+.group-card img, .group-hero img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.group-card-copy, .group-hero-copy, .group-management { padding: 1rem; }
+.group-card-copy h2 { margin-block: 0.55rem 0.25rem; }
+.group-card-description {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.group-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.group-tags span { border-radius: 999px; padding: 0.15rem 0.55rem; background: #ecefff; color: #344d91; font-size: 0.78rem; }
+.group-facts { margin-block: 0.65rem; }
+.group-hero, .group-management { margin-block: 1rem 1.5rem; }
+.group-hero { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: center; }
+.group-hero-copy .section-nav, .group-management .section-nav { margin-block: 0.75rem 0; }
+.group-member { align-items: center; }
+.group-categories { border: 1px solid var(--line, #dfe3ee); border-radius: 0.7rem; padding: 0.75rem; }
+.form .group-categories label { display: inline-flex; align-items: center; gap: 0.25rem; margin: 0.25rem 0.65rem 0.25rem 0; }
+.form .group-categories input { width: auto; min-height: 0; }
+.group-pinned {
+  margin-block-start: 0.55rem;
+  padding: 0.5rem 0.75rem;
+  background: #eef0ff;
+  color: #253567;
+  border-radius: 0.65rem;
+}
+.group-pinned p {
+  color: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-y: auto;
+  max-height: 6rem;
+}
+@media (max-width: 640px) {
+  .group-hero { grid-template-columns: 1fr; }
+}

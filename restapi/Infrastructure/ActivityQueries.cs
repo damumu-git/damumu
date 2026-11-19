@@ -83,7 +83,7 @@ public static class ActivityQueries
                        municipality.name_en_us AS municipality_name_en_us,
                        NULL::text AS place_name, NULL::text AS address_public,
                        s.starts_at, s.ends_at,
-                       u.id AS organizer_user_id, up.nickname AS organizer_name,
+                       u.id AS organizer_user_id, up.nickname AS organizer_name, member_level(u.id) AS organizer_level,
                        COALESCE(organizer_avatar.image_url, CASE
                            WHEN up.avatar_url LIKE '/uploads/%' THEN up.avatar_url
                            ELSE NULL

@@ -13,7 +13,7 @@ public static class SocialAuthEndpoints
         {
             context.Response.Headers.CacheControl = "no-store";
             var identity = await verifier.VerifyAsync(provider, request.Token ?? "", ct);
-            var user = await accounts.LoginAsync(identity, request, ct);
+            var user = await accounts.LoginAsync(identity, request, ct, registrationOnly: request.RegistrationOnly);
             return user is null
                 ? ApiSupport.Ok(new { registrationRequired = true })
                 : ApiSupport.Ok(new { accessToken = auth.CreateToken((Guid)user["id"]!), user });
@@ -24,7 +24,7 @@ public static class SocialAuthEndpoints
 
 public sealed record SocialLoginRequest(string? Token, string? Nickname = null,
     bool AgeConfirmed = false, bool PrivacyAcknowledged = false, string? PrivacyVersion = null,
-    string? Locale = null);
+    string? Locale = null, bool RegistrationOnly = false);
 
 public sealed class SocialAccountService(NpgsqlDataSource source)
 {
@@ -82,7 +82,7 @@ public sealed class SocialAccountService(NpgsqlDataSource source)
         Dictionary<string, object?> user;
         await using (var read = new NpgsqlCommand(
             """
-            SELECT u.id, u.status, u.deleted_at, p.nickname, p.avatar_url AS "avatarUrl",
+            SELECT u.id, u.status, u.deleted_at, p.nickname, member_level(u.id) AS "memberLevel", p.avatar_url AS "avatarUrl",
                    sa.image_url AS "avatarImageUrl", c.email
             FROM app_user u JOIN user_profile p ON p.user_id=u.id
             LEFT JOIN user_credential c ON c.user_id=u.id

@@ -15,6 +15,8 @@ export function createCommunityPages(ui) {
     card,
     area,
     cover,
+    prepareCover,
+    memberBadge,
     renderAvatar,
     time,
     session,
@@ -40,6 +42,33 @@ export function createCommunityPages(ui) {
     content.append(items.length ? grid : node("p", empty, "meta"));
   }
 
+  function groupFacts(item) {
+    const facts = [
+      item.region_name,
+      item.capacity ? `${item.member_count} / ${item.capacity} 人` : `${item.member_count} 名成员`,
+      item.join_mode === "approval" ? "组主确认后加入" : "自由加入",
+    ];
+    if (item.min_age && item.max_age) facts.push(`${item.min_age}–${item.max_age} 岁`);
+    else if (item.min_age) facts.push(`${item.min_age} 岁起`);
+    else if (item.max_age) facts.push(`${item.max_age} 岁及以下`);
+    return node("p", facts.filter(Boolean).join(" · "), "meta group-facts");
+  }
+
+  function groupTags(item) {
+    const tags = node("div", null, "group-tags");
+    for (const label of item.categories ?? []) tags.append(node("span", label));
+    return tags;
+  }
+
+  function groupCard(item) {
+    const link = actionLink("", "/groups/" + item.id, "group-card");
+    const summary = node("div", null, "group-card-copy");
+    summary.append(groupTags(item), node("h2", item.title),
+      node("p", item.description, "group-card-description"), groupFacts(item));
+    link.append(cover(item), summary);
+    return link;
+  }
+
   async function catalog(kind) {
     const intent = kind === "intents";
     const root = intent ? "/interests" : "/groups";
@@ -60,6 +89,12 @@ export function createCommunityPages(ui) {
     );
     try {
       const items = await request("/web/" + kind);
+      if (!intent) {
+        const cards = node("div", null, "group-grid");
+        cards.append(...items.map(groupCard));
+        content.append(items.length ? cards : node("p", "还没有小组。", "meta"));
+        return;
+      }
       list(
         content,
         items,
@@ -69,17 +104,12 @@ export function createCommunityPages(ui) {
             node("p", item.description, "detail-copy"),
             node(
               "p",
-              intent
-                ? [
-                    item.region_name,
-                    item.event_id ? "已有正式活动" : "意向征集",
-                  ].join(" · ")
-                : item.member_count + " 名成员",
+              [item.region_name, item.event_id ? "已有正式活动" : "意向征集"].join(" · "),
               "meta",
             ),
           );
         },
-        intent ? "还没有征集。可以先写下你想找人一起做的事。" : "还没有小组。",
+        "还没有征集。可以先写下你想找人一起做的事。",
       );
     } catch (error) {
       showError(content, error);
@@ -96,30 +126,97 @@ export function createCommunityPages(ui) {
       const form = node("form", null, "form");
       form.innerHTML =
         '<label>标题<input name="title" minlength="2" maxlength="100" required></label><label>介绍<textarea name="description" minlength="2" maxlength="1000" required></textarea></label><button type="submit" class="button primary">发布</button>';
-      if (intent) {
-        try {
-          const regions = await request("/regions");
-          const field = node("label", "市／道");
-          const select = node("select");
-          select.name = "regionCode";
-          select.required = true;
-          select.add(new Option("选择地区", ""));
-          for (const item of regions.filter((region) => region.level === 1))
-            select.add(new Option(item.name_zh_cn, item.code));
-          field.append(select);
-          form.prepend(field);
-        } catch (error) {
-          showError(content, error);
-          return;
+      let pendingGroup;
+      try {
+        const regions = await request("/regions");
+        const field = node("label", intent ? "市／道" : "市／道（选填）");
+        const select = node("select");
+        select.name = "regionCode";
+        select.required = intent;
+        select.add(new Option("选择地区", ""));
+        for (const item of regions.filter((region) => region.level === 1))
+          select.add(new Option(item.name_zh_cn, item.code));
+        field.append(select);
+        form.prepend(field);
+        if (!intent) {
+          const categories = (await request("/categories")).filter((category) => category.level === 1);
+          const fieldset = node("fieldset", null, "group-categories");
+          fieldset.append(node("legend", "小组分类（可多选）"));
+          const coverSelect = node("select");
+          coverSelect.name = "coverCategoryId";
+          function updateCoverOptions() {
+            const previous = coverSelect.value;
+            coverSelect.replaceChildren(new Option("默认封面", ""));
+            for (const input of fieldset.querySelectorAll("input:checked"))
+              coverSelect.add(new Option(input.parentElement.textContent, input.value));
+            if ([...coverSelect.options].some((option) => option.value === previous)) coverSelect.value = previous;
+          }
+          for (const category of categories) {
+            const label = node("label");
+            const checkbox = node("input");
+            checkbox.type = "checkbox";
+            checkbox.name = "category";
+            checkbox.value = category.id;
+            checkbox.addEventListener("change", updateCoverOptions);
+            label.append(checkbox, category.name_zh_cn);
+            fieldset.append(label);
+          }
+          updateCoverOptions();
+          const coverField = node("label", "系统分类封面");
+          coverField.append(coverSelect);
+          const config = node("div", null, "form group-settings");
+          config.innerHTML = `
+            <label>上传封面（可选，优先使用）<input type="file" name="cover" accept="image/jpeg,image/png,image/webp"></label>
+            <div class="form-row">
+              <label>人数上限（含组主）<input type="number" name="capacity" min="2" max="500"></label>
+              <label>加入方式<select name="joinMode"><option value="open">自由加入</option><option value="approval">组主确认后加入</option></select></label>
+            </div>
+            <div class="form-row">
+              <label>建议最低年龄（选填）<input type="number" name="minAge" min="14" max="120"></label>
+              <label>建议最高年龄（选填）<input type="number" name="maxAge" min="14" max="120"></label>
+            </div>`;
+          form.lastElementChild.before(fieldset, coverField, config);
         }
+      } catch (error) {
+        showError(content, error);
+        return;
       }
       content.append(form);
       handleForm(form, content, async (values) => {
-        const created = await request("/web/" + kind, {
-          auth: true,
-          data: values,
-        });
-        location.assign((intent ? "/interests/" : "/groups/") + created.id);
+        if (intent) {
+          const created = await request("/web/intents", { auth: true, data: values });
+          location.assign("/interests/" + created.id);
+          return;
+        }
+        const image = await prepareCover(values.cover);
+        if (!pendingGroup) {
+          pendingGroup = await request("/web/groups", {
+            auth: true,
+            data: {
+              title: values.title,
+              description: values.description,
+              regionCode: values.regionCode || null,
+              categoryIds: [...form.querySelectorAll("input[name=category]:checked")].map((input) => input.value),
+              coverCategoryId: values.coverCategoryId || null,
+              capacity: values.capacity ? Number(values.capacity) : null,
+              minAge: values.minAge ? Number(values.minAge) : null,
+              maxAge: values.maxAge ? Number(values.maxAge) : null,
+              joinMode: values.joinMode,
+            },
+          });
+        }
+        if (image) {
+          try {
+            await request("/web/groups/" + pendingGroup.id + "/cover", { auth: true, data: image });
+          } catch (error) {
+            if (!content.querySelector(".group-cover-recovery")) {
+              form.before(actionLink("前往已创建的小组", "/groups/" + pendingGroup.id, "group-cover-recovery"));
+              form.querySelector('button[type="submit"]').textContent = "重试上传封面";
+            }
+            throw error;
+          }
+        }
+        location.assign("/groups/" + pendingGroup.id);
       });
     });
   }
@@ -260,38 +357,65 @@ export function createCommunityPages(ui) {
   async function renderGroup(id, deferred) {
     const content = show("活动小组", "workspace-page", false, deferred);
     try {
-      const { item, events, members } = await request("/web/groups/" + id, {
+      const { item, events, members, applications } = await request("/web/groups/" + id, {
         auth: true,
       });
       content.querySelector("h1").textContent = item.title;
-      content.append(
-        node("p", item.description, "detail-copy"),
-        node("p", item.member_count + " 名成员", "meta"),
-      );
+      const endpoint = "/web/groups/" + id;
       const owner = session()?.user.id === item.owner_id;
-      if (!owner && !item.joined)
-        content.append(
-          node("p", "加入后，昵称会显示在公开小组成员名单。", "meta"),
-        );
-      if (!owner)
-        content.append(
-          button(
-            item.joined ? "退出小组" : "加入小组",
-            () =>
-              requireLogin(async () => {
-                try {
-                  await request("/web/groups/" + id + "/membership", {
-                    method: item.joined ? "DELETE" : "PUT",
-                    auth: true,
-                  });
-                  await groupDetail(id, content);
-                } catch (error) {
-                  showError(content, error);
-                }
-              }),
-            "button primary",
-          ),
-        );
+      const hero = node("section", null, "group-hero");
+      const copy = node("div", null, "group-hero-copy");
+      const ownerLink = actionLink("组主主页", "/people/" + item.owner_id);
+      const host = node("div", null, "group-host");
+      host.append(ownerLink, memberBadge(item.owner_level));
+      copy.append(groupTags(item), node("p", item.description, "detail-copy"), groupFacts(item), host);
+      const actions = node("div", null, "section-nav");
+      const change = (path, options) => requireLogin(async () => {
+        try {
+          await request(endpoint + path, { auth: true, ...options });
+          await groupDetail(id, content);
+        } catch (error) {
+          showError(content, error);
+        }
+      });
+      if (!owner) {
+        const label = item.joined ? "退出小组" : item.pending ? "撤回申请" :
+          item.join_mode === "approval" ? "申请加入" : "加入小组";
+        actions.append(button(label, () => change("/membership", {
+          method: item.joined || item.pending ? "DELETE" : "PUT",
+        }), "button primary"));
+        if (!item.joined)
+          copy.append(node("p", item.pending ? "加入申请等待组主确认。" : "加入后，昵称会显示在公开成员名单。", "meta"));
+      }
+      if (item.conversation_id)
+        actions.append(actionLink("打开小组聊天", "/messages/" + item.conversation_id, "button"));
+      copy.append(actions);
+      hero.append(cover(item), copy);
+      content.append(hero);
+      if (owner) {
+        const management = node("section", null, "group-management");
+        management.append(node("h2", "小组管理"));
+        if (item.join_mode === "approval") {
+          management.append(node("h3", "加入申请"));
+          list(management, applications, (row, applicant) => {
+            const decide = (accept) => change("/applications/" + applicant.id, { data: { accept } });
+            const actions = node("div", null, "section-nav");
+            actions.append(button("通过", () => decide(true)), button("拒绝", () => decide(false)));
+            row.append(actionLink(applicant.nickname, "/people/" + applicant.id), actions);
+          }, "暂无待处理申请。");
+        }
+        const announcement = node("form", null, "form");
+        announcement.innerHTML = '<label>聊天置顶公告<textarea name="body" maxlength="500" required></textarea></label><button type="submit" class="button primary">发布并置顶</button>';
+        handleForm(announcement, management, async ({ body }) => {
+          await request(endpoint + "/announcements", { auth: true, data: { body } });
+          announcement.reset();
+          status.textContent = "公告已发布，小组聊天将显示最新公告。";
+        });
+        const status = node("p", null, "meta");
+        status.setAttribute("role", "status");
+        management.append(announcement, status);
+        content.append(management);
+      }
       content.append(node("h2", "即将举办"));
       eventGrid(
         content,
@@ -308,10 +432,16 @@ export function createCommunityPages(ui) {
       list(
         content,
         members,
-        (row, member) =>
-          row.append(
-            actionLink(member.nickname, "/people/" + member.id, "text-button"),
-          ),
+        (row, member) => {
+          const actions = node("div", null, "section-nav group-member");
+          actions.append(actionLink(member.nickname, "/people/" + member.id, "text-button"), memberBadge(member.member_level));
+          if (owner && member.id !== item.owner_id)
+            actions.append(button("移出小组", () => {
+              if (window.confirm("将 " + member.nickname + " 移出小组？"))
+                change("/members/" + member.id, { method: "DELETE" });
+            }));
+          row.append(actions);
+        },
         "暂无成员。",
       );
       if (owner)

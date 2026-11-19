@@ -33,7 +33,7 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
     const content = show("活动系列", "workspace-page series-page");
     const toolbar = node("div", null, "series-toolbar");
     const actions = node("div", null, "section-nav");
-    actions.append(actionLink("搭慕周末", "/series/damu-weekend", "button primary"),
+    actions.append(actionLink("搭木木周末", "/series/damu-weekend", "button primary"),
       actionLink("创建活动系列", "/series/new"), actionLink("组织者招募与场地合作", "/series/participate"));
     const label = node("label", "按地区浏览", "series-region");
     const select = node("select");
@@ -87,7 +87,7 @@ export function createActivitySeries({ show, node, button, actionLink, request, 
       const { item, events } = await request("/series/" + encodeURIComponent(key), { auth: true });
       if (!content.isConnected) return;
       content.querySelector("h1").textContent = item.title;
-      document.title = item.title + " · 搭慕";
+      document.title = item.title + " · 搭木木";
       const intro = node("section", null, "activity-section series-intro");
       const summary = node("div", null, "series-intro-summary");
       if (item.region_name) summary.append(node("p", item.region_name, "meta"));

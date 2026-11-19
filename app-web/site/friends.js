@@ -30,7 +30,7 @@ export function createFriends({ show, node, button, actionLink, request, handleF
     const avatar = node("span", null, "account-avatar");
     avatar.setAttribute("aria-hidden", "true");
     renderAvatar(avatar, { nickname, avatarImageUrl: avatarUrl });
-    link.append(avatar, node("strong", nickname || "搭慕用户"));
+    link.append(avatar, node("strong", nickname || "搭木木用户"));
     return link;
   }
 
@@ -91,7 +91,7 @@ export function createFriends({ show, node, button, actionLink, request, handleF
         );
         row.append(identity(friend.id, friend.nickname, friend.avatar_url), actions);
         list.append(row);
-        return { row, name: (friend.nickname || "搭慕用户").toLocaleLowerCase() };
+        return { row, name: (friend.nickname || "搭木木用户").toLocaleLowerCase() };
       });
       const empty = node("p", null, "meta");
       function render() {

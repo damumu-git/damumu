@@ -13,7 +13,10 @@ public static class SocialEndpoints
             var take = Math.Clamp(limit ?? 30, 1, 100);
             return ApiSupport.Ok(await db.QueryAsync(
                 """
-                SELECT c.id, c.conversation_type, c.event_id,
+                SELECT c.id, c.conversation_type, c.event_id, c.group_id,
+                       (SELECT body FROM web_group_announcement WHERE group_id=c.group_id
+                        ORDER BY created_at DESC,id DESC LIMIT 1) AS pinned_announcement,
+                       member_level(other_member.user_id) AS peer_level,
                        COALESCE(c.title, e.title, other_member.nickname, '会话') AS display_title,
                        CASE WHEN c.status='active' AND c.conversation_type='direct'
                                  AND NOT COALESCE(direct_chat_allowed(@userId,other_member.user_id),false)
@@ -121,7 +124,9 @@ public static class SocialEndpoints
                     SELECT 1 FROM conversation_member peer JOIN friendship f
                         ON f.first_id=least(@userId,peer.user_id) AND f.second_id=greatest(@userId,peer.user_id)
                     WHERE peer.conversation_id=c.id AND peer.left_at IS NULL AND c.conversation_type='direct'
-                ) AS is_friend
+                ) AS is_friend,
+                (SELECT body FROM web_group_announcement WHERE group_id=c.group_id
+                 ORDER BY created_at DESC,id DESC LIMIT 1) AS pinned_announcement
                 FROM conversation_member cm JOIN conversation c ON c.id=cm.conversation_id
                 WHERE cm.conversation_id=@id AND cm.user_id=@userId AND cm.left_at IS NULL
                 """, new { id, userId }, ct);
@@ -142,6 +147,7 @@ public static class SocialEndpoints
                            COALESCE(shared_cover.thumbnail_storage_key,shared_cover.storage_key) END AS activity_cover_url,
                        m.edited_at, m.recalled_at, m.created_at,
                        up.nickname AS sender_name, COALESCE(sa.image_url,up.avatar_url) AS sender_avatar,
+                       member_level(m.sender_user_id) AS sender_level,
                        CASE WHEN reply.message_type='activity_share' AND reply.body IS NOT NULL
                             THEN '分享了一场活动' ELSE reply.body END AS reply_to_body,
                        reply.recalled_at AS reply_to_recalled_at,
@@ -199,7 +205,8 @@ public static class SocialEndpoints
             return ApiSupport.Ok(new
             {
                 items = rows, nextCursor, hasMore, historyBefore,
-                status = access["status"], isFriend = access["is_friend"]
+                status = access["status"], isFriend = access["is_friend"],
+                pinnedAnnouncement = access["pinned_announcement"]
             });
         });
 

@@ -79,6 +79,7 @@ public static class ActivitySeriesEndpoints
         api.MapPost("/series", async (SeriesInput input, HttpContext context, Db db, CancellationToken ct) =>
         {
             var viewer = ApiSupport.RequireUserId(context);
+            await MemberPrivileges.RequireCommunityCreatorAsync(db, viewer, ct);
             var title = input.Title?.Trim();
             var description = input.Description?.Trim();
             if (title is null or { Length: < 2 or > 100 } || description is null or { Length: < 2 or > 1000 })
@@ -229,11 +230,11 @@ public static class ActivitySeriesEndpoints
             var summary = WebUtility.HtmlEncode(string.Join(" · ", new[] { region, time }.Where(value => !string.IsNullOrWhiteSpace(value))));
             return Results.Content($"""
                 <!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-                <title>{title} · 搭慕</title><link rel="canonical" href="{url}"><meta property="og:type" content="website">
+                <title>{title} · 搭木木</title><link rel="canonical" href="{url}"><meta property="og:type" content="website">
                 <meta property="og:title" content="{title}"><meta property="og:description" content="{summary}">
                 <meta property="og:image" content="{WebUtility.HtmlEncode(image)}"><meta property="og:url" content="{url}/share">
                 <meta http-equiv="refresh" content="0;url={url}"></head>
-                <body><main><h1>{title}</h1><p>{summary}</p><a href="{url}">查看搭慕活动</a></main></body></html>
+                <body><main><h1>{title}</h1><p>{summary}</p><a href="{url}">查看搭木木活动</a></main></body></html>
                 """, "text/html; charset=utf-8");
         });
     }

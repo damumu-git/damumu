@@ -82,6 +82,7 @@ public static class UserEndpoints
                     id = userId,
                     nickname,
                     email,
+                    memberLevel = 1,
                     avatarUrl = avatarId.HasValue ? $"system:{avatarId}" : null,
                     avatarImageUrl
                 }
@@ -97,7 +98,7 @@ public static class UserEndpoints
             var user = await db.QueryOneAsync(
                 """
                 SELECT u.id, u.status, c.email, c.password_hash,
-                       p.nickname, p.avatar_url AS "avatarUrl",
+                       p.nickname, member_level(u.id) AS "memberLevel", p.avatar_url AS "avatarUrl",
                        sa.image_url AS "avatarImageUrl"
                 FROM user_credential c
                 JOIN app_user u ON u.id=c.user_id
@@ -122,6 +123,7 @@ public static class UserEndpoints
                 {
                     id = userId,
                     nickname = user["nickname"],
+                    memberLevel = user["memberLevel"],
                     email = user["email"],
                     avatarUrl = user["avatarUrl"],
                     avatarImageUrl = user["avatarImageUrl"]
@@ -163,13 +165,24 @@ public static class UserEndpoints
             });
         });
 
+        api.MapGet("/me/identity-verification", async (HttpContext context, Db db, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            context.Response.Headers.CacheControl = "private, no-store";
+            var verified = await db.ScalarAsync<bool>("""
+                SELECT EXISTS (SELECT 1 FROM member_identity_verification
+                               WHERE user_id=@userId AND revoked_at IS NULL)
+                """, new { userId }, ct);
+            return ApiSupport.Ok(new { available = false, verified });
+        });
+
         api.MapGet("/me", async (HttpContext context, Db db, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
             var user = await db.QueryOneAsync(
                 """
                 SELECT u.id, u.status, u.role, u.locale, u.timezone, u.adult_confirmed_at,
-                       u.created_at, p.nickname, p.avatar_url AS "avatarUrl",
+                       u.created_at, p.nickname, member_level(u.id) AS "memberLevel", p.avatar_url AS "avatarUrl",
                        COALESCE(sa.image_url, CASE
                            WHEN p.avatar_url LIKE '/uploads/%' THEN p.avatar_url
                            ELSE NULL
@@ -328,7 +341,7 @@ public static class UserEndpoints
                 $"""
                 WITH records AS (
                 SELECT e.id, e.organizer_user_id, e.title, e.description,
-                       e.status AS event_status, e.cancellation_reason,
+                       e.status AS event_status, e.visibility, e.cancellation_reason,
                        e.cover_media_id, e.cover_review_status, e.cover_review_reason,
                        {ActivityQueries.CoverThumbnail},
                        (e.recurrence_id IS NOT NULL) AS is_recurring,

@@ -46,6 +46,8 @@ internal static class ScheduleChecks
         app.MapGroup("/api/v1").MapRecurringEventEndpoints();
         app.MapGroup("/api/v1").MapUserEndpoints();
         app.MapGroup("/api/v1").MapActivityEndpoints();
+        app.MapGroup("/api/v1").MapWebCommunityEndpoints();
+        app.MapGroup("/api/v1").MapSocialEndpoints();
         await app.StartAsync();
         try
         {
@@ -59,6 +61,10 @@ internal static class ScheduleChecks
                     INSERT INTO user_profile(user_id,nickname,city_code) VALUES(@id,'Fixture','KR-11');
                     """, new { id });
             var category = await db.ScalarAsync<Guid>("SELECT id FROM category WHERE level=2 AND is_active AND NOT requires_custom_label LIMIT 1");
+            await db.ExecuteAsync("""
+                INSERT INTO member_identity_verification(user_id,provider,verification_reference)
+                VALUES(@host,'schedule-test',@host::text);
+                """, new { host = hosts[0] });
             var start = DateTime.UtcNow.Date.AddDays(2).AddHours(4);
             CreateEventRequest Request(string title, DateTime at, string mode = "manual",
                 string? repeat = null, short? count = null) =>
@@ -84,6 +90,92 @@ internal static class ScheduleChecks
                 request.Headers.Add("X-User-Id", user.ToString());
                 return await http.SendAsync(request);
             }
+            var owner = hosts[0];
+            async Task<int> Level(Guid user) => await db.ScalarAsync<int>("SELECT member_level(@user)", new { user });
+            Check(await Level(member) == 1 && await Level(owner) == 3, "Ordinary or verified-only level was wrong");
+            var legacy = await db.QueryAsync("""
+                INSERT INTO event(organizer_user_id,category_id,title,description,status,capacity,city_code)
+                SELECT @owner,@category,'Reputation fixture','Fixture','published',16,'KR-11'
+                FROM generate_series(1,6)
+                RETURNING id
+                """, new { owner, category });
+            var pastIds = legacy.Select(row => (Guid)row["id"]!).ToArray();
+            for (var i = 0; i < pastIds.Length; i++)
+            {
+                var at = start.AddDays(-60-i);
+                await db.ExecuteAsync("""
+                    INSERT INTO event_schedule(event_id,starts_at,ends_at) VALUES(@eventId,@at,@at+interval '2 hours');
+                    INSERT INTO event_member(event_id,user_id,status,checked_in_at) VALUES(@eventId,@member,'attended',@at);
+                    """, new { eventId = pastIds[i], at, member });
+            }
+            await db.ExecuteAsync("""
+                UPDATE member_identity_verification SET revoked_at=now() WHERE user_id=@owner
+                """, new { owner });
+            Check(await Level(owner) == 2, "Successful host did not reach the activity-host level");
+            var reviewers = Enumerable.Range(0, 9).Select(_ => Guid.NewGuid()).ToArray();
+            await db.ExecuteAsync("""
+                INSERT INTO app_user(id) SELECT unnest(@reviewers);
+                INSERT INTO event_member(event_id,user_id,status,checked_in_at)
+                SELECT s.event_id,r.user_id,'attended',s.starts_at FROM event_schedule s
+                CROSS JOIN unnest(@reviewers) AS r(user_id) WHERE s.event_id=ANY(@pastIds);
+                INSERT INTO endorsement(context_event_id,from_user_id,target_type,target_id,target_user_id,tag_code)
+                SELECT s.event_id,r.user_id,'activity',s.event_id,@owner,'well_organized'
+                FROM event_schedule s CROSS JOIN unnest(@reviewers) AS r(user_id) WHERE s.event_id=ANY(@pastIds)
+                ORDER BY s.event_id,r.user_id LIMIT 50
+                """, new { reviewers, pastIds, owner });
+            Check(await Level(owner) == 2, "Exactly 50 activity likes incorrectly qualified for high reputation");
+            await db.ExecuteAsync("""
+                INSERT INTO endorsement(context_event_id,from_user_id,target_type,target_id,target_user_id,tag_code)
+                SELECT s.event_id,r.user_id,'activity',s.event_id,@owner,'well_organized'
+                FROM event_schedule s CROSS JOIN unnest(@reviewers) AS r(user_id)
+                WHERE s.event_id=ANY(@pastIds) AND NOT EXISTS (
+                    SELECT 1 FROM endorsement WHERE context_event_id=s.event_id AND from_user_id=r.user_id)
+                LIMIT 1
+                """, new { reviewers, pastIds, owner });
+            Check(await Level(owner) == 3, "High reputation without identity should qualify for level three");
+            await db.ExecuteAsync("UPDATE member_identity_verification SET revoked_at=NULL WHERE user_id=@owner", new { owner });
+            Check(await Level(owner) == 4, "Verified high reputation did not reach level four");
+
+            var quotaOwner = Guid.NewGuid();
+            await db.ExecuteAsync("INSERT INTO app_user(id) VALUES(@quotaOwner)", new { quotaOwner });
+            await Create(quotaOwner, Request("Quota fixture", start.AddDays(19)) with { PriceMin = 3000, PriceMax = 3000 });
+            Check((await Send(quotaOwner, "/api/v1/events", Request("Extra active fixture", start.AddDays(20)))).StatusCode
+                  == HttpStatusCode.Conflict, "Ordinary member exceeded the simultaneous activity limit");
+            Check((await Send(second, "/api/v1/events", Request("Ordinary repeating fixture", start, repeat: "weekly", count: 2))).StatusCode
+                  == HttpStatusCode.Forbidden, "Ordinary member created recurring activities");
+
+            var groupInput = new { title = "Integration group", description = "Fixture group", joinMode = "approval", capacity = 2 };
+            Check((await Send(member, "/api/v1/web/groups", groupInput)).StatusCode == HttpStatusCode.Forbidden,
+                "Ordinary member created a group");
+            var group = (await Data(await Send(owner, "/api/v1/web/groups", groupInput))).GetProperty("id").GetGuid();
+            var groupPath = $"/api/v1/web/groups/{group}";
+            async Task<HttpResponseMessage> ChangeMembership(Guid user, string path, HttpMethod method)
+            {
+                using var request = new HttpRequestMessage(method, path);
+                request.Headers.Add("X-User-Id", user.ToString());
+                return await http.SendAsync(request);
+            }
+            await Data(await ChangeMembership(member, groupPath+"/membership", HttpMethod.Put));
+            await Data(await ChangeMembership(second, groupPath+"/membership", HttpMethod.Put));
+            var pendingGroup = await Data(await Get(member, groupPath));
+            Check(pendingGroup.GetProperty("item").GetProperty("pending").GetBoolean() &&
+                  pendingGroup.GetProperty("applications").GetArrayLength() == 0, "Pending member gained management access");
+            await Data(await Send(owner, groupPath+$"/applications/{member}", new { accept = true }));
+            Check((await Send(owner, groupPath+$"/applications/{second}", new { accept = true })).StatusCode == HttpStatusCode.Conflict,
+                "Owner exceeded group capacity");
+            var approvedGroup = await Data(await Get(member, groupPath));
+            var conversation = approvedGroup.GetProperty("item").GetProperty("conversation_id").GetGuid();
+            var chat = $"/api/v1/conversations/{conversation}/messages";
+            Check((await Send(member, groupPath+"/announcements", new { body = "Unauthorized" })).StatusCode == HttpStatusCode.Forbidden,
+                "Member published an owner announcement");
+            await Data(await Send(owner, groupPath+"/announcements", new { body = "First announcement" }));
+            await Data(await Send(owner, groupPath+"/announcements", new { body = "Latest announcement" }));
+            Check((await Data(await Get(member, chat))).GetProperty("pinnedAnnouncement").GetString() == "Latest announcement",
+                "Chat did not pin the latest announcement");
+            await Data(await ChangeMembership(owner, groupPath+$"/members/{member}", HttpMethod.Delete));
+            Check((await Get(member, chat)).StatusCode == HttpStatusCode.Forbidden, "Expelled group member retained chat access");
+            Console.WriteLine("PASS: four member levels, strict activity likes, publication limits and group membership/announcement authorization");
+
             var a = await Create(hosts[0], Request("A", start));
             var placeCount = await db.ScalarAsync<long>("SELECT count(*) FROM place");
             Check((await Send(hosts[0], "/api/v1/events", Request("Overlap", start.AddHours(1)))).StatusCode == HttpStatusCode.Conflict,

@@ -32,6 +32,7 @@ export function createChatPage({
   session,
   time,
   renderAvatar,
+  memberBadge,
   renderMessageCount,
   refreshUnread,
 }) {
@@ -117,7 +118,7 @@ export function createChatPage({
       threadRequest?.abort();
       activeId = id;
       layout.classList.toggle("has-thread", Boolean(id));
-      document.title = selected ? selected.item.display_title + " · 消息 · 搭慕 DAMU" : "消息 · 搭慕 DAMU";
+      document.title = selected ? selected.item.display_title + " · 消息 · 搭木木 DAMUMU" : "消息 · 搭木木 DAMUMU";
       if (!selected) {
         prompt.textContent = id ? "找不到这条消息。" : "选择左侧一项查看详情。";
         panel.replaceChildren(placeholder);
@@ -278,7 +279,7 @@ export function createChatPage({
     title.id = "chat-title";
     title.tabIndex = -1;
     thread.setAttribute("aria-labelledby", title.id);
-    const subtitle = conversation.is_friend ? "好友私信" : conversation.conversation_type === "direct" ? "私信" : "活动群聊";
+    const subtitle = conversation.is_friend ? "好友私信" : conversation.conversation_type === "direct" ? "私信" : conversation.group_id ? "小组聊天" : "活动群聊";
     const statusLine = node("p", subtitle, "meta");
     header.append(back, title, statusLine);
     const feedback = node("p", null, "chat-feedback");
@@ -296,6 +297,27 @@ export function createChatPage({
     const messages = node("ol", null, "chat-messages");
     const empty = node("p", "正在加载消息…", "chat-empty");
     viewport.append(history, empty, messages);
+    if (conversation.group_id) {
+      const pinned = node("aside", null, "group-pinned");
+      const showPinned = (text) => {
+        pinned.hidden = !text;
+        pinned.replaceChildren(node("strong", "置顶公告"), node("p", text));
+      };
+      showPinned(conversation.pinned_announcement);
+      header.append(actionLink("小组详情", "/groups/" + conversation.group_id), pinned);
+      const interval = setInterval(async () => {
+        if (!thread.isConnected || signal.aborted) return clearInterval(interval);
+        if (document.hidden) return;
+        try {
+          const params = new URLSearchParams({ includeId: conversation.id, limit: 1 });
+          const [latest] = await request("/conversations?" + params, { auth: true, signal });
+          showPinned(latest?.id === conversation.id ? latest.pinned_announcement : null);
+        } catch {
+          // Keep the last announcement while the network is unavailable.
+        }
+      }, 20000);
+      signal.addEventListener("abort", () => clearInterval(interval), { once: true });
+    }
     thread.append(header, viewport);
     panel.replaceChildren(thread);
 
@@ -337,7 +359,7 @@ export function createChatPage({
         });
       }
       const bubble = node("div", null, "chat-bubble");
-      const text = node("p", message.recalled_at ? "消息已撤回" : message.body || "附件请在搭慕 App 内查看", "chat-bubble-text");
+      const text = node("p", message.recalled_at ? "消息已撤回" : message.body || "附件请在搭木木 App 内查看", "chat-bubble-text");
       if (!message.recalled_at && message.message_type === "activity_share") {
         bubble.classList.add("activity-share-card");
         bubble.append(cover({ cover_url: message.activity_cover_url }, "activity-share-cover"));
@@ -384,7 +406,9 @@ export function createChatPage({
         if (signal.aborted) observer.disconnect();
         else signal.addEventListener("abort", () => observer.disconnect(), { once: true });
       }
-      body.append(node("p", metadata.filter(Boolean).join(" · "), "meta chat-sender"), bubble);
+      const byline = node("p", metadata.filter(Boolean).join(" · "), "meta chat-sender");
+      if (message.sender_level != null) byline.append(memberBadge(message.sender_level));
+      body.append(byline, bubble);
       if (message.sender_user_id && !own && !message.recalled_at) {
         const report = button("举报消息", () => reasonDialog("举报消息", async (description) => {
           await request(base + "/messages/" + encodeURIComponent(message.id) + "/report", {

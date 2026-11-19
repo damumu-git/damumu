@@ -65,6 +65,10 @@ public sealed class AccountDeletionService(
             DELETE FROM web_intent_vote WHERE user_id=@userId;
             DELETE FROM web_intent WHERE owner_id=@userId;
             DELETE FROM web_group_member WHERE user_id=@userId;
+            INSERT INTO media_deletion_queue(storage_key,is_directory)
+            SELECT cover_storage_key,false FROM web_group
+            WHERE owner_id=@userId AND cover_storage_key IS NOT NULL
+            ON CONFLICT (storage_key) DO NOTHING;
             DELETE FROM web_group WHERE owner_id=@userId;
             DELETE FROM web_follow WHERE user_id=@userId OR target_id=@userId;
             DELETE FROM activity_series_member WHERE user_id=@userId;

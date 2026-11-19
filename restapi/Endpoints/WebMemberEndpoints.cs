@@ -135,7 +135,7 @@ public static class WebMemberEndpoints
         {
             var userId = ApiSupport.RequireUserId(context);
             return ApiSupport.Ok(await db.QueryAsync("""
-                SELECT b.blocked_user_id AS id,COALESCE(p.nickname,'搭慕用户') AS nickname
+                SELECT b.blocked_user_id AS id,COALESCE(p.nickname,'搭木木用户') AS nickname
                 FROM user_block b JOIN app_user u ON u.id=b.blocked_user_id AND u.deleted_at IS NULL
                 LEFT JOIN user_profile p ON p.user_id=u.id
                 WHERE b.blocker_user_id=@userId ORDER BY nickname,u.id LIMIT 100

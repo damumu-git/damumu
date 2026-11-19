@@ -1,11 +1,11 @@
 {
-    "name": "搭慕",
-    "short_name": "搭慕",
+    "name": "搭木木",
+    "short_name": "搭木木",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#aad6f9",
     "theme_color": "#86bff0",
-    "description": "搭慕，发现附近值得一起参加的活动。",
+    "description": "搭木木，发现附近值得一起参加的活动。",
     "prefer_related_applications": false,
     "icons": [
         {

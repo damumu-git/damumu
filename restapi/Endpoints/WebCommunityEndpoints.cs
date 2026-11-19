@@ -94,7 +94,12 @@ public static class WebCommunityEndpoints
 
         api.MapGet("/web/groups", async (Db db, CancellationToken ct) =>
             ApiSupport.Ok(await db.QueryAsync("""
-                SELECT g.id,g.title,g.description,(SELECT count(*) FROM web_group_member WHERE group_id=g.id) AS member_count
+                SELECT g.id,g.owner_id,g.title,g.description,g.capacity,g.min_age,g.max_age,g.join_mode,
+                    member_level(g.owner_id) AS owner_level,
+                    (SELECT name_zh_cn FROM administrative_region WHERE code=g.region_code) AS region_name,
+                    ARRAY(SELECT name_zh_cn::text FROM category WHERE id=ANY(g.category_ids) ORDER BY sort_order) AS categories,
+                    COALESCE((SELECT code FROM category WHERE id=g.cover_category_id), 'other') AS cover_category_code,
+                    CASE WHEN g.cover_storage_key IS NOT NULL THEN '/uploads/'||g.cover_storage_key END AS cover_url,(SELECT count(*) FROM web_group_member WHERE group_id=g.id) AS member_count
                 FROM web_group g JOIN app_user owner ON owner.id=g.owner_id AND owner.status='active' AND owner.deleted_at IS NULL
                 ORDER BY g.created_at DESC,g.id LIMIT 100
                 """, cancellationToken: ct)));
@@ -102,13 +107,34 @@ public static class WebCommunityEndpoints
         api.MapPost("/web/groups", async (GroupInput input, HttpContext context, Db db, CancellationToken ct) =>
         {
             var ownerId = ApiSupport.RequireUserId(context);
+            await MemberPrivileges.RequireCommunityCreatorAsync(db, ownerId, ct);
             var (title, description) = Validate(input.Title, input.Description);
+            var categoryIds = input.CategoryIds?.Distinct().ToArray() ?? [];
+            if (input.Capacity is < 2 or > 500 || input.MinAge is < 14 or > 120 ||
+                input.MaxAge is < 14 or > 120 || input.MinAge > input.MaxAge ||
+                input.JoinMode is not (null or "open" or "approval") || categoryIds.Length > 12)
+                throw new ApiException(400, "group_settings_invalid", "请检查人数、年龄范围及加入方式。");
+            if (await db.ScalarAsync<int>("SELECT count(*) FROM category WHERE id=ANY(@categoryIds) AND level=1 AND is_active",
+                    new { categoryIds }, ct) != categoryIds.Length ||
+                input.CoverCategoryId is Guid cover && !categoryIds.Contains(cover))
+                throw new ApiException(400, "group_categories_invalid", "请选择有效的一级分类及其封面。");
+            if (input.RegionCode is not null && await db.ScalarAsync<int>(
+                "SELECT count(*) FROM administrative_region WHERE code=@regionCode AND is_active", new { input.RegionCode }, ct) == 0)
+                throw new ApiException(400, "group_region_invalid", "请选择有效地区。");
             var id = Guid.NewGuid();
             await db.ExecuteAsync("""
-                WITH created AS (INSERT INTO web_group(id,owner_id,title,description)
-                    VALUES (@id,@ownerId,@title,@description) RETURNING id)
-                INSERT INTO web_group_member(group_id,user_id) SELECT id,@ownerId FROM created
-                """, new { id, ownerId, title, description }, ct);
+                WITH created AS (
+                    INSERT INTO web_group(id,owner_id,title,description,capacity,min_age,max_age,join_mode,category_ids,cover_category_id,region_code)
+                    VALUES (@id,@ownerId,@title,@description,@capacity,@minAge,@maxAge,@joinMode,@categoryIds,@coverCategoryId,@regionCode)
+                    RETURNING id
+                ), members AS (
+                    INSERT INTO web_group_member(group_id,user_id) SELECT id,@ownerId FROM created
+                ), chat AS (
+                    INSERT INTO conversation(conversation_type,group_id,title) SELECT 'group',id,@title FROM created RETURNING id
+                )
+                INSERT INTO conversation_member(conversation_id,user_id) SELECT id,@ownerId FROM chat
+                """, new { id, ownerId, title, description, input.Capacity, input.MinAge, input.MaxAge,
+                    joinMode = input.JoinMode ?? "open", categoryIds, input.CoverCategoryId, input.RegionCode }, ct);
             return ApiSupport.Ok(new { id });
         });
 
@@ -116,14 +142,23 @@ public static class WebCommunityEndpoints
         {
             var viewer = ApiSupport.GetOptionalUserId(context);
             var item = await db.QueryOneAsync("""
-                SELECT g.id,g.owner_id,g.title,g.description,
+                SELECT g.id,g.owner_id,g.title,g.description,g.capacity,g.min_age,g.max_age,g.join_mode,
+                    member_level(g.owner_id) AS owner_level,
+                    (SELECT name_zh_cn FROM administrative_region WHERE code=g.region_code) AS region_name,
+                    ARRAY(SELECT name_zh_cn::text FROM category WHERE id=ANY(g.category_ids) ORDER BY sort_order) AS categories,
+                    COALESCE((SELECT code FROM category WHERE id=g.cover_category_id), 'other') AS cover_category_code,
+                    CASE WHEN g.cover_storage_key IS NOT NULL THEN '/uploads/'||g.cover_storage_key END AS cover_url,
+                    EXISTS(SELECT 1 FROM web_group_application WHERE group_id=g.id AND user_id=@viewer) AS pending,
+                    (SELECT id FROM conversation WHERE group_id=g.id AND EXISTS (
+                        SELECT 1 FROM conversation_member WHERE conversation_id=conversation.id AND user_id=@viewer AND left_at IS NULL)) AS conversation_id,
                     EXISTS(SELECT 1 FROM web_group_member WHERE group_id=g.id AND user_id=@viewer) AS joined,
                     (SELECT count(*) FROM web_group_member WHERE group_id=g.id) AS member_count
                 FROM web_group g JOIN app_user owner ON owner.id=g.owner_id AND owner.status='active' AND owner.deleted_at IS NULL
                 WHERE g.id=@id
                 """, new { id, viewer }, ct) ?? throw Missing();
             var events = await db.QueryAsync($"""
-                SELECT e.id,e.title,e.price_amount,e.status,e.approved_count,e.capacity,c.name_zh_cn AS category_name,
+                SELECT e.id,e.title,e.price_amount,e.status,e.approved_count,e.capacity,
+                    e.organizer_user_id, member_level(e.organizer_user_id) AS organizer_level,c.name_zh_cn AS category_name,
                     COALESCE(p.code,c.code) AS cover_category_code,c.code AS cover_subcategory_code,
                     (SELECT min(starts_at) FROM event_schedule s WHERE s.event_id=e.id AND s.status='scheduled') AS starts_at
                 FROM web_group_event ge JOIN event e ON e.id=ge.event_id JOIN category c ON c.id=e.category_id
@@ -131,35 +166,127 @@ public static class WebCommunityEndpoints
                 WHERE ge.group_id=@id AND {PublicEvent} ORDER BY starts_at DESC NULLS LAST,e.id LIMIT 100
                 """, new { id }, ct);
             var members = await db.QueryAsync("""
-                SELECT m.user_id AS id,COALESCE(p.nickname,'搭慕用户') AS nickname
+                SELECT m.user_id AS id,member_level(m.user_id) AS member_level,COALESCE(p.nickname,'搭木木用户') AS nickname
                 FROM web_group_member m JOIN app_user u ON u.id=m.user_id AND u.status='active' AND u.deleted_at IS NULL
-                LEFT JOIN user_profile p ON p.user_id=u.id WHERE m.group_id=@id ORDER BY nickname,u.id LIMIT 50
+                LEFT JOIN user_profile p ON p.user_id=u.id WHERE m.group_id=@id ORDER BY nickname,u.id LIMIT CASE WHEN @owner THEN 500 ELSE 50 END
+                """, new { id, owner = Equals(item["owner_id"], viewer) }, ct);
+            var applications = Equals(item["owner_id"], viewer) ? await db.QueryAsync("""
+                SELECT a.user_id AS id,COALESCE(p.nickname,'搭木木用户') AS nickname
+                FROM web_group_application a JOIN app_user u ON u.id=a.user_id AND u.deleted_at IS NULL AND u.status='active'
+                LEFT JOIN user_profile p ON p.user_id=a.user_id WHERE a.group_id=@id ORDER BY a.requested_at
+                """, new { id }, ct) : [];
+            context.Response.Headers.CacheControl = "private, no-store";
+            return ApiSupport.Ok(new { item, events, members, applications });
+        });
+
+        api.MapPut("/web/groups/{id:guid}/membership", (
+            Guid id, HttpContext context, Db db, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            return db.InTransactionAsync(async tx =>
+            {
+                var group = await LockGroup(tx,id,ct);
+                if (await IsGroupMember(tx,id,userId,ct)) return ApiSupport.Ok(new { joined = true });
+                if ((string)group["join_mode"]! == "approval")
+                {
+                    await tx.ExecuteAsync("""
+                        INSERT INTO web_group_application(group_id,user_id) VALUES(@id,@userId) ON CONFLICT DO NOTHING
+                        """, new { id,userId },ct);
+                    return ApiSupport.Ok(new { pending = true });
+                }
+                await AddGroupMember(tx,group,id,userId,ct);
+                return ApiSupport.Ok(new { joined = true });
+            }, ct);
+        });
+
+        api.MapDelete("/web/groups/{id:guid}/membership", (
+            Guid id, HttpContext context, Db db, CancellationToken ct) =>
+            RemoveGroupMember(id,ApiSupport.RequireUserId(context),null,db,ct));
+
+        api.MapDelete("/web/groups/{id:guid}/members/{memberId:guid}", (
+            Guid id, Guid memberId, HttpContext context, Db db, CancellationToken ct) =>
+            RemoveGroupMember(id,memberId,ApiSupport.RequireUserId(context),db,ct));
+
+        api.MapPost("/web/groups/{id:guid}/applications/{memberId:guid}", (
+            Guid id, Guid memberId, GroupDecision decision, HttpContext context, Db db, CancellationToken ct) =>
+        {
+            var ownerId = ApiSupport.RequireUserId(context);
+            return db.InTransactionAsync(async tx =>
+            {
+                var group = await LockGroup(tx,id,ct);
+                RequireGroupOwner(group,ownerId);
+                if (await tx.ExecuteAsync("DELETE FROM web_group_application WHERE group_id=@id AND user_id=@memberId",
+                        new { id,memberId },ct) == 0)
+                    throw new ApiException(404,"group_application_missing","加入申请已处理。");
+                if (decision.Accept)
+                {
+                    if (await tx.ScalarAsync<int>("SELECT count(*) FROM app_user WHERE id=@memberId AND status='active' AND deleted_at IS NULL",new { memberId },ct)==0)
+                        throw Missing();
+                    await AddGroupMember(tx,group,id,memberId,ct);
+                }
+                return ApiSupport.Ok(decision);
+            }, ct);
+        });
+
+        api.MapPost("/web/groups/{id:guid}/announcements", async (
+            Guid id, GroupAnnouncement announcement, HttpContext context, Db db,
+            RealtimeConnectionManager realtime, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var body = announcement.Body?.Trim();
+            if (body is null or { Length: < 1 or > 500 })
+                throw new ApiException(400,"group_announcement_invalid","请填写 1 至 500 字的公告。");
+            var row = await db.QueryOneAsync("""
+                INSERT INTO web_group_announcement(group_id,body)
+                SELECT g.id,@body FROM web_group g JOIN app_user owner ON owner.id=g.owner_id
+                WHERE g.id=@id AND g.owner_id=@userId AND owner.status='active' AND owner.deleted_at IS NULL
+                RETURNING id,body,created_at
+                """,new { id,userId,body },ct);
+            if (row is null)
+                throw new ApiException(403, "group_owner_required", "只有组主可以发布公告。");
+            var recipients = await db.QueryAsync("""
+                SELECT c.id AS conversation_id, m.user_id FROM conversation c
+                JOIN conversation_member m ON m.conversation_id=c.id
+                WHERE c.group_id=@id AND m.left_at IS NULL
                 """, new { id }, ct);
-            return ApiSupport.Ok(new { item, events, members });
+            if (recipients.Count > 0)
+                await realtime.PublishAsync(recipients.Select(member => (Guid)member["user_id"]!),
+                    "conversation.changed", new { conversationId = recipients[0]["conversation_id"] }, ct);
+            return ApiSupport.Ok(row);
         });
 
-        api.MapPut("/web/groups/{id:guid}/membership", async (Guid id, HttpContext context, Db db, CancellationToken ct) =>
+        api.MapPost("/web/groups/{id:guid}/cover", async (Guid id, HttpContext context, IFormFile cover,
+            Db db, MediaStorage media, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
-            if (!await db.ScalarAsync<bool>("""
-                SELECT EXISTS (SELECT 1 FROM web_group g JOIN app_user u ON u.id=g.owner_id
-                    WHERE g.id=@id AND u.status='active' AND u.deleted_at IS NULL)
-                """, new { id }, ct)) throw Missing();
-            await db.ExecuteAsync("""
-                INSERT INTO web_group_member(group_id,user_id) VALUES (@id,@userId) ON CONFLICT DO NOTHING
-                """, new { id, userId }, ct);
-            return ApiSupport.Ok(new { joined = true });
-        });
+            EventCoverImageValidator.Validate(cover);
+            var group = await db.QueryOneAsync("""
+                SELECT owner_id,cover_storage_key FROM web_group WHERE id=@id
+                """, new { id }, ct) ?? throw Missing();
+            RequireGroupOwner(group, userId);
+            if (group["cover_storage_key"] is string existing)
+                return ApiSupport.Ok(new { coverUrl = "/uploads/" + existing });
 
-        api.MapDelete("/web/groups/{id:guid}/membership", async (Guid id, HttpContext context, Db db, CancellationToken ct) =>
-        {
-            var userId = ApiSupport.RequireUserId(context);
-            await db.ExecuteAsync("""
-                DELETE FROM web_group_member m USING web_group g WHERE m.group_id=g.id
-                    AND g.id=@id AND m.user_id=@userId AND g.owner_id<>@userId
-                """, new { id, userId }, ct);
-            return ApiSupport.Ok(new { left = true });
-        });
+            var key = $"groups/{id:N}/{Guid.NewGuid():N}.jpg";
+            var path = media.GetPath(key);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            try
+            {
+                await using (var output = File.Create(path)) await cover.CopyToAsync(output, ct);
+                var stored = await db.ScalarAsync<string>("""
+                    UPDATE web_group SET cover_storage_key=COALESCE(cover_storage_key,@key)
+                    WHERE id=@id AND owner_id=@userId
+                    RETURNING cover_storage_key
+                    """, new { id, userId, key }, ct) ?? throw Missing();
+                if (stored != key) media.DeleteFile(key);
+                return ApiSupport.Ok(new { coverUrl = "/uploads/" + stored });
+            }
+            catch
+            {
+                media.DeleteFile(key);
+                throw;
+            }
+        }).DisableAntiforgery();
 
         api.MapPut("/web/groups/{id:guid}/events", async (Guid id, EventReference input,
             HttpContext context, Db db, CancellationToken ct) =>
@@ -248,10 +375,60 @@ public static class WebCommunityEndpoints
         return (title, description);
     }
 
+    private static async Task<Dictionary<string,object?>> LockGroup(Db db, Guid id, CancellationToken ct) =>
+        await db.QueryOneAsync("""
+            UPDATE web_group SET title=title WHERE id=@id AND EXISTS (
+                SELECT 1 FROM app_user WHERE id=web_group.owner_id AND status='active' AND deleted_at IS NULL)
+            RETURNING owner_id,capacity,join_mode
+            """,new { id },ct) ?? throw Missing();
+
+    private static void RequireGroupOwner(Dictionary<string,object?> group, Guid userId)
+    {
+        if (!Equals(group["owner_id"],userId))
+            throw new ApiException(403,"group_owner_required","只有组主可以管理小组。");
+    }
+
+    private static async Task<bool> IsGroupMember(Db db, Guid id, Guid userId, CancellationToken ct) =>
+        await db.ScalarAsync<bool>("SELECT EXISTS (SELECT 1 FROM web_group_member WHERE group_id=@id AND user_id=@userId)",
+            new { id,userId },ct);
+
+    private static async Task AddGroupMember(Db db, Dictionary<string,object?> group, Guid id, Guid userId, CancellationToken ct)
+    {
+        if (group["capacity"] is int capacity && await db.ScalarAsync<int>(
+                "SELECT count(*) FROM web_group_member WHERE group_id=@id",new { id },ct) >= capacity)
+            throw new ApiException(409,"group_full","小组人数已满。");
+        await db.ExecuteAsync("""
+            INSERT INTO web_group_member(group_id,user_id) VALUES(@id,@userId) ON CONFLICT DO NOTHING;
+            INSERT INTO conversation_member(conversation_id,user_id)
+            SELECT id,@userId FROM conversation WHERE group_id=@id
+            ON CONFLICT(conversation_id,user_id) DO UPDATE SET left_at=NULL,hidden_at=NULL,joined_at=now()
+            """,new { id,userId },ct);
+    }
+
+    private static Task<IResult> RemoveGroupMember(Guid id, Guid userId, Guid? ownerId, Db db, CancellationToken ct) =>
+        db.InTransactionAsync<IResult>(async tx =>
+        {
+            var group = await LockGroup(tx,id,ct);
+            if (ownerId.HasValue) RequireGroupOwner(group,ownerId.Value);
+            if (Equals(group["owner_id"],userId))
+                throw new ApiException(409,"group_owner_cannot_leave","组主不能退出自己的小组。");
+            await tx.ExecuteAsync("""
+                DELETE FROM web_group_application WHERE group_id=@id AND user_id=@userId;
+                DELETE FROM web_group_member WHERE group_id=@id AND user_id=@userId;
+                UPDATE conversation_member SET left_at=now() WHERE user_id=@userId AND left_at IS NULL
+                  AND conversation_id IN (SELECT id FROM conversation WHERE group_id=@id)
+                """,new { id,userId },ct);
+            return ApiSupport.Ok(new { left = true });
+        },ct);
+
     private static ApiException Missing() => new(404, "web_content_not_found", "内容不存在或不可用");
 
     public sealed record IntentInput(string? Title, string? Description, string? RegionCode);
     public sealed record IntentVote(string? Slot);
-    public sealed record GroupInput(string? Title, string? Description);
+    public sealed record GroupInput(string? Title, string? Description, int? Capacity = null,
+        short? MinAge = null, short? MaxAge = null, string? JoinMode = null, Guid[]? CategoryIds = null,
+        Guid? CoverCategoryId = null, string? RegionCode = null);
+    public sealed record GroupDecision(bool Accept);
+    public sealed record GroupAnnouncement(string? Body);
     public sealed record EventReference(Guid EventId);
 }

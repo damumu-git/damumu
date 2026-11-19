@@ -343,7 +343,7 @@ export function createMemberPages(ui) {
         "了解账号注销",
         "https://app.damumu.com/account-deletion.html",
       ),
-      button("注销搭慕账号", () =>
+      button("注销搭木木账号", () =>
         reasonDialog("注销账号", async (confirmation) => {
           if (confirmation !== "注销账号")
             throw new Error("请输入「注销账号」确认。");
@@ -481,7 +481,7 @@ export function createMemberPages(ui) {
               ["approved", "attended"].includes(item.status),
           ),
           (row, item) => {
-            row.append(node("strong", item.nickname ?? "搭慕用户"));
+            row.append(node("strong", item.nickname ?? "搭木木用户"));
             if (item.status === "attended")
               row.append(node("p", "已签到", "meta"));
             else

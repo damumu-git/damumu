@@ -24,7 +24,7 @@ export default function ActivitySeries() {
     setBusy(true)
     try {
       await api.saveSeriesEditor({ userId: draft.userId.trim() || null, regionCode: draft.regionCode || null })
-      setMessage('已保存搭慕周末设置。')
+      setMessage('已保存搭木木周末设置。')
     } catch (error) {
       setMessage(error.message)
     } finally {
@@ -34,7 +34,7 @@ export default function ActivitySeries() {
 
   return <div>
     <section className="panel">
-      <h2>搭慕周末</h2>
+      <h2>搭木木周末</h2>
       <form className="form-grid" onSubmit={save}>
         <label>系列运营者账号 ID<input value={draft.userId} onChange={(event) => setDraft({ ...draft, userId: event.target.value })} /></label>
         <label>试点地区<select value={draft.regionCode} onChange={(event) => setDraft({ ...draft, regionCode: event.target.value })}>

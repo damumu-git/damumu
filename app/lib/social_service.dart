@@ -36,6 +36,7 @@ class ConversationItem {
     this.eventStartsAt,
     this.eventCategories = const {},
     this.isFriend = false,
+    this.pinnedAnnouncement,
   });
 
   final String id;
@@ -53,6 +54,7 @@ class ConversationItem {
   final DateTime? eventStartsAt;
   final Map<String, List<String>> eventCategories;
   final bool isFriend;
+  final String? pinnedAnnouncement;
 
   factory ConversationItem.fromJson(
     Map<String, dynamic> json,
@@ -64,6 +66,7 @@ class ConversationItem {
     memberCount: (json['member_count'] as num?)?.toInt() ?? 0,
     status: '${json['status'] ?? 'active'}',
     isFriend: json['is_friend'] == true,
+    pinnedAnnouncement: json['pinned_announcement'] as String?,
     avatarUrl: json['peer_avatar'] as String?,
     eventStartsAt: DateTime.tryParse('${json['event_starts_at'] ?? ''}'),
     eventCategories: {
@@ -92,6 +95,7 @@ class ChatMessage {
     required this.body,
     required this.createdAt,
     this.senderName,
+    this.senderLevel,
     this.senderAvatar,
     this.messageType = 'text',
     this.replyToMessageId,
@@ -115,6 +119,7 @@ class ChatMessage {
   final String? senderUserId;
   final String body;
   final String? senderName;
+  final int? senderLevel;
   final String? senderAvatar;
   final String messageType;
   final DateTime createdAt;
@@ -141,6 +146,7 @@ class ChatMessage {
     body: body,
     createdAt: createdAt,
     senderName: senderName,
+    senderLevel: senderLevel,
     senderAvatar: senderAvatar,
     messageType: messageType,
     replyToMessageId: replyToMessageId,
@@ -166,6 +172,7 @@ class ChatMessage {
     'sender_user_id': senderUserId,
     'body': body,
     'sender_name': senderName,
+    'sender_level': senderLevel,
     'sender_avatar': senderAvatar,
     'message_type': messageType,
     'created_at': createdAt.toUtc().toIso8601String(),
@@ -190,6 +197,7 @@ class ChatMessage {
     senderUserId: json['sender_user_id']?.toString(),
     body: '${json['body'] ?? ''}',
     senderName: json['sender_name'] as String?,
+    senderLevel: (json['sender_level'] as num?)?.toInt(),
     senderAvatar: json['sender_avatar'] as String?,
     messageType: '${json['message_type'] ?? 'text'}',
     createdAt: DateTime.parse('${json['created_at']}').toLocal(),
@@ -229,12 +237,14 @@ class ChatMessagePage {
     required this.hasMore,
     this.status,
     this.isFriend,
+    this.pinnedAnnouncement,
   });
   final List<ChatMessage> items;
   final String? nextCursor;
   final bool hasMore;
   final String? status;
   final bool? isFriend;
+  final String? pinnedAnnouncement;
 }
 
 class NotificationItem {
@@ -598,6 +608,7 @@ class SocialService {
       hasMore: envelope['hasMore'] == true,
       status: envelope['status'] as String?,
       isFriend: envelope['isFriend'] as bool?,
+      pinnedAnnouncement: envelope['pinnedAnnouncement'] as String?,
     );
   }
 

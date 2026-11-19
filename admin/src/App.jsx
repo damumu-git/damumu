@@ -1373,7 +1373,7 @@ function App() {
   return (
     <div className="admin-shell">
       <aside className={mobileNav ? 'sidebar open' : 'sidebar'}>
-        <div className="brand"><img className="brand-mark" src="/brand/logo.png" alt="" width="34" height="34" /><div><strong>搭慕</strong><span>管理控制台</span></div></div>
+        <div className="brand"><img className="brand-mark" src="/brand/logo.png" alt="" width="34" height="34" /><div><strong>搭木木</strong><span>管理控制台</span></div></div>
         <nav aria-label="主菜单">{navigation.map((item) => (
           <Fragment key={item.id}>
           {item.id === 'users' && <div className="nav-section-label">业务管理</div>}
@@ -1389,7 +1389,7 @@ function App() {
       {mobileNav && <button className="nav-backdrop" aria-label="关闭菜单" onClick={() => setMobileNav(false)} />}
       <main className="main-panel">
         <header className="topbar">
-          <div className="title-row"><button className="menu-button" aria-label="切换菜单" aria-expanded={mobileNav} onClick={() => setMobileNav(!mobileNav)}><AdminNavIcon name="menu" /></button><div><span className="breadcrumb">搭慕 / 运营管理</span><h1>{current.label}</h1></div></div>
+          <div className="title-row"><button className="menu-button" aria-label="切换菜单" aria-expanded={mobileNav} onClick={() => setMobileNav(!mobileNav)}><AdminNavIcon name="menu" /></button><div><span className="breadcrumb">搭木木 / 运营管理</span><h1>{current.label}</h1></div></div>
           <div className="top-actions"><span className="today">{new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date())}</span><button className="announcement-button" onClick={() => setAnnouncement(true)}>发布公告</button><div className="admin-avatar">管</div></div>
         </header>
         <div className="page-content"><ActivePage pendingCovers={pendingCovers} onOpenMessages={openEventMessages} messageEventFilter={messageEventFilter} onClearMessageEventFilter={() => setMessageEventFilter(null)} /></div>

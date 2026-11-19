@@ -88,7 +88,7 @@ export function createDirectContact({
         avatar.setAttribute("aria-hidden", "true");
         renderAvatar(avatar, { nickname: item.peer_nickname, avatarImageUrl: item.peer_avatar });
         const identity = node("div", null, "activity-organizer");
-        identity.append(avatar, node("strong", item.peer_nickname || "搭慕用户"));
+        identity.append(avatar, node("strong", item.peer_nickname || "搭木木用户"));
         const type = item.kind === "inquiry" ? "活动咨询" : "私聊请求";
         const status = { pending: item.incoming ? "待处理" : "等待回复", accepted: "已接受", declined: "已结束" };
         row.append(identity, node("p", [type, item.event_title, status[item.status]].filter(Boolean).join(" · "), "meta"),

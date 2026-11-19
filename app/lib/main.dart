@@ -19,6 +19,7 @@ import 'external_processing.dart';
 import 'activity_interactions.dart';
 import 'activity_text.dart';
 import 'activity_series.dart';
+import 'community_groups.dart';
 import 'recurring_activities.dart';
 import 'member_profile.dart';
 import 'user_avatar_image.dart';
@@ -246,7 +247,7 @@ class _DaziAppState extends State<DaziApp> with WidgetsBindingObserver {
               },
             );
           },
-          title: '搭慕',
+          onGenerateTitle: (context) => context.tr('appName'),
           locale: _locale,
           supportedLocales: const [Locale('zh'), Locale('en'), Locale('ko')],
           localizationsDelegates: const [
@@ -798,7 +799,7 @@ class _AppShellState extends State<AppShell> {
                         ? Padding(
                             padding: const EdgeInsets.fromLTRB(12, 14, 12, 20),
                             child: Text(
-                              'DAMU',
+                              'DAMUMU',
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(
                                     color: _ink,
@@ -1279,6 +1280,11 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ],
                       ),
+                    ),
+                    IconButton(
+                      onPressed: () => _openGroupsPage(context),
+                      tooltip: context.tr('communityGroups'),
+                      icon: const Icon(Icons.groups_outlined),
                     ),
                     IconButton(
                       onPressed: () => _openSeriesPage(context),
@@ -2000,6 +2006,47 @@ class _ActivityCategoryCover extends StatelessWidget {
   }
 }
 
+class _MemberLevelBadge extends StatelessWidget {
+  const _MemberLevelBadge(this.level);
+
+  final Object? level;
+
+  @override
+  Widget build(BuildContext context) {
+    final rank = (level as num?)?.toInt();
+    if (rank == null || rank < 1 || rank > 4) return const SizedBox.shrink();
+    const backgrounds = [
+      Color(0xFFE9EDF5),
+      Color(0xFFDAF1E9),
+      Color(0xFFE9E6FF),
+      Color(0xFFFCECCF),
+    ];
+    const foregrounds = [
+      Color(0xFF3E506B),
+      Color(0xFF155B49),
+      Color(0xFF4D3798),
+      Color(0xFF77480B),
+    ];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: backgrounds[rank - 1],
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        child: Text(
+          context.tr('memberLevel$rank'),
+          style: TextStyle(
+            color: foregrounds[rank - 1],
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class EventCard extends StatelessWidget {
   const EventCard({required this.event, required this.onTap, super.key});
   final EventItem event;
@@ -2117,6 +2164,10 @@ class EventCard extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (event.localizedContent?['organizer_level'] != null)
+                      _MemberLevelBadge(
+                        event.localizedContent?['organizer_level'],
+                      ),
                     Text(
                       '${event.joined}/${event.capacity}',
                       style: const TextStyle(
@@ -3019,9 +3070,18 @@ class _EventDetailPageState extends State<EventDetailPage> {
                       '组织者 · $organizerName',
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
-                    subtitle: organizerScore > 0
-                        ? Text('${context.tr('trust')} $organizerScore')
-                        : null,
+                    subtitle: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        _MemberLevelBadge(
+                          _detail?['organizer_level'] ??
+                              e.localizedContent?['organizer_level'],
+                        ),
+                        if (organizerScore > 0)
+                          Text('${context.tr('trust')} $organizerScore'),
+                      ],
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                   ),
                   if (_detail?['visibility'] == 'public' &&
@@ -3603,6 +3663,7 @@ class PublicUserProfilePage extends StatefulWidget {
 class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
   Future<Map<String, dynamic>>? _future;
   bool _countedLikeSubmission = false;
+  String _activitySection = 'profileUpcomingActivities';
 
   @override
   void didChangeDependencies() {
@@ -3636,6 +3697,14 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
         }
         final profile = snapshot.data!;
         final nickname = '${profile['nickname'] ?? '用户'}';
+        final currentTime = DateTime.now();
+        final activities = (profile['activities'] as List? ?? const []).whereType<Map>().toList();
+        String section(Map activity) {
+          if (activity['event_status'] == 'cancelled') return 'profileCancelledActivities';
+          final end = DateTime.tryParse('${activity['ends_at'] ?? ''}');
+          return activity['event_status'] == 'completed' || (end != null && !end.isAfter(currentTime))
+              ? 'profilePastActivities' : 'profileUpcomingActivities';
+        }
         final tags = (profile['positive_tags'] as List? ?? const [])
             .whereType<Map>()
             .take(6)
@@ -3683,6 +3752,8 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                             ),
                       ),
                       const SizedBox(height: 6),
+                      _MemberLevelBadge(profile['member_level']),
+                      const SizedBox(height: 6),
                       Text(
                         '♥ ${context.tr('profileLikes')} ${profile['like_count'] ?? 0}',
                         style: const TextStyle(
@@ -3720,9 +3791,28 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                     context.tr('seriesHosted'),
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
-                for (final activity
-                    in (profile['activities'] as List? ?? const [])
-                        .whereType<Map>())
+                if (activities.isNotEmpty)
+                  Wrap(
+                    spacing: 7,
+                    children: [
+                      for (final key in [
+                        'profileUpcomingActivities',
+                        'profilePastActivities',
+                        if (auth.user?.id == widget.userId) 'profileCancelledActivities',
+                      ])
+                        ChoiceChip(
+                          label: Text(context.tr(key)),
+                          selected: _activitySection == key,
+                          onSelected: (_) => setState(() => _activitySection = key),
+                        ),
+                    ],
+                  ),
+                if (activities.isNotEmpty && !activities.any((activity) => section(activity) == _activitySection))
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(context.tr('profileNoActivitiesInSection')),
+                  ),
+                for (final activity in activities.where((activity) => section(activity) == _activitySection))
                   ListTile(
                     title: Text(activity['title'] as String),
                     subtitle: activity['category_name'] is String
@@ -5498,6 +5588,7 @@ class _MessagesPageState extends State<MessagesPage> {
   bool _loading = true;
   bool _hasLoadedInbox = false;
   bool _readingAll = false;
+  bool _onlyUnreadNotices = false;
   String? _error;
   List<ConversationItem> _conversations = const [];
   List<NotificationItem> _notifications = const [];
@@ -5658,8 +5749,12 @@ class _MessagesPageState extends State<MessagesPage> {
   );
 
   int _chatUnread(String type) => _conversations
-      .where((item) => item.type == type && (type != 'direct' || item.isFriend))
+      .where((item) => _inChatSegment(item, type))
       .fold(0, (total, item) => total + item.unreadCount);
+
+  bool _inChatSegment(ConversationItem item, String type) => type == 'direct'
+      ? item.type == 'group' || (item.type == 'direct' && item.isFriend)
+      : item.type == type;
 
   Widget _segmentLabel(String label, int unread) => Row(
     mainAxisSize: MainAxisSize.min,
@@ -5686,9 +5781,7 @@ class _MessagesPageState extends State<MessagesPage> {
     if (_segment == 2) return _notices();
     final type = _segment == 0 ? 'event' : 'direct';
     final items = _conversations
-        .where(
-          (item) => item.type == type && (type != 'direct' || item.isFriend),
-        )
+        .where((item) => _inChatSegment(item, type))
         .toList();
     if (items.isEmpty && _segment == 0) {
       return Center(child: Text(context.tr('noConversations')));
@@ -5729,7 +5822,11 @@ class _MessagesPageState extends State<MessagesPage> {
                     backgroundColor: _orange,
                     foregroundColor: Colors.white,
                     icon: Icons.delete_outline,
-                    label: item.type == 'event' ? '退出群聊' : '删除',
+                    label: item.type == 'group'
+                        ? context.tr('communityGroupHide')
+                        : item.type == 'event'
+                        ? '退出群聊'
+                        : '删除',
                   ),
                 ],
               ),
@@ -5738,6 +5835,7 @@ class _MessagesPageState extends State<MessagesPage> {
                 showAvatar: item.type != 'event',
                 title: item.title,
                 details: [
+                  if (item.type == 'group') context.tr('communityGroupChat'),
                   if (item.eventStartsAt != null)
                     activityTime(context, item.eventStartsAt!),
                   ...?item.eventCategories[Localizations.localeOf(context)
@@ -5760,16 +5858,29 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   Widget _notices() {
-    if (_notifications.isEmpty) {
-      return Center(child: Text(context.tr('noNotifications')));
-    }
+    final notices = _notifications.where((item) => !_onlyUnreadNotices || !item.read);
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         key: const PageStorageKey('message-notices'),
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        children: _notifications
-            .map(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          Wrap(spacing: 8, children: [
+            ChoiceChip(
+              label: Text(context.tr('noticeAll')),
+              selected: !_onlyUnreadNotices,
+              onSelected: (_) => setState(() => _onlyUnreadNotices = false),
+            ),
+            ChoiceChip(
+              label: Text(context.tr('noticeUnreadOnly')),
+              selected: _onlyUnreadNotices,
+              onSelected: (_) => setState(() => _onlyUnreadNotices = true),
+            ),
+          ]),
+          if (notices.isEmpty)
+            Padding(padding: const EdgeInsets.all(16), child: Text(context.tr(_onlyUnreadNotices ? 'noticeNoUnread' : 'noNotifications'))),
+          ...notices.map(
               (item) => Slidable(
                 key: ValueKey('notification-${item.id}'),
                 startActionPane: ActionPane(
@@ -5798,17 +5909,20 @@ class _MessagesPageState extends State<MessagesPage> {
                     ),
                   ],
                 ),
-                child: _NoticeTile(
+                child: Card(
+                  margin: const EdgeInsets.symmetric(vertical: 5),
+                  child: _NoticeTile(
                   icon: _notificationIcon(item.type),
                   title: item.title,
                   subtitle: item.body,
                   time: _relativeTime(item.createdAt),
                   unread: !item.read,
                   onTap: () => _openNotification(item),
+                  ),
                 ),
               ),
-            )
-            .toList(),
+            ),
+        ],
       ),
     );
   }
@@ -6152,8 +6266,9 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
     _realtimeSubscription = RealtimeService.instance.events.listen((event) {
+      final selected = event.data['conversationId']?.toString() == widget.conversation.id;
       if ((event.type == 'conversation.changed' &&
-              widget.conversation.type == 'direct') ||
+              (widget.conversation.type == 'direct' || selected)) ||
           ((event.type == 'message.created' ||
                   event.type == 'message.updated') &&
               event.data['conversationId']?.toString() ==
@@ -6211,6 +6326,7 @@ class _ChatPageState extends State<ChatPage> {
         _messages = [...page.items, ...pending];
         _conversationStatus = page.status ?? _conversationStatus;
         _isFriend = page.isFriend ?? _isFriend;
+        _pinnedAnnouncement = page.pinnedAnnouncement;
         if (_conversationStatus != 'active') {
           _replyingTo = null;
           _editingMessage = null;
@@ -6247,6 +6363,8 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  String? _pinnedAnnouncement;
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -6265,7 +6383,13 @@ class _ChatPageState extends State<ChatPage> {
                         '{count}',
                         '${widget.conversation.memberCount}',
                       )
-                : context.tr(_isFriend ? 'friendChat' : 'privateChat'),
+                : context.tr(
+                    widget.conversation.type == 'group'
+                        ? 'communityGroupChat'
+                        : _isFriend
+                        ? 'friendChat'
+                        : 'privateChat',
+                  ),
             style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal),
           ),
         ],
@@ -6274,6 +6398,14 @@ class _ChatPageState extends State<ChatPage> {
     ),
     body: Column(
       children: [
+        if ((_pinnedAnnouncement ?? widget.conversation.pinnedAnnouncement)
+            case final String announcement)
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.push_pin_outlined),
+            title: Text(context.tr('communityGroupPinned')),
+            subtitle: Text(announcement),
+          ),
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
@@ -6344,6 +6476,7 @@ class _ChatPageState extends State<ChatPage> {
                                         child: Image.network(
                                           message.activityCoverUrl!,
                                           width: 58,
+                                          errorBuilder: (_, _, _) => const Icon(Icons.event_outlined),
                                           height: 58,
                                           fit: BoxFit.cover,
                                           headers: privateImageHeaders(
@@ -6352,10 +6485,12 @@ class _ChatPageState extends State<ChatPage> {
                                           ),
                                         ),
                                       ),
-                                title: Text(
-                                  message.activityTitle ??
-                                      context.tr('friendActivityUnavailable'),
-                                ),
+                                title: message.activityId == null
+                                    ? Text(message.activityTitle ?? context.tr('friendActivityUnavailable'))
+                                    : OutlinedButton(
+                                        onPressed: () => _openSeriesEvent(context, message.activityId!),
+                                        child: Text(message.activityTitle ?? context.tr('activityShared')),
+                                      ),
                                 subtitle: Text(
                                   [
                                         if (message.activityStartsAt != null)
@@ -6370,12 +6505,6 @@ class _ChatPageState extends State<ChatPage> {
                                       .where((value) => value.isNotEmpty)
                                       .join(' · '),
                                 ),
-                                onTap: message.activityId == null
-                                    ? null
-                                    : () => _openSeriesEvent(
-                                        context,
-                                        message.activityId!,
-                                      ),
                                 onLongPress: () => _showMessageActions(message),
                               ),
                             ),
@@ -6404,7 +6533,12 @@ class _ChatPageState extends State<ChatPage> {
                     if (message.senderUserId == null) {
                       return bubble;
                     }
-                    final avatar = UserAvatarImage(
+                    final avatar = IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                      tooltip: context.tr('viewSenderProfile'),
+                      onPressed: () => _openMemberPerson(context, message.senderUserId!),
+                      icon: UserAvatarImage(
                       nickname:
                           message.senderName ??
                           (mine ? viewer?.nickname ?? '' : ''),
@@ -6414,6 +6548,7 @@ class _ChatPageState extends State<ChatPage> {
                           (mine
                               ? viewer?.avatarImageUrl ?? viewer?.avatarUrl
                               : null),
+                      ),
                     );
                     return Align(
                       alignment: mine
@@ -6424,7 +6559,19 @@ class _ChatPageState extends State<ChatPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (!mine) ...[avatar, const SizedBox(width: 8)],
-                          Flexible(child: bubble),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: mine
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (message.senderLevel != null)
+                                  _MemberLevelBadge(message.senderLevel),
+                                bubble,
+                              ],
+                            ),
+                          ),
                           if (mine) ...[const SizedBox(width: 8), avatar],
                         ],
                       ),
@@ -7279,6 +7426,7 @@ class ProfilePage extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
+                          if (user.memberLevel != null) _MemberLevelBadge(user.memberLevel),
                           Text(user.email),
                         ],
                       ),
@@ -7650,6 +7798,24 @@ Future<void> _openSimilarEvent(
       ),
     ),
   );
+}
+
+void _openGroupsPage(BuildContext context) {
+  Navigator.of(context).push(MaterialPageRoute<void>(
+    builder: (_) => CommunityGroupsPage(
+      openActivity: _openSeriesEvent,
+      openPerson: _openMemberPerson,
+      openChat: (context, group) => Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => ChatPage(conversation: ConversationItem(
+          id: group['conversation_id'] as String,
+          type: 'group',
+          title: group['title'] as String,
+          unreadCount: 0,
+          memberCount: (group['member_count'] as num).toInt(),
+        )),
+      )),
+    ),
+  ));
 }
 
 void _openSeriesPage(
