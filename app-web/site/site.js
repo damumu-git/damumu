@@ -38,7 +38,15 @@ let dialogRequest = 0;
 
 function readSession() {
   try {
-    return JSON.parse(sessionStorage.getItem("damu-session")) ?? null;
+    const saved = JSON.parse(localStorage.getItem("damu-remembered-session"));
+    const current = JSON.parse(sessionStorage.getItem("damu-session"));
+    if (saved?.expiresAt > Date.now()) return saved;
+    localStorage.removeItem("damu-remembered-session");
+    if (current?.expiresAt && current.expiresAt <= Date.now()) {
+      sessionStorage.removeItem("damu-session");
+      return null;
+    }
+    return current ?? null;
   } catch {
     return null;
   }
@@ -50,7 +58,11 @@ function setSession(value) {
   const wasSignedIn = !messagesMenu.hidden;
   session = value;
   if (value) sessionStorage.setItem("damu-session", JSON.stringify(value));
-  else sessionStorage.removeItem("damu-session");
+  else {
+    sessionStorage.removeItem("damu-session");
+    localStorage.removeItem("damu-remembered-session");
+  }
+  if (value?.expiresAt) localStorage.setItem("damu-remembered-session", JSON.stringify(value));
   login.hidden = Boolean(value);
   myMenu.hidden = !value;
   messagesMenu.hidden = !value;
@@ -88,6 +100,10 @@ async function request(
   path,
   { data, signal, auth = false, sameOrigin = false, method } = {},
 ) {
+  if (auth && session?.expiresAt <= Date.now()) {
+    setSession(null);
+    throw new Error("登录已满 7 天，请重新登录。");
+  }
   const headers = {};
   const isForm = data instanceof FormData;
   if (data !== undefined && !isForm)
@@ -517,7 +533,10 @@ function requireLogin(action) {
   else location.assign("/login?next=" + encodeURIComponent(currentPage()));
 }
 function finishLogin(result) {
-  setSession(result);
+  const remember = sessionStorage.getItem("damu-login-remember") === "true";
+  sessionStorage.removeItem("damu-login-remember");
+  localStorage.removeItem("damu-remembered-session");
+  setSession(remember ? { ...result, expiresAt: Date.now() + 7 * 86400000 } : result);
   const target =
     sessionStorage.getItem("damu-return") ??
     new URLSearchParams(location.search).get("next");
@@ -578,6 +597,21 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
     password.append(input);
     form.append(password);
   }
+  if (!register && !socialRegistration) {
+    const preferences = node("div", null, "login-preferences");
+    preferences.innerHTML = '<label class="check"><input type="checkbox" name="rememberAccount">记住账号</label><label class="check"><input type="checkbox" name="rememberMe">记住我（7天）</label>';
+    const remembered = localStorage.getItem("damu-remembered-email");
+    form.elements.email.value = remembered ?? "";
+    preferences.querySelector('[name="rememberAccount"]').checked = Boolean(remembered);
+    preferences.querySelector('[name="rememberAccount"]').addEventListener("change", (event) => {
+      if (!event.target.checked) localStorage.removeItem("damu-remembered-email");
+    });
+    form.append(preferences);
+  }
+  function saveLoginPreferences() {
+    if (register || socialRegistration) return;
+    sessionStorage.setItem("damu-login-remember", String(form.elements.rememberMe.checked));
+  }
   if (register || socialRegistration) {
     form.insertAdjacentHTML(
       "beforeend",
@@ -602,6 +636,7 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
         title,
         async () => {
           try {
+            saveLoginPreferences();
             options = await request(oauth + "/options", { sameOrigin: true });
             if (!options[provider])
               throw new Error(
@@ -643,6 +678,7 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
       ),
     );
   handleForm(form, content, async (values) => {
+    saveLoginPreferences();
     if (register || socialRegistration) {
       if (!options.privacyVersion)
         options = await request(oauth + "/options", { sameOrigin: true });
@@ -654,6 +690,11 @@ function showLogin(register = false, socialRegistration = false, notice = "") {
       const result = socialRegistration
         ? await request(oauth + "/complete", { data: values, sameOrigin: true })
         : await request(register ? "/auth/register" : "/auth/login", { data: values });
+      if (!register && !socialRegistration) {
+        if (form.elements.rememberAccount.checked)
+          localStorage.setItem("damu-remembered-email", values.email.trim());
+        else localStorage.removeItem("damu-remembered-email");
+      }
       finishLogin(result);
     } catch (error) {
       if (!socialRegistration || error.code !== "social_already_registered") throw error;
@@ -2208,6 +2249,7 @@ const showMessages = createChatPage({
   handleForm,
   request,
   requestPrivateImage,
+  cover,
   reasonDialog,
   dialog,
   session: () => session,
@@ -2227,10 +2269,16 @@ const activitySeries = createActivitySeries({
 });
 setSession(session);
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) refreshUnread();
+  if (!document.hidden) {
+    if (session?.expiresAt <= Date.now()) setSession(null);
+    refreshUnread();
+  }
 });
 window.setInterval(() => {
-  if (!document.hidden) refreshUnread();
+  if (!document.hidden) {
+    if (session?.expiresAt <= Date.now()) setSession(null);
+    refreshUnread();
+  }
 }, 45_000);
 installSelectMenus();
 route();

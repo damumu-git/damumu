@@ -26,6 +26,7 @@ export function createChatPage({
   handleForm,
   request,
   requestPrivateImage,
+  cover,
   reasonDialog,
   dialog,
   session,
@@ -339,12 +340,7 @@ export function createChatPage({
       const text = node("p", message.recalled_at ? "消息已撤回" : message.body || "附件请在搭慕 App 内查看", "chat-bubble-text");
       if (!message.recalled_at && message.message_type === "activity_share") {
         bubble.classList.add("activity-share-card");
-        if (message.activity_cover_url) {
-          const image = node("img", null, "activity-share-cover");
-          image.src = message.activity_cover_url;
-          image.alt = "";
-          bubble.append(image);
-        }
+        bubble.append(cover({ cover_url: message.activity_cover_url }, "activity-share-cover"));
         const details = node("div", null, "activity-share-details");
         details.append(node("p", "分享的活动", "meta"));
         details.append(message.activity_id && message.activity_title

@@ -2121,3 +2121,6 @@ dialog.avatar-crop-dialog {
 .activity-label-owned { color: #165339; border-color: #a8d5bf; background: #e7f6ed; border-radius: 5px; }
 
 .page-content.notifications-page { width: min(100%, 1060px); }
+
+.login-preferences { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; }
+.login-preferences .check { margin: 0; font-size: .9rem; }
