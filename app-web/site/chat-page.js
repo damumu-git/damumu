@@ -281,7 +281,14 @@ export function createChatPage({
     thread.setAttribute("aria-labelledby", title.id);
     const subtitle = conversation.is_friend ? "好友私信" : conversation.conversation_type === "direct" ? "私信" : conversation.group_id ? "小组聊天" : "活动群聊";
     const statusLine = node("p", subtitle, "meta");
-    header.append(back, title, statusLine);
+    const heading = node("div", null, "chat-thread-heading");
+    heading.append(title, statusLine);
+    const top = node("div", null, "chat-thread-top");
+    top.append(heading);
+    if (conversation.group_id) {
+      top.append(actionLink("小组详情", "/groups/" + conversation.group_id, "button chat-group-details"));
+    }
+    header.append(back, top);
     const feedback = node("p", null, "chat-feedback");
     feedback.setAttribute("role", "status");
     header.append(feedback);
@@ -304,7 +311,7 @@ export function createChatPage({
         pinned.replaceChildren(node("strong", "置顶公告"), node("p", text));
       };
       showPinned(conversation.pinned_announcement);
-      header.append(actionLink("小组详情", "/groups/" + conversation.group_id), pinned);
+      header.append(pinned);
       const interval = setInterval(async () => {
         if (!thread.isConnected || signal.aborted) return clearInterval(interval);
         if (document.hidden) return;

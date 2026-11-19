@@ -63,9 +63,10 @@ export function createCommunityPages(ui) {
   function groupCard(item) {
     const link = actionLink("", "/groups/" + item.id, "group-card");
     const summary = node("div", null, "group-card-copy");
-    summary.append(groupTags(item), node("h2", item.title),
-      node("p", item.description, "group-card-description"), groupFacts(item));
-    link.append(cover(item), summary);
+    summary.append(node("h2", item.title), groupFacts(item));
+    if (item.description) summary.append(node("p", item.description, "group-card-description"));
+    if (item.categories?.length) summary.append(groupTags(item));
+    link.append(cover(item, "group-card-thumbnail"), summary);
     return link;
   }
 
@@ -73,26 +74,27 @@ export function createCommunityPages(ui) {
     const intent = kind === "intents";
     const root = intent ? "/interests" : "/groups";
     const content = show(intent ? "想一起去" : "活动小组", "workspace-page");
-    content.append(
-      node(
-        "p",
-        intent
-          ? "先征集时段和兴趣，有了正式活动再报名。"
-          : "和熟悉的人，反复做喜欢的事。",
-        "meta",
-      ),
-      actionLink(
-        intent ? "发起意向征集" : "创建小组",
-        root + "/new",
-        "button primary",
-      ),
-    );
+    if (intent) {
+      content.append(
+        node("p", "先征集时段和兴趣，有了正式活动再报名。", "meta"),
+        actionLink("发起意向征集", root + "/new", "button primary"),
+      );
+    } else {
+      const header = node("header", null, "group-catalog-header");
+      header.append(content.querySelector("h1"), actionLink("创建小组", root + "/new", "button primary"));
+      content.append(header);
+    }
     try {
       const items = await request("/web/" + kind);
       if (!intent) {
-        const cards = node("div", null, "group-grid");
-        cards.append(...items.map(groupCard));
-        content.append(items.length ? cards : node("p", "还没有小组。", "meta"));
+        const groups = node("ul", null, "group-catalog-list");
+        groups.setAttribute("role", "list");
+        for (const item of items) {
+          const row = node("li");
+          row.append(groupCard(item));
+          groups.append(row);
+        }
+        content.append(items.length ? groups : node("p", "还没有小组。", "meta"));
         return;
       }
       list(
