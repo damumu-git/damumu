@@ -6,12 +6,44 @@ namespace Muda.Api.Infrastructure;
 
 public sealed class Db(NpgsqlDataSource dataSource)
 {
+    private NpgsqlConnection? transactionConnection;
+    private NpgsqlTransaction? activeTransaction;
+
+    private NpgsqlCommand CreateCommand(string sql) => transactionConnection is null
+        ? dataSource.CreateCommand(sql)
+        : new NpgsqlCommand(sql, transactionConnection, activeTransaction);
+
+    public static async Task<T> RetryTransactionAsync<T>(Func<Task<T>> operation)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try { return await operation(); }
+            catch (PostgresException error) when (attempt < 4 &&
+                error.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected)
+            {
+                // Back off before opening a fresh snapshot after a competing admission.
+                await Task.Delay(TimeSpan.FromMilliseconds(50 * (attempt + 1)));
+            }
+        }
+    }
+
+    public Task<T> InTransactionAsync<T>(Func<Db, Task<T>> operation, CancellationToken ct) =>
+        RetryTransactionAsync(async () =>
+        {
+            await using var connection = await dataSource.OpenConnectionAsync(ct);
+            await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+            var transactionalDb = new Db(dataSource) { transactionConnection = connection, activeTransaction = transaction };
+            var result = await operation(transactionalDb);
+            await transaction.CommitAsync(ct);
+            return result;
+        });
+
     public async Task<List<Dictionary<string, object?>>> QueryAsync(
         string sql,
         object? parameters = null,
         CancellationToken cancellationToken = default)
     {
-        await using var command = dataSource.CreateCommand(sql);
+        await using var command = CreateCommand(sql);
         AddParameters(command, parameters);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var rows = new List<Dictionary<string, object?>>();
@@ -43,7 +75,7 @@ public sealed class Db(NpgsqlDataSource dataSource)
         object? parameters = null,
         CancellationToken cancellationToken = default)
     {
-        await using var command = dataSource.CreateCommand(sql);
+        await using var command = CreateCommand(sql);
         AddParameters(command, parameters);
         return await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -53,7 +85,7 @@ public sealed class Db(NpgsqlDataSource dataSource)
         object? parameters = null,
         CancellationToken cancellationToken = default)
     {
-        await using var command = dataSource.CreateCommand(sql);
+        await using var command = CreateCommand(sql);
         AddParameters(command, parameters);
         var result = await command.ExecuteScalarAsync(cancellationToken);
         if (result is null or DBNull) return default;
@@ -306,7 +338,19 @@ public sealed class Db(NpgsqlDataSource dataSource)
         return report;
     }
 
-    public async Task<Dictionary<string, object?>> JoinEventAsync(
+    private static async Task LockAdmissionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        Guid userId, CancellationToken ct)
+    {
+        await using var guard = new NpgsqlCommand("SELECT lock_event_user(@userId)", connection, transaction);
+        guard.Parameters.AddWithValue("userId", userId);
+        await guard.ExecuteNonQueryAsync(ct);
+    }
+
+    public Task<Dictionary<string, object?>> JoinEventAsync(
+        Guid eventId, Guid userId, short partySize, string? note, bool shareContact, CancellationToken ct) =>
+        RetryTransactionAsync(() => JoinEventCoreAsync(eventId, userId, partySize, note, shareContact, ct));
+
+    public async Task<Dictionary<string, object?>> JoinEventCoreAsync(
         Guid eventId,
         Guid userId,
         short partySize,
@@ -316,6 +360,8 @@ public sealed class Db(NpgsqlDataSource dataSource)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+
+        await LockAdmissionAsync(connection, transaction, userId, cancellationToken);
 
         await using var eventCommand = new NpgsqlCommand(
             """
@@ -348,7 +394,7 @@ public sealed class Db(NpgsqlDataSource dataSource)
             existingCommand.Parameters.AddWithValue("eventId", eventId);
             existingCommand.Parameters.AddWithValue("userId", userId);
             var existingStatus = await existingCommand.ExecuteScalarAsync(cancellationToken);
-            if (existingStatus is not null)
+            if (existingStatus is not null && existingStatus is not "withdrawn")
                 throw new ApiException(409, "already_applied", "你已经申请过该活动，不能重复申请");
         }
         if (eventStatus is not ("published" or "full"))
@@ -373,6 +419,12 @@ public sealed class Db(NpgsqlDataSource dataSource)
                 @note, @shareContact,
                 CASE WHEN @status = 'approved' THEN now() ELSE NULL END
             )
+            ON CONFLICT(event_id,user_id) DO UPDATE SET
+                status=EXCLUDED.status,waitlist_position=EXCLUDED.waitlist_position,
+                party_size=EXCLUDED.party_size,application_note=EXCLUDED.application_note,
+                share_contact=EXCLUDED.share_contact,joined_at=EXCLUDED.joined_at,
+                reviewed_by_user_id=NULL,reviewed_at=NULL,rejection_reason=NULL,
+                left_at=NULL,withdrawal_reason=NULL
             RETURNING id, event_id, user_id, status, waitlist_position,
                       party_size, share_contact, application_note, created_at
             """, connection, transaction);
@@ -433,18 +485,18 @@ public sealed class Db(NpgsqlDataSource dataSource)
         bool approve,
         string? rejectionReason,
         CancellationToken cancellationToken) =>
-        ReviewMemberCoreAsync(
+        RetryTransactionAsync(() => ReviewMemberCoreAsync(
             eventId, memberUserId, reviewerUserId, approve, rejectionReason,
-            allowAdministrativeReview: false, cancellationToken: cancellationToken);
+            allowAdministrativeReview: false, cancellationToken: cancellationToken));
 
     public Task<Dictionary<string, object?>> ReviewMemberAsAdminAsync(
         Guid eventId,
         Guid memberUserId,
         Guid? actorUserId,
         CancellationToken cancellationToken) =>
-        ReviewMemberCoreAsync(
+        RetryTransactionAsync(() => ReviewMemberCoreAsync(
             eventId, memberUserId, actorUserId, approve: true, rejectionReason: null,
-            allowAdministrativeReview: true, cancellationToken: cancellationToken);
+            allowAdministrativeReview: true, cancellationToken: cancellationToken));
 
     private async Task<Dictionary<string, object?>> ReviewMemberCoreAsync(
         Guid eventId,
@@ -458,6 +510,8 @@ public sealed class Db(NpgsqlDataSource dataSource)
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
 
+        await LockAdmissionAsync(connection, transaction, memberUserId, cancellationToken);
+
         await using var eventCommand = new NpgsqlCommand(
             "SELECT organizer_user_id, capacity, approved_count, title, status FROM event WHERE id=@eventId FOR UPDATE",
             connection, transaction);
@@ -466,9 +520,9 @@ public sealed class Db(NpgsqlDataSource dataSource)
         if (!await eventReader.ReadAsync(cancellationToken))
             throw new ApiException(404, "event_not_found", "活动不存在");
         if (!allowAdministrativeReview && eventReader.GetGuid(0) != reviewerUserId)
-            throw new ApiException(403, "forbidden", "只有组织者可以审核成员");
+            throw new ApiException(403, "forbidden", "只有组织者可以确认加入申请");
         if (eventReader.GetString(4) is "cancelled" or "completed")
-            throw new ApiException(409, "event_closed", "活动已结束或取消，无法审核成员");
+            throw new ApiException(409, "event_closed", "活动已结束或取消，无法确认加入");
         var capacity = eventReader.GetInt16(1);
         var approvedCount = eventReader.GetInt16(2);
         var eventTitle = eventReader.GetString(3);
@@ -481,7 +535,7 @@ public sealed class Db(NpgsqlDataSource dataSource)
         sizeCommand.Parameters.AddWithValue("memberUserId", memberUserId);
         var partySizeResult = await sizeCommand.ExecuteScalarAsync(cancellationToken);
         if (partySizeResult is null)
-            throw new ApiException(404, "application_not_found", "待审核申请不存在");
+            throw new ApiException(404, "application_not_found", "待确认申请不存在");
         var partySize = Convert.ToInt16(partySizeResult);
         if (approve && approvedCount + partySize > capacity)
             throw new ApiException(409, "event_full", "活动名额已满");
@@ -508,7 +562,7 @@ public sealed class Db(NpgsqlDataSource dataSource)
         await using (var memberReader = await command.ExecuteReaderAsync(cancellationToken))
         {
             if (!await memberReader.ReadAsync(cancellationToken))
-                throw new ApiException(404, "application_not_found", "待审核申请不存在");
+                throw new ApiException(404, "application_not_found", "待确认申请不存在");
             member = ReadRow(memberReader);
         }
 
@@ -535,10 +589,10 @@ public sealed class Db(NpgsqlDataSource dataSource)
         notification.Parameters.AddWithValue("memberUserId", memberUserId);
         notification.Parameters.AddWithValue("type", approve
             ? "event_application_approved" : "event_application_rejected");
-        notification.Parameters.AddWithValue("title", approve ? "活动申请已通过" : "活动申请未通过");
+        notification.Parameters.AddWithValue("title", approve ? "已确认加入活动" : "本次未能加入活动");
         notification.Parameters.AddWithValue("body", approve
-            ? $"你申请的「{eventTitle}」已通过"
-            : $"你申请的「{eventTitle}」未通过：{rejectionReason}");
+            ? $"你申请的「{eventTitle}」已确认加入"
+            : $"你申请的「{eventTitle}」本次未能加入：{rejectionReason}");
         notification.Parameters.AddWithValue("eventId", eventId);
         notification.Parameters.AddWithValue("status", approve ? "approved" : "rejected");
         await notification.ExecuteNonQueryAsync(cancellationToken);

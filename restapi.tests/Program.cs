@@ -7,6 +7,11 @@ using Muda.Api.Infrastructure;
 CancellationChecks.ValidateReasons();
 FeedbackChecks.Validate();
 PrivacyChecks.ValidateRegistration();
+if (args.FirstOrDefault() == "--schedule-db")
+{
+    await ScheduleChecks.RunAsync();
+    return;
+}
 if (args.FirstOrDefault() == "--region-db")
 {
     await DatabaseChecks.Run(args.ElementAtOrDefault(1) ?? "restapi/appsettings.json");

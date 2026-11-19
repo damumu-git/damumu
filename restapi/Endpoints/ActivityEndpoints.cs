@@ -58,7 +58,12 @@ public static class ActivityEndpoints
                     cursorActivityId = position?.ActivityId ?? Guid.Empty
                 }, ct);
             var totalCount = rows.Count == 0 ? 0L : (long)rows[0]["total_count"]!;
-            foreach (var row in rows) row.Remove("total_count");
+            foreach (var row in rows)
+            {
+                row.Remove("total_count");
+                row.Remove("recurrence_rank");
+                row.Remove("recurrence_id");
+            }
             var hasMore = rows.Count > take;
             if (hasMore) rows.RemoveAt(rows.Count - 1);
             await ActivityLocalization.AttachAsync(db, rows, ct);

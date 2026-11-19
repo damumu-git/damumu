@@ -45,7 +45,7 @@ public static class ActivityQueries
         LEFT JOIN category grandparent_category ON grandparent_category.id=parent_category.parent_id
         """;
 
-    internal const string RecurringActivity = """
+    internal const string SeriesActivity = """
         EXISTS (
             SELECT 1 FROM activity_series_event recurring_event
             JOIN activity_series recurring_series ON recurring_series.id=recurring_event.series_id
@@ -53,18 +53,19 @@ public static class ActivityQueries
             WHERE recurring_event.event_id=e.id
               AND (recurring_series.owner_id IS NULL OR
                    (recurring_owner.status='active' AND recurring_owner.deleted_at IS NULL))
-        ) AS is_recurring
+        ) AS is_series_activity
         """;
 
     private const string Matching = $"""
-                WITH matching AS (
-                SELECT count(*) OVER () AS total_count, e.id, e.created_at, e.title, e.description, e.status, e.visibility, e.approval_mode,
+                WITH candidates AS (
+                SELECT e.id, e.recurrence_id, e.created_at, e.title, e.description, e.status, e.visibility, e.approval_mode,
                        e.min_participants, e.capacity, e.approved_count, e.waitlist_count,
                        e.price_min, e.price_max, e.price_amount,
                        e.price_currency, e.city_code, e.district_code, e.language_codes,
                        e.cover_media_id,
                        {CoverThumbnail},
-                       {RecurringActivity},
+                       {SeriesActivity},
+                       (e.recurrence_id IS NOT NULL) AS is_recurring,
                        e.published_at,
                        c.id AS category_id,
                        {CoverCategoryCodes},
@@ -151,6 +152,16 @@ public static class ActivityQueries
                   AND (@to IS NULL OR s.starts_at <= @to)
                   AND (NOT @hasGeo OR p.public_geo IS NULL OR ST_DWithin(
                         p.public_geo, ST_Point(@longitude, @latitude, 4326)::geography, @radius))
+                ), ranked AS (
+                    SELECT candidates.*, row_number() OVER (
+                        PARTITION BY COALESCE(recurrence_id,id)
+                        ORDER BY (status='full' OR approved_count>=capacity), starts_at ASC NULLS LAST, id
+                    ) AS recurrence_rank
+                    FROM candidates
+                ), matching AS (
+                    SELECT ranked.*,count(*) OVER () AS total_count
+                    FROM ranked
+                    WHERE recurrence_rank=1 OR @from IS NOT NULL OR @to IS NOT NULL
                 )
                 """;
 

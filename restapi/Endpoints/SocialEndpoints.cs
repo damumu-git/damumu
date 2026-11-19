@@ -78,7 +78,7 @@ public static class SocialEndpoints
                     WHERE m.conversation_id=c.id AND m.deleted_at IS NULL
                     ORDER BY m.created_at DESC LIMIT 1
                 ) lm ON true
-                WHERE cm.user_id=@userId AND cm.left_at IS NULL AND cm.hidden_at IS NULL
+                WHERE cm.user_id=@userId AND cm.left_at IS NULL AND (cm.hidden_at IS NULL OR c.id=@includeId)
                   AND c.status<>'archived'
                 ORDER BY (c.id IS NOT DISTINCT FROM @includeId) DESC,
                          lm.created_at DESC NULLS LAST, c.updated_at DESC

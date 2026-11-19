@@ -20,8 +20,7 @@ public sealed partial class ContentFilter(Db db)
             UpdateProfileRequest input => [input.Nickname, input.Bio, input.Occupation],
             WebGuideEndpoints.BioUpdate input => [input.Bio],
             WebMemberEndpoints.MemberProfileUpdate input => [input.Bio],
-            CreateEventRequest input => [input.Title, input.Description, input.CustomSubcategory,
-                input.Announcement, input.OrganizerNote, input.Place?.Name, input.Place?.AddressPublic],
+            CreateEventRequest input => EventFields(input),
             UpdateEventRequest input => [input.Title, input.Description, input.CustomSubcategory],
             JoinEventRequest input => [input.Note],
             RejectApplicationRequest input => [input.Reason],
@@ -49,6 +48,13 @@ public sealed partial class ContentFilter(Db db)
         }
         return await next(invocation);
     }
+
+    private static string?[] EventFields(CreateEventRequest input) =>
+        [input.Title, input.Description, input.CustomSubcategory, input.Announcement,
+            input.OrganizerNote, input.Place?.Name, input.Place?.AddressPublic];
+
+    internal Task ValidateEventAsync(CreateEventRequest input, CancellationToken ct) =>
+        ValidateAsync(EventFields(input).Where(field => !string.IsNullOrWhiteSpace(field)).ToArray(), ct);
 
     private async Task ValidateAsync(string?[] fields, CancellationToken ct)
     {

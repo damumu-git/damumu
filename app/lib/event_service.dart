@@ -342,9 +342,8 @@ class EventService {
     if (targetUserId != null) query['targetUserId'] = targetUserId;
     final response = await http
         .get(
-          Uri.parse(
-            '$_apiBase/feedback/eligibility',
-          ).replace(queryParameters: query),
+          Uri.parse('$_apiBase/feedback/eligibility')
+              .replace(queryParameters: query),
           headers: {'Authorization': 'Bearer $token'},
         )
         .timeout(const Duration(seconds: 10));
@@ -489,6 +488,37 @@ class EventService {
     );
   }
 
+  static Future<ActivityPage> myActivityPage(
+    String token, {
+    String? cursor,
+    String query = '',
+    String state = 'all',
+    bool? owned,
+  }) async {
+    final uri = Uri.parse('$_apiBase/me/activities').replace(
+      queryParameters: {
+        'limit': '20',
+        'eventState': state,
+        if (cursor != null) 'cursor': cursor,
+        if (query.trim().isNotEmpty) 'q': query.trim(),
+        if (owned != null) 'owned': '$owned',
+      },
+    );
+    final response = await http
+        .get(uri, headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 10));
+    final data =
+        _decodeResponse(response, '我的活动暂时无法加载，请稍后再试')['data']
+            as Map<String, dynamic>;
+    return ActivityPage(
+      items: (data['items'] as List)
+          .map((item) => (item as Map).cast<String, dynamic>())
+          .toList(),
+      nextCursor: data['nextCursor'] as String?,
+      hasMore: data['hasMore'] == true,
+    );
+  }
+
   static Future<List<Map<String, dynamic>>> myActivities(String token) async {
     final response = await http
         .get(
@@ -587,6 +617,9 @@ class EventService {
     String? meetingPoint,
     String? customSubcategory,
     String? coverMediaId,
+    String? repeatFrequency,
+    int? repeatCount,
+    DateTime? repeatUntil,
   }) async {
     final response = await http
         .post(
@@ -609,6 +642,9 @@ class EventService {
             'minParticipants': 2,
             'capacity': capacity,
             'approvalMode': approvalRequired ? 'manual' : 'automatic',
+            'repeatFrequency': repeatFrequency,
+            'repeatCount': repeatCount,
+            'repeatUntil': repeatUntil?.toUtc().toIso8601String(),
             'beginnerFriendly': beginnerFriendly,
             'visibility': 'public',
             'minAge': 14,

@@ -113,7 +113,12 @@ class ActivityListTags extends StatelessWidget {
   Widget build(BuildContext context) {
     final major = activityMajorCategory(context, data);
     final minor = activityText(context, data, 'category', category);
-    if (major.isEmpty && minor.isEmpty && !owned) {
+    if (major.isEmpty &&
+        minor.isEmpty &&
+        !owned &&
+        data?['is_series_activity'] != true &&
+        data?['is_recurring'] != true &&
+        data?['recurrence_id'] == null) {
       return const SizedBox.shrink();
     }
     Widget tag(
@@ -133,16 +138,26 @@ class ActivityListTags extends StatelessWidget {
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: ink,
-          fontWeight: FontWeight.w700,
-        ),
+        style: Theme.of(context).textTheme.labelSmall
+            ?.copyWith(color: ink, fontWeight: FontWeight.w700),
       ),
     );
     return Wrap(
       spacing: 4,
       runSpacing: 4,
       children: [
+        if (data?['is_series_activity'] == true)
+          tag(
+            context.tr('seriesTitle'),
+            const Color(0xff6a3890),
+            const Color(0xfff5edfc),
+          ),
+        if (data?['is_recurring'] == true || data?['recurrence_id'] != null)
+          tag(
+            context.tr('recurringLabel'),
+            const Color(0xff6a3890),
+            const Color(0xfff5edfc),
+          ),
         if (major.isNotEmpty)
           tag(major, const Color(0xff293b85), const Color(0xffedf0ff)),
         if (minor.isNotEmpty)

@@ -1,3 +1,4 @@
+import { createRecurringPage } from "/recurring-events.js";
 import { createCommunityPages } from "/community-pages.js";
 import { createMemberPages } from "/member-pages.js";
 import { conversationRoute, createChatPage } from "/chat-page.js";
@@ -338,6 +339,7 @@ function card(item) {
   thumbnail.setAttribute("aria-label", item.title);
   thumbnail.append(cover(item));
   const labels = node("div", null, "activity-card-labels");
+  if (item.is_series_activity === true) labels.append(node("span", "活动系列", "activity-label-recurring"));
   if (item.is_recurring === true)
     labels.append(node("span", "定期活动", "activity-label-recurring"));
   appendActivityLabels(labels, item);
@@ -817,12 +819,29 @@ async function renderActivity(id, deferred) {
     }
     const participation = node("section", null, "activity-section");
     participation.append(node("h2", "活动参与"));
+    if (item.approval_mode === "manual" && !owns)
+      participation.append(node("p", "确认加入一场活动后，其他时间重叠的待确认申请和候补将自动撤回。", "meta"));
+    if (owns && item.recurrence_id)
+      participation.append(actionLink("管理定期活动计划", "/me/recurring"));
+    if (owns || approved) {
+      const chat = button("进入活动群聊", async () => {
+        chat.disabled = true;
+        try {
+          const conversation = await request("/events/" + encodeURIComponent(id) + "/conversation", { auth: true });
+          location.assign("/messages/" + conversation.id);
+        } catch (error) {
+          showError(participation, error);
+          chat.disabled = false;
+        }
+      }, "button primary");
+      participation.append(chat);
+    }
     const labels = {
-      applied: "已申请 · 等待审核",
-      approved: "报名已通过",
+      applied: "等待组织者确认",
+      approved: "已确认加入",
       attended: "已参加",
       waitlisted: "候补中",
-      rejected: "报名未通过",
+      rejected: "本次未能加入",
       withdrawn: "已退出",
     };
     if (membership && !owns)
@@ -849,7 +868,7 @@ async function renderActivity(id, deferred) {
       }, "button primary");
       actions.append(activityAction(confirmation, "manage"));
     }
-    if (active && !owns && !membership) {
+    if (active && !owns && (!membership || membership === "withdrawn")) {
       const join = button(
         item.approval_mode === "manual" ? "申请参加" : "报名参加",
         () => requireLogin(() => showJoin(id)),
@@ -913,7 +932,7 @@ async function renderActivity(id, deferred) {
     }
     if (owns) {
       const management = node("section", null, "inline-member-management");
-      management.append(node("h3", item.approval_mode === "manual" ? "报名申请" : "当前报名成员"));
+      management.append(node("h3", item.approval_mode === "manual" ? "加入申请" : "当前报名成员"));
       const memberList = node("div", null, "inline-member-list");
       management.append(memberList);
       participation.append(management);
@@ -933,7 +952,7 @@ async function renderActivity(id, deferred) {
                   (approved ? "/approve" : "/reject"), { auth: true, data: approved ? undefined : { reason: "组织者未通过申请" } });
                 await showActivity(id, content);
               };
-              controls.append(button("通过", () => decide(true), "button primary"), button("取消", () => decide(false)));
+              controls.append(button("同意加入", () => decide(true), "button primary"), button("取消", () => decide(false)));
               row.append(controls);
             }
             memberList.append(row);
@@ -978,59 +997,86 @@ function showJoin(id) {
 async function showMine() {
   const content = show("我的活动", "workspace-page library-page");
   const marker = dialogRequest;
-  const statuses = {
-    all: "全部",
-    upcoming: "进行中与待开始",
-    ended: "已结束",
-    cancelled: "已取消",
-  };
-  const requestedStatus = new URLSearchParams(location.search).get("status");
-  const status = Object.hasOwn(statuses, requestedStatus) ? requestedStatus : "all";
+  const params = new URLSearchParams(location.search);
+  const statuses = { all: "全部", upcoming: "进行中与待开始", ended: "已结束", cancelled: "已取消" };
+  const state = Object.hasOwn(statuses, params.get("status")) ? params.get("status") : "all";
+  const query = params.get("q") || "";
+  const search = node("form", null, "my-activity-search");
+  search.setAttribute("role", "search");
+  const label = node("label", "搜索我的活动", "friend-search");
+  const input = node("input");
+  input.type = "search";
+  input.name = "q";
+  input.maxLength = 100;
+  input.placeholder = "输入活动标题或关键词";
+  input.value = query;
+  label.append(input);
+  const submit = node("button", "搜索", "button primary");
+  submit.type = "submit";
+  search.append(label, submit);
+  search.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const next = new URLSearchParams();
+    if (state !== "all") next.set("status", state);
+    if (input.value.trim()) next.set("q", input.value.trim());
+    location.assign("/me/activities" + (next.size ? "?" + next : ""));
+  });
+  content.append(search);
   const filters = node("nav", null, "activity-status-filters");
   filters.setAttribute("aria-label", "活动状态");
-  for (const [value, label] of Object.entries(statuses)) {
-    const link = actionLink(
-      label,
-      value === "all" ? location.pathname : `${location.pathname}?status=${value}`,
-      value === status ? "button primary" : "button ghost",
-    );
-    if (value === status) link.setAttribute("aria-current", "page");
+  for (const [value, title] of Object.entries(statuses)) {
+    const next = new URLSearchParams();
+    if (value !== "all") next.set("status", value);
+    if (query) next.set("q", query);
+    const link = actionLink(title, "/me/activities" + (next.size ? "?" + next : ""),
+      value === state ? "button primary" : "button ghost");
+    if (value === state) link.setAttribute("aria-current", "page");
     filters.append(link);
   }
   content.append(filters);
-  try {
-    const activities = await request("/me/activities", { auth: true });
-    if (marker !== dialogRequest) return;
-    const now = Date.now();
-    const filtered = activities.filter((item) => {
-      if (status === "all") return true;
-      if (item.event_status === "cancelled") return status === "cancelled";
-      const ended = libraryEventState(item, now) === "已结束";
-      return status === (ended ? "ended" : "upcoming");
-    });
-    for (const own of [false, true]) {
-      const section = node("section", null, "library-section");
-      section.append(node("h2", own ? "我发起的" : "我报名的"));
-      const list = node("ul", null, "library-list");
-      for (const item of filtered.filter(
-        (entry) => (entry.organizer_user_id === session.user.id) === own,
-      )) {
-        const state = [libraryEventState(item, now), !own && membershipLabel(item.membership_status)]
-          .filter(Boolean).join(" · ");
-        list.append(libraryRow(item, {
-          href: eventLink(item.id),
-          categoryName: item.category_name,
-          state,
-          action: own ? actionLink("管理活动", "/organizer/activities/" + item.id) : null,
-        }));
+  for (const owned of [false, true]) {
+    const section = node("section", null, "library-section");
+    const list = node("ul", null, "library-list");
+    section.append(node("h2", owned ? "我发起的" : "我报名的"), list);
+    content.append(section);
+    let cursor = null;
+    let busy = false;
+    let hasMore = true;
+    const more = button("加载更多", load, "button ghost");
+    section.append(more);
+    async function load() {
+      if (busy || !hasMore || marker !== dialogRequest) return;
+      busy = true;
+      more.disabled = true;
+      more.textContent = "正在加载…";
+      $(".form-error", section)?.remove();
+      try {
+        const parameters = new URLSearchParams({ limit: "20", owned: String(owned), eventState: state });
+        if (query) parameters.set("q", query);
+        if (cursor) parameters.set("cursor", cursor);
+        const result = await request("/me/activities?" + parameters, { auth: true });
+        if (marker !== dialogRequest) return;
+        for (const item of result.items) {
+          const status = [libraryEventState(item), !owned && (item.withdrawal_reason === "schedule_conflict"
+            ? "行程冲突 · 已自动撤回" : membershipLabel(item.membership_status))].filter(Boolean).join(" · ");
+          list.append(libraryRow(item, {
+            href: eventLink(item.id), categoryName: item.category_name, state: status,
+            action: owned ? actionLink("管理活动", "/organizer/activities/" + item.id) : null,
+          }));
+        }
+        cursor = result.nextCursor;
+        hasMore = result.hasMore && Boolean(cursor);
+        more.hidden = !hasMore;
+        if (!list.children.length) list.append(node("li", "暂无记录。", "meta"));
+      } catch (error) {
+        showError(section, error);
+      } finally {
+        busy = false;
+        more.disabled = false;
+        more.textContent = "加载更多";
       }
-      section.append(
-        list.children.length ? list : node("p", "暂无记录。", "meta"),
-      );
-      content.append(section);
     }
-  } catch (error) {
-    if (marker === dialogRequest) showError(content, error);
+    await load();
   }
 }
 
@@ -1097,8 +1143,22 @@ function showPublish(template, seriesId) {
     </div>
     <div class="form-row"><label>人数上限（含组织者）<input name="capacity" type="number" value="6" min="2" max="100" required></label><label>预计线下人均费用（₩）<input name="price" type="text" inputmode="numeric" value="0" required></label></div>
     <label>集合点（报名通过后可见）<input name="place" required maxlength="100"></label>
-    <label>报名方式<select name="approvalMode"><option value="manual">组织者审核</option><option value="auto">直接加入</option></select></label>
+    <div class="form-row"><label>重复频率<select name="repeatFrequency"><option value="">不重复</option><option value="weekly">每周</option><option value="monthly">每月</option></select></label><label>结束方式<select name="repeatEndMode" disabled><option value="count">按场数结束</option><option value="until">截至日期</option></select></label></div>
+    <div class="form-row recurrence-end"><label>计划场数（含本场）<input name="repeatCount" type="number" min="2" max="12" value="2" disabled></label><label>截至日期（韩国）<input name="repeatUntil" type="date" disabled></label></div>
+    <p class="meta recurrence-help" hidden>最多12场，跨度不超过6个月。先发布本场，后续场次在开始前14天内逐期确认发布。每月没有对应日期则跳过该月，后续场次默认使用分类封面。</p>
+    <label>报名方式<select name="approvalMode"><option value="manual">需组织者确认</option><option value="auto">直接加入</option></select></label>
     <button class="button primary" type="submit">发布活动</button>`;
+  const updateRecurrence = () => {
+    const enabled = Boolean(form.elements.repeatFrequency.value);
+    const byDate = form.elements.repeatEndMode.value === "until";
+    form.elements.repeatEndMode.disabled = !enabled;
+    form.elements.repeatCount.disabled = !enabled || byDate;
+    form.elements.repeatUntil.disabled = !enabled || !byDate;
+    form.elements.repeatUntil.required = enabled && byDate;
+    $(".recurrence-help", form).hidden = !enabled;
+  };
+  form.elements.repeatFrequency.addEventListener("change", updateRecurrence);
+  form.elements.repeatEndMode.addEventListener("change", updateRecurrence);
   const layout = node("div", null, "publish-layout");
   const preview = node("aside", null, "invitation-summary");
   const previewTitle = node("h2", "活动卡片预览");
@@ -1268,6 +1328,10 @@ function showPublish(template, seriesId) {
           minParticipants: 2,
           capacity: Number(values.capacity),
           approvalMode: values.approvalMode,
+          repeatFrequency: values.repeatFrequency || null,
+          repeatCount: values.repeatFrequency && values.repeatEndMode !== "until" ? Number(values.repeatCount) : null,
+          repeatUntil: values.repeatFrequency && values.repeatEndMode === "until"
+            ? new Date(values.repeatUntil + "T23:59:59+09:00").toISOString() : null,
           visibility: "public",
           priceMin: amount,
           priceMax: amount,
@@ -1291,7 +1355,7 @@ function showPublish(template, seriesId) {
       try {
         await request("/series/" + seriesId + "/events/" + item.id, { auth: true, method: "PUT" });
       } catch {
-        window.alert("活动已发布。请从定期活动管理页手动加入活动。");
+        window.alert("活动已发布。请从系列管理页手动加入活动。");
       }
     }
     location.assign(eventLink(item.id));
@@ -1328,11 +1392,11 @@ async function finishSocial(register) {
 function membershipLabel(value) {
   return (
     {
-      applied: "待审核",
-      approved: "已通过",
+      applied: "等待组织者确认",
+      approved: "已确认加入",
       attended: "已参加",
       waitlisted: "候补",
-      rejected: "未通过",
+      rejected: "本次未能加入",
       withdrawn: "已退出",
     }[value] ?? ""
   );
@@ -2113,7 +2177,7 @@ async function route() {
           throw new Error("只能复办自己发起的活动。");
         regions = areaCatalog;
         categories = categoryCatalog;
-        if (series && !series.item.can_manage) throw new Error("仅定期活动管理者可添加活动。");
+        if (series && !series.item.can_manage) throw new Error("仅系列管理者可添加活动。");
         showPublish(source?.item, series?.item.id);
       } catch (error) {
         showError(show("发起活动"), error);
@@ -2175,6 +2239,7 @@ async function route() {
   if (organizer) return requireLogin(() => showOrganizer(organizer[1]));
   const person = /^\/people\/([0-9a-f-]{36})$/i.exec(path);
   if (person) return showPerson(person[1]);
+  if (path === "/me/recurring") return requireLogin(showRecurring);
   if (path === "/me/activities") return requireLogin(showMine);
   if (path === "/messages/requests") return requireLogin(directContact.showRequests);
   if (path === "/messages/friend-requests") return requireLogin(friends.showRequests);
@@ -2305,6 +2370,7 @@ const directContact = createDirectContact({
   show, node, button, actionLink, request, requireLogin, handleForm, showError,
   showReport, renderAvatar, refreshUnread, friends,
 });
+const showRecurring = createRecurringPage({ show, node, button, actionLink, request, showError, time, refreshCurrentPage });
 const activitySeries = createActivitySeries({
   show, node, button, actionLink, request, requireLogin, handleForm, showError,
   session: () => session, cover, card, eventLink, uploadCover, uploadedImage,

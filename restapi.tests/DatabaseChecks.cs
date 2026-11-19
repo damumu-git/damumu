@@ -22,7 +22,7 @@ internal static class DatabaseChecks
         {
             "event", "category", "app_user", "user_profile", "trust_snapshot",
             "place", "administrative_region", "event_schedule", "event_tag", "interest",
-            "report", "endorsement", "emoji_asset"
+            "report", "endorsement", "emoji_asset", "activity_series_event", "activity_series"
         })
         {
             await Execute($"CREATE TEMP TABLE {table} ON COMMIT DROP AS SELECT * FROM public.{table} WITH NO DATA");

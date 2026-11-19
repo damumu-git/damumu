@@ -34,7 +34,8 @@ public static class EventEndpoints
                        e.price_currency, e.city_code, e.district_code, e.language_codes,
                        e.cover_media_id,
                        {ActivityQueries.CoverThumbnail},
-                       {ActivityQueries.RecurringActivity},
+                       {ActivityQueries.SeriesActivity},
+                       (e.recurrence_id IS NOT NULL) AS is_recurring,
                        {ActivityQueries.CoverCategoryCodes},
                        e.published_at, e.confirmed_at,
                        c.id AS category_id,
@@ -420,153 +421,9 @@ public static class EventEndpoints
             return ApiSupport.Ok(new { id });
         });
 
-        api.MapPost("/events", async (
-            HttpContext context, CreateEventRequest request, Db db, CancellationToken ct) =>
-        {
-            var userId = ApiSupport.RequireUserId(context);
-            if (request.EndsAt <= request.StartsAt)
-                throw new ApiException(400, "invalid_schedule", "结束时间必须晚于开始时间");
-            if (request.MinAge is < PrivacyRules.MinimumAge)
-                throw new ApiException(400, "invalid_minimum_age", "活动最低年龄不能小于14周岁");
-            if (request.MinParticipants < 2 || request.Capacity < request.MinParticipants)
-                throw new ApiException(400, "capacity_invalid", "人数范围无效");
-            if (request.PriceMin < 0 || request.PriceMax < request.PriceMin)
-                throw new ApiException(400, "price_range_invalid", "人均费用范围无效");
-            var categorySelectable = await db.ScalarAsync<int>(
-                "SELECT count(*) FROM category WHERE id=@categoryId AND level=2 AND is_active",
-                new { request.CategoryId }, ct);
-            if (categorySelectable == 0)
-                throw new ApiException(400, "category_not_selectable", "请选择有效的细分类");
-            var requiresCustomLabel = await db.ScalarAsync<int>(
-                "SELECT count(*) FROM category WHERE id=@categoryId AND requires_custom_label",
-                new { request.CategoryId }, ct) > 0;
-            var customSubcategory = request.CustomSubcategory?.Trim();
-            if (requiresCustomLabel && (string.IsNullOrWhiteSpace(customSubcategory) ||
-                            customSubcategory.EnumerateRunes().Count() > 15))
-                throw new ApiException(400, "custom_subcategory_invalid", "请填写 1 至 15 字的小分类");
-            if (!requiresCustomLabel && !string.IsNullOrEmpty(customSubcategory))
-                throw new ApiException(400, "custom_subcategory_unexpected", "该分类不支持自定义小分类");
-            if (request.CoverMediaId is Guid coverMediaId && await db.ScalarAsync<int>(
-                "SELECT count(*) FROM media_asset WHERE id=@coverMediaId AND owner_user_id=@userId AND mime_type='image/jpeg' AND status='ready' AND deleted_at IS NULL AND NOT activity_recap_uses_media(id)",
-                new { coverMediaId, userId }, ct) == 0)
-                throw new ApiException(400, "cover_invalid", "活动图片不存在或无权使用");
-            var regionValid = await db.ScalarAsync<int>(
-                ActivityQueries.ValidRegion, new { request.CityCode, request.DistrictCode }, ct);
-            if (regionValid == 0)
-                throw new ApiException(400, "region_invalid", "请选择有效的城市和地区");
-
-            var eventId = Guid.NewGuid();
-            Guid? placeId = null;
-            if (request.Place is not null)
-            {
-                placeId = Guid.NewGuid();
-                await db.ExecuteAsync(
-                    """
-                    INSERT INTO place (
-                        id, provider, provider_place_id, name, city_code, district_code,
-                        address_public, public_geo,
-                        created_by_user_id
-                    )
-                    VALUES (
-                        @placeId, 'manual', @placeId::text, @name, @cityCode, @districtCode, @addressPublic,
-                        CASE WHEN @longitude IS NULL OR @latitude IS NULL THEN NULL
-                             ELSE ST_Point(@longitude, @latitude, 4326)::geography END, @userId
-                    )
-                    """, new
-                    {
-                        placeId,
-                        request.Place.Name,
-                        request.CityCode,
-                        request.DistrictCode,
-                        request.Place.AddressPublic,
-                        request.Place.Longitude,
-                        request.Place.Latitude,
-                        userId
-                    }, ct);
-            }
-
-            await db.ExecuteAsync(
-                """
-                WITH inserted_event AS (
-                    INSERT INTO event (
-                        id, organizer_user_id, category_id, custom_subcategory, place_id, cover_media_id, title, description,
-                        city_code, district_code, status, published_at, visibility, approval_mode,
-                        beginner_friendly_claimed, min_participants, capacity, approved_count, min_age, max_age,
-                        price_min, price_max, price_amount, price_currency, language_codes,
-                        announcement, organizer_note, review_status
-                    )
-                    VALUES (
-                        @eventId, @userId, @categoryId, @customSubcategory, @placeId, @coverMediaId, @title, @description,
-                        @cityCode, @districtCode, 'published', now(), @visibility, @approvalMode,
-                        @beginnerFriendly, @minParticipants, @capacity, 1, @minAge, @maxAge,
-                        @priceMin, @priceMax, @priceMin, @priceCurrency, @languageCodes,
-                        @announcement, @organizerNote, 'not_required'
-                    )
-                    RETURNING id
-                ), inserted_schedule AS (
-                    INSERT INTO event_schedule (event_id, starts_at, ends_at)
-                    SELECT id, @startsAt, @endsAt FROM inserted_event
-                ), inserted_cover_review AS (
-                    INSERT INTO event_cover_review (event_id, media_asset_id)
-                    SELECT id, @coverMediaId FROM inserted_event
-                    WHERE @coverMediaId IS NOT NULL
-                )
-                INSERT INTO event_member (event_id, user_id, member_role, status, joined_at)
-                VALUES (@eventId, @userId, 'organizer', 'approved', now())
-                """, new
-                {
-                    eventId,
-                    userId,
-                    request.CategoryId,
-                    customSubcategory = requiresCustomLabel ? customSubcategory : null,
-                    request.CoverMediaId,
-                    placeId,
-                    title = request.Title.Trim(),
-                    description = request.Description.Trim(),
-                    request.CityCode,
-                    request.DistrictCode,
-                    visibility = request.Visibility ?? "public",
-                    approvalMode = request.ApprovalMode ?? "manual",
-                    beginnerFriendly = request.BeginnerFriendly,
-                    request.MinParticipants,
-                    request.Capacity,
-                    minAge = request.MinAge ?? PrivacyRules.MinimumAge,
-                    request.MaxAge,
-                    request.PriceMin,
-                    request.PriceMax,
-                    priceCurrency = request.PriceCurrency ?? "KRW",
-                    languageCodes = request.LanguageCodes ?? ["zh-CN"],
-                    request.StartsAt,
-                    request.EndsAt,
-                    request.Announcement,
-                    request.OrganizerNote
-                }, ct);
-
-            foreach (var interestId in request.InterestIds?.Distinct().Take(10) ?? [])
-                await db.ExecuteAsync(
-                    "INSERT INTO event_tag (event_id, interest_id) VALUES (@eventId, @interestId) ON CONFLICT DO NOTHING",
-                    new { eventId, interestId }, ct);
-
-            var beginnerFriendlyEndorsements = await db.ScalarAsync<long>(
-                """
-                SELECT count(DISTINCT from_user_id)
-                FROM endorsement
-                WHERE target_user_id=@userId AND target_type='activity'
-                  AND tag_code='newcomer_friendly'
-                """, new { userId }, ct);
-            var beginnerFriendlyVerified = beginnerFriendlyEndorsements >=
-                FeedbackPolicy.BeginnerFriendlyVerificationThreshold;
-
-            return ApiSupport.Created($"/api/v1/events/{eventId}", new
-            {
-                id = eventId,
-                status = "published",
-                reviewStatus = "not_required",
-                beginnerFriendly = request.BeginnerFriendly || beginnerFriendlyVerified,
-                beginnerFriendlyClaimed = request.BeginnerFriendly,
-                beginnerFriendlyVerified
-            });
-        });
+        api.MapPost("/events", (HttpContext context, CreateEventRequest request, Db db, CancellationToken ct) =>
+            db.InTransactionAsync(transaction => CreateEventAsync(
+                ApiSupport.RequireUserId(context), request, transaction, ct), ct));
 
         api.MapPatch("/events/{id:guid}", async (
             Guid id, HttpContext context, UpdateEventRequest request, Db db, CancellationToken ct) =>
@@ -714,6 +571,25 @@ public static class EventEndpoints
                     "Cancellation persisted; clients will synchronize the group notice later");
             }
             return ApiSupport.Ok(item);
+        });
+
+        api.MapGet("/events/{id:guid}/conversation", async (
+            Guid id, HttpContext context, Db db, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.RequireUserId(context);
+            var conversation = await db.QueryOneAsync("""
+                SELECT c.id,c.status,c.conversation_type,e.title AS display_title,
+                    0 AS unread_count,
+                    (SELECT count(*) FROM conversation_member peer WHERE peer.conversation_id=c.id AND peer.left_at IS NULL) AS member_count
+                FROM event e JOIN conversation c ON c.event_id=e.id AND c.conversation_type='event'
+                JOIN conversation_member cm ON cm.conversation_id=c.id AND cm.user_id=@userId AND cm.left_at IS NULL
+                WHERE e.id=@id AND e.deleted_at IS NULL AND c.status<>'archived'
+                  AND (e.organizer_user_id=@userId OR EXISTS (
+                      SELECT 1 FROM event_member m WHERE m.event_id=e.id AND m.user_id=@userId
+                        AND m.status IN ('approved','attended') AND m.left_at IS NULL))
+                """, new { id, userId }, ct)
+                ?? throw new ApiException(403, "event_chat_unavailable", "当前无法进入活动群聊，请确认参与状态或是否已退出群聊。");
+            return ApiSupport.Ok(conversation);
         });
 
         api.MapPost("/events/{id:guid}/join", async (
@@ -889,10 +765,10 @@ public static class EventEndpoints
             status = approved ? "approved" : "rejected"
         }, ct);
         var body = approved
-            ? $"你申请的「{activityTitle}」已通过"
-            : $"你申请的「{activityTitle}」未通过：{rejectionReason}";
+            ? $"你申请的「{activityTitle}」已确认加入"
+            : $"你申请的「{activityTitle}」本次未能加入：{rejectionReason}";
         await push.SendToUsersAsync(db, [memberUserId],
-            approved ? "活动申请已通过" : "活动申请未通过",
+            approved ? "已确认加入活动" : "本次未能加入活动",
             body,
             new Dictionary<string, string>
             {
@@ -900,6 +776,165 @@ public static class EventEndpoints
                 ["notificationType"] = notificationType,
                 ["eventId"] = eventId.ToString()
             }, ct);
+    }
+
+    internal static async Task<IResult> CreateEventAsync(
+        Guid userId, CreateEventRequest request, Db db, CancellationToken ct,
+        Guid? existingRecurrenceId = null, int occurrenceIndex = 0)
+    {
+        await db.ExecuteAsync("SELECT lock_event_user(@userId)", new { userId }, ct);
+        if (request.ApprovalMode is not (null or "manual" or "auto" or "automatic"))
+            throw new ApiException(400, "approval_mode_invalid", "请选择有效的报名方式");
+        if (request.EndsAt <= request.StartsAt)
+            throw new ApiException(400, "invalid_schedule", "结束时间必须晚于开始时间");
+        if (request.MinAge is < PrivacyRules.MinimumAge)
+            throw new ApiException(400, "invalid_minimum_age", "活动最低年龄不能小于14周岁");
+        if (request.MinParticipants < 2 || request.Capacity < request.MinParticipants)
+            throw new ApiException(400, "capacity_invalid", "人数范围无效");
+        if (request.PriceMin < 0 || request.PriceMax < request.PriceMin)
+            throw new ApiException(400, "price_range_invalid", "人均费用范围无效");
+        var categorySelectable = await db.ScalarAsync<int>(
+            "SELECT count(*) FROM category WHERE id=@categoryId AND level=2 AND is_active",
+            new { request.CategoryId }, ct);
+        if (categorySelectable == 0)
+            throw new ApiException(400, "category_not_selectable", "请选择有效的细分类");
+        var requiresCustomLabel = await db.ScalarAsync<int>(
+            "SELECT count(*) FROM category WHERE id=@categoryId AND requires_custom_label",
+            new { request.CategoryId }, ct) > 0;
+        var customSubcategory = request.CustomSubcategory?.Trim();
+        if (requiresCustomLabel && (string.IsNullOrWhiteSpace(customSubcategory) ||
+                        customSubcategory.EnumerateRunes().Count() > 15))
+            throw new ApiException(400, "custom_subcategory_invalid", "请填写 1 至 15 字的小分类");
+        if (!requiresCustomLabel && !string.IsNullOrEmpty(customSubcategory))
+            throw new ApiException(400, "custom_subcategory_unexpected", "该分类不支持自定义小分类");
+        if (request.CoverMediaId is Guid coverMediaId && await db.ScalarAsync<int>(
+            "SELECT count(*) FROM media_asset WHERE id=@coverMediaId AND owner_user_id=@userId AND mime_type='image/jpeg' AND status='ready' AND deleted_at IS NULL AND NOT activity_recap_uses_media(id)",
+            new { coverMediaId, userId }, ct) == 0)
+            throw new ApiException(400, "cover_invalid", "活动图片不存在或无权使用");
+        var regionValid = await db.ScalarAsync<int>(
+            ActivityQueries.ValidRegion, new { request.CityCode, request.DistrictCode }, ct);
+        if (regionValid == 0)
+            throw new ApiException(400, "region_invalid", "请选择有效的城市和地区");
+
+        var recurrenceId = existingRecurrenceId;
+        if (request.RepeatFrequency is not null && existingRecurrenceId is null)
+            recurrenceId = await RecurringEventEndpoints.CreatePlanAsync(db, userId, request, ct);
+        var eventId = Guid.NewGuid();
+        Guid? placeId = null;
+        if (request.Place is not null)
+        {
+            placeId = Guid.NewGuid();
+            await db.ExecuteAsync(
+                """
+                INSERT INTO place (
+                    id, provider, provider_place_id, name, city_code, district_code,
+                    address_public, public_geo,
+                    created_by_user_id
+                )
+                VALUES (
+                    @placeId, 'manual', @placeId::text, @name, @cityCode, @districtCode, @addressPublic,
+                    CASE WHEN @longitude IS NULL OR @latitude IS NULL THEN NULL
+                         ELSE ST_Point(@longitude, @latitude, 4326)::geography END, @userId
+                )
+                """, new
+                {
+                    placeId,
+                    request.Place.Name,
+                    request.CityCode,
+                    request.DistrictCode,
+                    request.Place.AddressPublic,
+                    request.Place.Longitude,
+                    request.Place.Latitude,
+                    userId
+                }, ct);
+        }
+
+        await db.ExecuteAsync(
+            """
+            WITH inserted_event AS (
+                INSERT INTO event (
+                    id, organizer_user_id, category_id, custom_subcategory, place_id, cover_media_id, title, description, recurrence_id, recurrence_index,
+                    city_code, district_code, status, published_at, visibility, approval_mode,
+                    beginner_friendly_claimed, min_participants, capacity, approved_count, min_age, max_age,
+                    price_min, price_max, price_amount, price_currency, language_codes,
+                    announcement, organizer_note, review_status
+                )
+                VALUES (
+                    @eventId, @userId, @categoryId, @customSubcategory, @placeId, @coverMediaId, @title, @description, @recurrenceId, @recurrenceIndex,
+                    @cityCode, @districtCode, 'published', now(), @visibility, @approvalMode,
+                    @beginnerFriendly, @minParticipants, @capacity, 1, @minAge, @maxAge,
+                    @priceMin, @priceMax, @priceMin, @priceCurrency, @languageCodes,
+                    @announcement, @organizerNote, 'not_required'
+                )
+                RETURNING id
+            ), inserted_schedule AS (
+                INSERT INTO event_schedule (event_id, starts_at, ends_at)
+                SELECT id, @startsAt, @endsAt FROM inserted_event
+            ), inserted_cover_review AS (
+                INSERT INTO event_cover_review (event_id, media_asset_id)
+                SELECT id, @coverMediaId FROM inserted_event
+                WHERE @coverMediaId IS NOT NULL
+            )
+            INSERT INTO event_member (event_id, user_id, member_role, status, joined_at)
+            VALUES (@eventId, @userId, 'organizer', 'approved', now())
+            """, new
+            {
+                eventId,
+                userId,
+                recurrenceId,
+                recurrenceIndex = recurrenceId.HasValue ? (int?)occurrenceIndex : null,
+                request.CategoryId,
+                customSubcategory = requiresCustomLabel ? customSubcategory : null,
+                request.CoverMediaId,
+                placeId,
+                title = request.Title.Trim(),
+                description = request.Description.Trim(),
+                request.CityCode,
+                request.DistrictCode,
+                visibility = request.Visibility ?? "public",
+                approvalMode = request.ApprovalMode ?? "manual",
+                beginnerFriendly = request.BeginnerFriendly,
+                request.MinParticipants,
+                request.Capacity,
+                minAge = request.MinAge ?? PrivacyRules.MinimumAge,
+                request.MaxAge,
+                request.PriceMin,
+                request.PriceMax,
+                priceCurrency = request.PriceCurrency ?? "KRW",
+                languageCodes = request.LanguageCodes ?? ["zh-CN"],
+                request.StartsAt,
+                request.EndsAt,
+                request.Announcement,
+                request.OrganizerNote
+            }, ct);
+
+        await db.ExecuteAsync("SELECT enforce_event_user_schedule(@eventId,@userId,true)", new { eventId, userId }, ct);
+
+        foreach (var interestId in request.InterestIds?.Distinct().Take(10) ?? [])
+            await db.ExecuteAsync(
+                "INSERT INTO event_tag (event_id, interest_id) VALUES (@eventId, @interestId) ON CONFLICT DO NOTHING",
+                new { eventId, interestId }, ct);
+
+        var beginnerFriendlyEndorsements = await db.ScalarAsync<long>(
+            """
+            SELECT count(DISTINCT from_user_id)
+            FROM endorsement
+            WHERE target_user_id=@userId AND target_type='activity'
+              AND tag_code='newcomer_friendly'
+            """, new { userId }, ct);
+        var beginnerFriendlyVerified = beginnerFriendlyEndorsements >=
+            FeedbackPolicy.BeginnerFriendlyVerificationThreshold;
+
+        return ApiSupport.Created($"/api/v1/events/{eventId}", new
+        {
+            id = eventId,
+            recurrenceId,
+            status = "published",
+            reviewStatus = "not_required",
+            beginnerFriendly = request.BeginnerFriendly || beginnerFriendlyVerified,
+            beginnerFriendlyClaimed = request.BeginnerFriendly,
+            beginnerFriendlyVerified
+        });
     }
 
     public sealed record EventConfirmationRequest(bool Confirmed);
@@ -931,7 +966,10 @@ public sealed record CreateEventRequest(
     Guid[]? InterestIds,
     PlaceRequest? Place,
     string? CustomSubcategory,
-    Guid? CoverMediaId);
+    Guid? CoverMediaId,
+    string? RepeatFrequency = null,
+    short? RepeatCount = null,
+    DateTime? RepeatUntil = null);
 public sealed record UpdateEventRequest(
     string? Title,
     string? Description,

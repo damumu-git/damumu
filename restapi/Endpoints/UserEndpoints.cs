@@ -314,15 +314,25 @@ public static class UserEndpoints
                 """, new { userId }, ct));
         });
 
-        api.MapGet("/me/activities", async (HttpContext context, Db db, string? status, CancellationToken ct) =>
+        api.MapGet("/me/activities", async (HttpContext context, Db db, string? status, int? limit, string? cursor, string? q, string? eventState, bool? owned, CancellationToken ct) =>
         {
+            context.Response.Headers.CacheControl = "private, no-store";
             var userId = ApiSupport.RequireUserId(context);
+            var take = Math.Clamp(limit ?? 20, 1, 100);
+            var position = ActivityCursor.Decode(cursor);
+            q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+            if (q?.Length > 100) throw new ApiException(400, "query_invalid", "搜索内容请限制在100字以内");
+            if (eventState is not (null or "all" or "upcoming" or "ended" or "cancelled" or "history" or "feedback"))
+                throw new ApiException(400, "event_state_invalid", "请选择有效活动状态");
             var rows = await db.QueryAsync(
                 $"""
+                WITH records AS (
                 SELECT e.id, e.organizer_user_id, e.title, e.description,
                        e.status AS event_status, e.cancellation_reason,
                        e.cover_media_id, e.cover_review_status, e.cover_review_reason,
                        {ActivityQueries.CoverThumbnail},
+                       (e.recurrence_id IS NOT NULL) AS is_recurring,
+                       {ActivityQueries.SeriesActivity},
                        {ActivityQueries.CoverCategoryCodes},
                        e.city_code, e.district_code, e.approval_mode,
                        e.capacity, e.approved_count, e.price_amount, e.price_currency,
@@ -330,7 +340,7 @@ public static class UserEndpoints
                            SELECT count(*) FROM event_member applicant
                            WHERE applicant.event_id=e.id AND applicant.status='applied' AND applicant.left_at IS NULL
                        ) END AS pending_count,
-                       em.status AS membership_status, em.member_role, em.checked_in_at,
+                       em.status AS membership_status, em.withdrawal_reason, em.member_role, em.checked_in_at,
                        s.starts_at, s.ends_at,
                        COALESCE(s.ends_at <= now(), false)
                            AND e.status <> 'cancelled'
@@ -367,10 +377,30 @@ public static class UserEndpoints
                 WHERE em.user_id=@userId
                   AND (@status IS NULL OR em.status=@status)
                   AND e.deleted_at IS NULL
-                ORDER BY s.starts_at DESC NULLS LAST
-                """, new { userId, status }, ct);
+                )
+                SELECT * FROM records
+                WHERE (@q IS NULL OR title ILIKE '%'||@q||'%' OR description ILIKE '%'||@q||'%')
+                  AND (@owned::boolean IS NULL OR (organizer_user_id=@userId)=@owned)
+                  AND (@eventState IS NULL OR @eventState='all'
+                    OR (@eventState='cancelled' AND event_status='cancelled')
+                    OR (@eventState='feedback' AND feedback_pending)
+                    OR (@eventState='upcoming' AND event_status NOT IN ('cancelled','completed') AND (ends_at IS NULL OR ends_at>now()))
+                    OR (@eventState='ended' AND event_status<>'cancelled' AND (event_status='completed' OR ends_at<=now()))
+                    OR (@eventState='history' AND (event_status IN ('cancelled','completed') OR ends_at<=now())))
+                  AND (NOT @hasCursor OR (COALESCE(starts_at,@epoch),id) < (@cursorStart,@cursorId))
+                ORDER BY COALESCE(starts_at,@epoch) DESC,id DESC
+                LIMIT @take
+                """, new { userId, status, q, owned, eventState, epoch = DateTime.UnixEpoch,
+                    hasCursor = position is not null, cursorStart = position?.CreatedAt ?? DateTime.UnixEpoch,
+                    cursorId = position?.ActivityId ?? Guid.Empty, take = limit.HasValue ? take+1 : int.MaxValue }, ct);
             await ActivityLocalization.AttachAsync(db, rows, ct);
-            return ApiSupport.Ok(rows);
+            if (!limit.HasValue) return ApiSupport.Ok(rows);
+            var hasMore = rows.Count>take;
+            if (hasMore) rows.RemoveAt(rows.Count-1);
+            var nextCursor = hasMore ? ActivityCursor.Encode(
+                rows[^1]["starts_at"] is DateTime startsAt ? startsAt : DateTime.UnixEpoch,
+                (Guid)rows[^1]["id"]!) : null;
+            return ApiSupport.Ok(new { items = rows, hasMore, nextCursor });
         });
 
         api.MapGet("/me/notifications", async (

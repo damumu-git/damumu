@@ -43,6 +43,7 @@ builder.Services.AddSingleton<PushNotificationService>();
 builder.Services.AddHostedService<RealtimeRelayService>();
 builder.Services.AddHostedService<ConversationLifecycleService>();
 builder.Services.AddHostedService<PrivacyRetentionService>();
+builder.Services.AddHostedService<RecurringEventReminderService>();
 builder.Services.AddHttpClient(nameof(ActivityTranslationWorker), client => client.Timeout = TimeSpan.FromSeconds(12))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHostedService<ActivityTranslationWorker>();
@@ -92,6 +93,19 @@ app.Use(async (context, next) =>
         eventLog.RecordRequest(context, traceId, exception.StatusCode, exception.Code, exception);
         if (context.Response.HasStarted) throw;
         await WriteError(context, traceId, exception.StatusCode, exception.Code, exception.Message);
+    }
+    catch (PostgresException exception) when (exception.SqlState is
+        PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected)
+    {
+        eventLog.RecordRequest(context, traceId, 409, "state_changed", exception);
+        if (context.Response.HasStarted) throw;
+        await WriteError(context, traceId, 409, "state_changed", "参与状态已发生变化，请刷新后重试。");
+    }
+    catch (PostgresException exception) when (exception.ConstraintName == "event_schedule_conflict")
+    {
+        eventLog.RecordRequest(context, traceId, 409, "schedule_conflict", exception);
+        if (context.Response.HasStarted) throw;
+        await WriteError(context, traceId, 409, "schedule_conflict", "此时间与你已确定的活动重叠，请先处理已有行程。");
     }
     catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
     {
@@ -180,6 +194,7 @@ api.MapWebMemberEndpoints();
 api.MapWebCommunityEndpoints();
 api.MapEventEndpoints();
 api.MapActivitySeriesEndpoints();
+api.MapRecurringEventEndpoints();
 api.MapActivityEndpoints();
 api.MapSocialEndpoints();
 api.MapDirectContactEndpoints();

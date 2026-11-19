@@ -294,7 +294,8 @@ export function createMemberPages(ui) {
       }
       const id = data?.conversationId ?? data?.eventId;
       const href =
-        item.notification_type === "friend_request" ? "/messages/friend-requests"
+        item.notification_type === "recurrence_due" ? "/me/recurring"
+          : item.notification_type === "friend_request" ? "/messages/friend-requests"
           : item.notification_type === "friend_accepted" ? "/me/friends"
           : item.notification_type === "contact_request" ? "/messages/requests"
           : typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)
@@ -440,7 +441,7 @@ export function createMemberPages(ui) {
     const pending = hosted.reduce((total, item) => total + item.pending_count, 0);
     content.append(
       actionLink("发起活动", "/activities/new", "button primary"),
-      node("p", `${hosted.length} 场活动 · ${pending} 条报名待审核`, "meta"),
+      node("p", `${hosted.length} 场活动 · ${pending} 条加入申请待确认`, "meta"),
     );
     addList(
       content,
@@ -454,7 +455,7 @@ export function createMemberPages(ui) {
           ),
           node(
             "p",
-            `${time(item.starts_at)} · ${item.approved_count} 人已确认 · ${item.pending_count} 条待审核`,
+            `${time(item.starts_at)} · ${item.approved_count} 人已确认 · ${item.pending_count} 条待确认`,
             "meta",
           ),
           actionLink("复办", "/activities/new?copy=" + item.id),
