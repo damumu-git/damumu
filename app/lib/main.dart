@@ -2035,13 +2035,20 @@ class _MemberLevelBadge extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        child: Text(
-          context.tr('memberLevel$rank'),
-          style: TextStyle(
-            color: foregrounds[rank - 1],
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MemberMedal(rank: rank, size: 16),
+            const SizedBox(width: 3),
+            Text(
+              context.tr('memberLevel$rank'),
+              style: TextStyle(
+                color: foregrounds[rank - 1],
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
       ),
     );

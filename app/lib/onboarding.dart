@@ -203,7 +203,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 child: Row(
                   children: [
                     Image.asset(
-                      'assets/branding/logo.png',
+                      'assets/damumu-brand/damumu-mark.webp',
                       width: 36,
                       height: 36,
                     ),

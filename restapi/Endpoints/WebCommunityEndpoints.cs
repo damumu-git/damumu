@@ -4,6 +4,7 @@ namespace Muda.Api.Endpoints;
 
 public static class WebCommunityEndpoints
 {
+    private const int MaximumGroupCapacity = 50;
     private const string PublicEvent = """
         e.visibility='public' AND e.deleted_at IS NULL AND e.status IN ('published','full','completed')
         """;
@@ -94,11 +95,12 @@ public static class WebCommunityEndpoints
 
         api.MapGet("/web/groups", async (Db db, CancellationToken ct) =>
             ApiSupport.Ok(await db.QueryAsync("""
-                SELECT g.id,g.owner_id,g.title,g.description,g.capacity,g.min_age,g.max_age,g.join_mode,
+                SELECT g.id,g.owner_id,g.title,g.description,COALESCE(g.capacity,50) AS capacity,g.min_age,g.max_age,g.join_mode,
                     member_level(g.owner_id) AS owner_level,
                     (SELECT name_zh_cn FROM administrative_region WHERE code=g.region_code) AS region_name,
                     ARRAY(SELECT name_zh_cn::text FROM category WHERE id=ANY(g.category_ids) ORDER BY sort_order) AS categories,
                     COALESCE((SELECT code FROM category WHERE id=g.cover_category_id), 'other') AS cover_category_code,
+                    (SELECT cover_image_url FROM category WHERE id=g.cover_category_id) AS category_cover_url,
                     CASE WHEN g.cover_storage_key IS NOT NULL THEN '/uploads/'||g.cover_storage_key END AS cover_url,(SELECT count(*) FROM web_group_member WHERE group_id=g.id) AS member_count
                 FROM web_group g JOIN app_user owner ON owner.id=g.owner_id AND owner.status='active' AND owner.deleted_at IS NULL
                 ORDER BY g.created_at DESC,g.id LIMIT 100
@@ -110,7 +112,9 @@ public static class WebCommunityEndpoints
             await MemberPrivileges.RequireCommunityCreatorAsync(db, ownerId, ct);
             var (title, description) = Validate(input.Title, input.Description);
             var categoryIds = input.CategoryIds?.Distinct().ToArray() ?? [];
-            if (input.Capacity is < 2 or > 500 || input.MinAge is < 14 or > 120 ||
+            if (input.Capacity is < 2 or > MaximumGroupCapacity)
+                throw new ApiException(400, "group_capacity_invalid", "小组人数上限须为 2 至 50 人（含组主）。");
+            if (input.MinAge is < 14 or > 120 ||
                 input.MaxAge is < 14 or > 120 || input.MinAge > input.MaxAge ||
                 input.JoinMode is not (null or "open" or "approval") || categoryIds.Length > 12)
                 throw new ApiException(400, "group_settings_invalid", "请检查人数、年龄范围及加入方式。");
@@ -133,7 +137,7 @@ public static class WebCommunityEndpoints
                     INSERT INTO conversation(conversation_type,group_id,title) SELECT 'group',id,@title FROM created RETURNING id
                 )
                 INSERT INTO conversation_member(conversation_id,user_id) SELECT id,@ownerId FROM chat
-                """, new { id, ownerId, title, description, input.Capacity, input.MinAge, input.MaxAge,
+                """, new { id, ownerId, title, description, capacity = input.Capacity ?? MaximumGroupCapacity, input.MinAge, input.MaxAge,
                     joinMode = input.JoinMode ?? "open", categoryIds, input.CoverCategoryId, input.RegionCode }, ct);
             return ApiSupport.Ok(new { id });
         });
@@ -142,11 +146,12 @@ public static class WebCommunityEndpoints
         {
             var viewer = ApiSupport.GetOptionalUserId(context);
             var item = await db.QueryOneAsync("""
-                SELECT g.id,g.owner_id,g.title,g.description,g.capacity,g.min_age,g.max_age,g.join_mode,
+                SELECT g.id,g.owner_id,g.title,g.description,COALESCE(g.capacity,50) AS capacity,g.min_age,g.max_age,g.join_mode,
                     member_level(g.owner_id) AS owner_level,
                     (SELECT name_zh_cn FROM administrative_region WHERE code=g.region_code) AS region_name,
                     ARRAY(SELECT name_zh_cn::text FROM category WHERE id=ANY(g.category_ids) ORDER BY sort_order) AS categories,
                     COALESCE((SELECT code FROM category WHERE id=g.cover_category_id), 'other') AS cover_category_code,
+                    (SELECT cover_image_url FROM category WHERE id=g.cover_category_id) AS category_cover_url,
                     CASE WHEN g.cover_storage_key IS NOT NULL THEN '/uploads/'||g.cover_storage_key END AS cover_url,
                     EXISTS(SELECT 1 FROM web_group_application WHERE group_id=g.id AND user_id=@viewer) AS pending,
                     (SELECT id FROM conversation WHERE group_id=g.id AND EXISTS (
@@ -394,7 +399,8 @@ public static class WebCommunityEndpoints
 
     private static async Task AddGroupMember(Db db, Dictionary<string,object?> group, Guid id, Guid userId, CancellationToken ct)
     {
-        if (group["capacity"] is int capacity && await db.ScalarAsync<int>(
+        var capacity = group["capacity"] as int? ?? MaximumGroupCapacity;
+        if (await db.ScalarAsync<int>(
                 "SELECT count(*) FROM web_group_member WHERE group_id=@id",new { id },ct) >= capacity)
             throw new ApiException(409,"group_full","小组人数已满。");
         await db.ExecuteAsync("""

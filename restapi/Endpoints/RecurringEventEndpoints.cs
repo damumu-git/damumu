@@ -49,7 +49,7 @@ public static class RecurringEventEndpoints
         if (count is < 2 or > 12)
             throw new ApiException(400, "recurrence_invalid", "计划须包含2至12场，请调整场数或截至日期");
         if (await db.ScalarAsync<int>("SELECT member_level(@userId)", new { userId }, ct) == 3 && count > 4)
-            throw new ApiException(400, "recurrence_level_limit", "信赖搭主的每个定期计划最多安排4期。");
+            throw new ApiException(400, "recurrence_level_limit", "优搭主的每个定期计划最多安排4期。");
         var last = Occurrence(request.StartsAt, request.RepeatFrequency, count-1);
         if (request.StartsAt <= DateTime.UtcNow || last is null ||
             last > request.StartsAt.AddHours(9).AddMonths(6).AddHours(-9))

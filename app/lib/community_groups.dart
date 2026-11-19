@@ -11,6 +11,7 @@ import 'activity_series.dart';
 import 'auth.dart';
 import 'event_cover_image.dart';
 import 'l10n.dart';
+import 'member_level_guide.dart';
 
 const _api = String.fromEnvironment(
   'API_BASE_URL',
@@ -406,7 +407,14 @@ Widget _heading(BuildContext context, String key) => Padding(
 
 Widget? _levelText(BuildContext context, Object? value) {
   if (value is! int || value < 1 || value > 4) return null;
-  return Text(context.tr('memberLevel$value'));
+  return Wrap(
+    crossAxisAlignment: WrapCrossAlignment.center,
+    spacing: 4,
+    children: [
+      MemberMedal(rank: value, size: 16),
+      Text(context.tr('memberLevel$value')),
+    ],
+  );
 }
 
 class _GroupSummary extends StatelessWidget {
@@ -430,28 +438,12 @@ class _GroupSummary extends StatelessWidget {
         : '';
     final categories =
         (item['categories'] as List?)?.whereType<String>() ?? const <String>[];
-    final photo = item['cover_url'] as String?;
-    final kind = item['cover_category_code'] as String? ?? 'other';
-    Widget asset() => Image.asset(
-      'assets/activity-covers/$kind.webp',
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => const ColoredBox(
-        color: Color(0xffe9edff),
-        child: Center(child: Icon(Icons.groups_outlined, size: 44)),
-      ),
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AspectRatio(
-          aspectRatio: 16 / 8,
-          child: photo == null
-              ? asset()
-              : Image.network(
-                  Uri.parse(_api).resolve(photo).toString(),
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => asset(),
-                ),
+        _GroupCover(
+          kind: item['cover_category_code'] as String?,
+          url: (item['cover_url'] ?? item['category_cover_url']) as String?,
         ),
         Padding(
           padding: const EdgeInsets.all(13),
@@ -505,6 +497,44 @@ class _GroupSummary extends StatelessWidget {
   }
 }
 
+class _GroupCover extends StatelessWidget {
+  const _GroupCover({this.kind, this.url, this.bytes});
+
+  final String? kind;
+  final String? url;
+  final Uint8List? bytes;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget fallback() => Image.asset(
+      'assets/activity-covers/${kind ?? 'other'}.webp',
+      fit: BoxFit.cover,
+      excludeFromSemantics: true,
+      errorBuilder: (_, _, _) => const ColoredBox(
+        color: Color(0xffe9edff),
+        child: Center(child: Icon(Icons.groups_outlined, size: 44)),
+      ),
+    );
+    return AspectRatio(
+      aspectRatio: 16 / 8,
+      child: switch ((bytes, url)) {
+        (final Uint8List image, _) => Image.memory(
+          image,
+          fit: BoxFit.cover,
+          excludeFromSemantics: true,
+        ),
+        (_, final String photo) => Image.network(
+          Uri.parse(_api).resolve(photo).toString(),
+          fit: BoxFit.cover,
+          excludeFromSemantics: true,
+          errorBuilder: (_, _, _) => fallback(),
+        ),
+        _ => fallback(),
+      },
+    );
+  }
+}
+
 class _GroupEditor extends StatefulWidget {
   const _GroupEditor({required this.token});
   final String token;
@@ -517,7 +547,7 @@ class _GroupEditorState extends State<_GroupEditor> {
   final _form = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _description = TextEditingController();
-  final _capacity = TextEditingController();
+  final _capacity = TextEditingController(text: '50');
   final _min = TextEditingController();
   final _max = TextEditingController();
   final Set<String> _selected = {};
@@ -566,6 +596,9 @@ class _GroupEditorState extends State<_GroupEditor> {
           return const Center(child: CircularProgressIndicator());
         final categories = ActivitySeriesService.rows(snapshot.data![0])
             .where((item) => item['level'] == 1);
+        final coverCategory = categories
+            .where((item) => item['id'] == _coverType)
+            .firstOrNull;
         final regions = ActivitySeriesService.rows(snapshot.data![1])
             .where((item) => item['level'] == 1);
         return Form(
@@ -642,24 +675,60 @@ class _GroupEditorState extends State<_GroupEditor> {
                 onChanged: (id) =>
                     setState(() => _coverType = id == '' ? null : id),
               ),
-              if (_image != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Image.memory(_image!, height: 100, fit: BoxFit.cover),
+              const SizedBox(height: 12),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Semantics(
+                      image: true,
+                      label: context.tr('groupCoverPreview'),
+                      child: _GroupCover(
+                        bytes: _image,
+                        kind: coverCategory?['code'] as String?,
+                        url: coverCategory?['cover_image_url'] as String?,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        children: [
+                          FilledButton.tonalIcon(
+                            onPressed: _saving ? null : _pickCover,
+                            icon: const Icon(
+                              Icons.add_photo_alternate_outlined,
+                            ),
+                            label: Text(
+                              context.tr(
+                                _image == null
+                                    ? 'groupUploadCover'
+                                    : 'groupReplaceCover',
+                              ),
+                            ),
+                          ),
+                          if (_image != null)
+                            TextButton(
+                              onPressed: _saving
+                                  ? null
+                                  : () => setState(() => _image = null),
+                              child: Text(context.tr('groupClearCover')),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              OutlinedButton.icon(
-                onPressed: _saving ? null : _pickCover,
-                icon: const Icon(Icons.image_outlined),
-                label: Text(context.tr('groupUploadCover')),
               ),
-              if (_image != null)
-                TextButton(
-                  onPressed: _saving
-                      ? null
-                      : () => setState(() => _image = null),
-                  child: Text(context.tr('groupClearCover')),
-                ),
-              _field(_capacity, 'groupCapacity', min: 2, max: 500),
+              _field(
+                _capacity,
+                'groupCapacity',
+                min: 2,
+                max: 50,
+                required: true,
+              ),
               _field(_min, 'groupMinAge', min: 14, max: 120),
               _field(_max, 'groupMaxAge', min: 14, max: 120),
               SwitchListTile(
@@ -708,7 +777,9 @@ class _GroupEditorState extends State<_GroupEditor> {
       decoration: InputDecoration(labelText: context.tr(label)),
       validator: (value) {
         final text = value?.trim() ?? '';
-        if (required && text.length < 2) return context.tr('groupInvalidField');
+        if (required && (text.isEmpty || (min == null && text.length < 2))) {
+          return context.tr('groupInvalidField');
+        }
         if (min != null && text.isNotEmpty) {
           final number = int.tryParse(text);
           if (number == null || number < min || number > max!)

@@ -127,6 +127,7 @@ export function createCommunityPages(ui) {
       form.innerHTML =
         '<label>标题<input name="title" minlength="2" maxlength="100" required></label><label>介绍<textarea name="description" minlength="2" maxlength="1000" required></textarea></label><button type="submit" class="button primary">发布</button>';
       let pendingGroup;
+      let coverUpload = Promise.resolve(null);
       try {
         const regions = await request("/regions");
         const field = node("label", intent ? "市／道" : "市／道（选填）");
@@ -164,18 +165,84 @@ export function createCommunityPages(ui) {
           updateCoverOptions();
           const coverField = node("label", "系统分类封面");
           coverField.append(coverSelect);
+          const coverPicker = node("section", null, "group-cover-picker");
+          const preview = node("div", null, "group-cover-preview");
+          const file = node("input", null, "sr-only");
+          file.type = "file";
+          file.accept = "image/jpeg,image/png,image/webp";
+          file.hidden = true;
+          const status = node("p", null, "meta group-cover-status");
+          status.setAttribute("role", "status");
+          const choose = button("上传封面", () => file.click(), "button primary");
+          const icon = node("span", null, "cover-camera");
+          icon.setAttribute("aria-hidden", "true");
+          const chooseText = node("span", "上传封面");
+          choose.replaceChildren(icon, chooseText);
+          const clear = button("使用系统封面", () => {
+            file.value = "";
+            coverUpload = Promise.resolve(null);
+            updateCover();
+          }, "button");
+          const actions = node("div", null, "group-cover-actions");
+          actions.append(choose, clear);
+          const pickerControls = node("div", null, "group-cover-controls");
+          pickerControls.append(coverField, actions, status, file);
+          coverPicker.append(preview, pickerControls);
+
+          function updateCover() {
+            const category = categories.find((item) => item.id === coverSelect.value);
+            const image = cover({
+              cover_category_code: category?.code,
+              category_cover_url: category?.cover_image_url,
+            });
+            image.alt = "小组封面预览";
+            preview.replaceChildren(image);
+            const task = coverUpload;
+            clear.hidden = !file.files.length;
+            chooseText.textContent = file.files.length ? "更换图片" : "上传封面";
+            status.textContent = file.files.length ? "正在准备预览…" : "支持 JPG、PNG、WebP";
+            task.then((upload) => {
+              if (coverUpload !== task || !upload) return;
+              const source = URL.createObjectURL(upload.get("cover"));
+              const selected = node("img");
+              selected.alt = image.alt;
+              selected.addEventListener("load", () => {
+                URL.revokeObjectURL(source);
+                if (coverUpload !== task) return;
+                preview.replaceChildren(selected);
+                status.textContent = file.files[0]?.name || "";
+              }, { once: true });
+              selected.addEventListener("error", () => {
+                URL.revokeObjectURL(source);
+                if (coverUpload === task) status.textContent = "无法显示预览，请重新选择图片。";
+              }, { once: true });
+              selected.src = source;
+            }).catch((error) => {
+              if (coverUpload !== task) return;
+              file.value = "";
+              coverUpload = Promise.resolve(null);
+              updateCover();
+              status.textContent = error.message || "无法读取图片，请重新选择。";
+            });
+          }
+          file.addEventListener("change", () => {
+            coverUpload = prepareCover(file.files[0]);
+            updateCover();
+          });
+          coverSelect.addEventListener("change", updateCover);
+          fieldset.addEventListener("change", updateCover);
+          updateCover();
           const config = node("div", null, "form group-settings");
           config.innerHTML = `
-            <label>上传封面（可选，优先使用）<input type="file" name="cover" accept="image/jpeg,image/png,image/webp"></label>
             <div class="form-row">
-              <label>人数上限（含组主）<input type="number" name="capacity" min="2" max="500"></label>
+              <label>人数上限（含组主）<input type="number" name="capacity" min="2" max="50" value="50" required></label>
               <label>加入方式<select name="joinMode"><option value="open">自由加入</option><option value="approval">组主确认后加入</option></select></label>
             </div>
             <div class="form-row">
-              <label>建议最低年龄（选填）<input type="number" name="minAge" min="14" max="120"></label>
-              <label>建议最高年龄（选填）<input type="number" name="maxAge" min="14" max="120"></label>
+              <label>最低年龄（选填）<input type="number" name="minAge" min="14" max="120"></label>
+              <label>最高年龄（选填）<input type="number" name="maxAge" min="14" max="120"></label>
             </div>`;
-          form.lastElementChild.before(fieldset, coverField, config);
+          form.lastElementChild.before(fieldset, coverPicker, config);
         }
       } catch (error) {
         showError(content, error);
@@ -188,7 +255,7 @@ export function createCommunityPages(ui) {
           location.assign("/interests/" + created.id);
           return;
         }
-        const image = await prepareCover(values.cover);
+        const image = await coverUpload;
         if (!pendingGroup) {
           pendingGroup = await request("/web/groups", {
             auth: true,

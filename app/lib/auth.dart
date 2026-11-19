@@ -678,7 +678,7 @@ class _AuthPageState extends State<AuthPage> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: Image.asset(
-                        'assets/branding/logo.png',
+                        'assets/damumu-brand/damumu-mark.webp',
                         width: 64,
                         height: 64,
                         excludeFromSemantics: true,

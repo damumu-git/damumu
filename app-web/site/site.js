@@ -261,16 +261,28 @@ function renderAvatar(container, user) {
   }
 }
 const memberLevels = [
-  { name: "萌新搭", condition: "注册后自动获得。", open: 2, recent: 4 },
-  { name: "搭主", condition: "成功组织至少 3 场活动。", open: 3, recent: 6 },
-  { name: "信赖搭主", condition: "达到高信誉条件，或通过韩国本人确认。", open: 5, recent: 10, recurring: 4 },
-  { name: "认证搭主", condition: "同时达到高信誉条件并通过韩国本人确认。", open: 10, recent: 30, recurring: 12 },
+  { name: "萌新搭", condition: "注册即获得", open: 2, recent: 4 },
+  { name: "小搭主", condition: "成功组织 ≥3 场", open: 3, recent: 6 },
+  { name: "优搭主", condition: "成功组织 ≥10 场且活动获赞 >50，或通过本人确认", open: 5, recent: 10, recurring: 4 },
+  { name: "金牌搭主", condition: "成功组织 ≥10 场、活动获赞 >50，并通过本人确认", open: 10, recent: 30, recurring: 12 },
 ];
+
+const brandAssets = "/assets/damumu-brand/";
+
+function memberMedal(rank) {
+  const image = node("img", null, "member-medal");
+  image.src = brandAssets + "level-" + rank + ".webp";
+  image.alt = "";
+  return image;
+}
 
 function memberBadge(level) {
   const rank = Number(level);
   const item = memberLevels[rank - 1];
-  return item ? node("span", item.name, "member-badge member-level-" + rank) : "";
+  if (!item) return "";
+  const badge = node("span", null, "member-badge member-level-" + rank);
+  badge.append(memberMedal(rank), node("span", item.name));
+  return badge;
 }
 
 function profileMemberLevel(level) {
@@ -283,25 +295,46 @@ function profileMemberLevel(level) {
 
 function showMemberLevelGuide(profileLevel) {
   const content = show("等级说明", "", true);
-  const levels = node("ol", null, "member-guide-levels");
-  memberLevels.forEach((item, index) => {
+  const brand = node("img", null, "member-guide-brand");
+  brand.src = brandAssets + "damumu-mark.webp";
+  brand.alt = "DAMUMU";
+  content.querySelector("h2").prepend(brand);
+  const steps = node("div", null, "member-guide-steps");
+  steps.setAttribute("role", "group");
+  steps.setAttribute("aria-label", "查看各等级");
+  const detail = node("section", null, "member-guide-detail");
+  detail.setAttribute("aria-live", "polite");
+  const controls = memberLevels.map((item, index) => {
     const rank = index + 1;
-    const entry = node("li", null, "member-guide-level");
-    const title = node("h3", rank + "级 · " + item.name);
-    if (rank === profileLevel) title.append(node("span", "资料等级", "member-guide-current"));
-    entry.append(title, node("p", item.condition));
-    entry.append(node("p", `同时开放 ${item.open} 场 · 最近 30 天内最多发布 ${item.recent} 场`, "member-guide-quota"));
-    if (item.recurring)
-      entry.append(node("p", `可创建活动系列、小组和定期活动。每个定期计划最多安排 ${item.recurring} 场。`));
-    levels.append(entry);
+    const control = button("", () => select(rank), "member-guide-step member-guide-step-" + rank);
+    const crest = node("span", null, "member-guide-tread");
+    crest.append(memberMedal(rank), node("span", "Lv" + rank));
+    control.append(crest, node("span", item.name, "member-step-label"));
+    if (rank === profileLevel) control.setAttribute("aria-current", "step");
+    steps.append(control);
+    return control;
   });
+  function select(rank) {
+    controls.forEach((control, index) => control.setAttribute("aria-pressed", String(index + 1 === rank)));
+    const item = memberLevels[rank - 1];
+    const title = node("h3", item.name);
+    if (rank === profileLevel) title.append(node("span", "资料等级", "member-guide-current"));
+    const quotas = node("div", null, "member-guide-numbers");
+    for (const [amount, label] of [[item.open, "同时开放 · 场"], [item.recent, "每 30 天发布 · 场"]]) {
+      const quota = node("div");
+      quota.append(node("strong", amount), node("span", label));
+      quotas.append(quota);
+    }
+    detail.replaceChildren(title, node("p", item.condition), quotas);
+    if (item.recurring)
+      detail.append(node("p", "可创建系列、小组及定期活动 · 每计划最多 " + item.recurring + " 场", "meta"));
+  }
+  select(memberLevels[profileLevel - 1] ? profileLevel : 1);
   content.append(
-    levels,
-    node("h3", "升级怎么计算"),
-    node("p", "成功组织的活动须已结束，且至少有一名参与者（组织者以外）已签到。"),
-    node("p", "高信誉需要成功组织至少 10 场，且这些活动合计获得至少 51 个赞。"),
-    node("p", "取消活动会释放同时开放的名额，该场仍计入最近 30 天的发布配额。"),
-    node("p", "韩国本人确认暂未开放。你仍可以凭活动信誉升为信赖搭主。", "member-guide-note"),
+    steps,
+    detail,
+    node("p", "成功组织 · 活动已结束，至少一名非组织者签到。", "meta member-guide-footnote"),
+    node("p", "韩国本人确认暂未开放。", "member-guide-note"),
   );
 }
 
@@ -2098,7 +2131,7 @@ function showDownload() {
   const content = show("下载搭木木 App", "reading download-page");
   const card = node("section", null, "download-card");
   const logo = node("img", null, "download-logo");
-  logo.src = "/assets/logo.png";
+  logo.src = brandAssets + "damumu-mark.webp";
   logo.alt = "";
   const copy = node("div");
   const available = appStoreLinks.filter(({ url }) => url);

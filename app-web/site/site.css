@@ -2242,21 +2242,6 @@ dialog.avatar-crop-dialog {
   text-decoration: underline;
   text-underline-offset: 0.16em;
 }
-.member-guide-levels {
-  list-style: none;
-  padding: 0;
-  display: grid;
-  gap: 0.65rem;
-  margin: 0.9rem 0 1.3rem;
-}
-.member-guide-level {
-  border: 1px solid var(--line);
-  border-radius: 0.85rem;
-  padding: 0.8rem 1rem;
-}
-.member-guide-level h3,
-.member-guide-level p { margin: 0 0 0.3rem; }
-.member-guide-level p:last-child { margin-bottom: 0; }
 .member-guide-current {
   display: inline-block;
   margin-inline-start: 0.55rem;
@@ -2267,7 +2252,6 @@ dialog.avatar-crop-dialog {
   font-size: 0.75rem;
   font-weight: 700;
 }
-.member-guide-quota { font-weight: 700; }
 .member-guide-note {
   margin-bottom: 0;
   padding: 0.7rem 0.9rem;
@@ -2275,3 +2259,113 @@ dialog.avatar-crop-dialog {
   background: #eef0ff;
   color: #253567;
 }
+
+.group-cover-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem 1.3rem;
+  padding: clamp(0.8rem, 3vw, 1.25rem);
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: #f6f8ff;
+}
+.group-cover-preview {
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: #e7ecf8;
+  aspect-ratio: 16 / 9;
+}
+.group-cover-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.group-cover-controls { display: grid; gap: 0.7rem; min-width: 0; }
+.group-cover-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.group-cover-actions button { display: inline-flex; align-items: center; gap: 0.45rem; }
+.group-cover-actions button[hidden] { display: none; }
+.group-cover-status { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 680px) {
+  .group-cover-picker { grid-template-columns: 1fr; }
+}
+
+.member-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+  max-width: 100%;
+}
+.member-badge .member-medal {
+  width: 1.15rem;
+  height: 1.15rem;
+  object-fit: contain;
+}
+.member-guide-brand {
+  width: 2.25rem;
+  height: 2.25rem;
+  vertical-align: middle;
+  margin-inline-end: 0.5rem;
+}
+.member-guide-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: clamp(0.2rem, 1.25vw, 0.75rem);
+  margin: 1rem 0;
+}
+.member-guide-step {
+  display: grid;
+  width: 100%;
+  gap: 0.3rem;
+  justify-items: stretch;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  text-align: center;
+  line-height: 1.25;
+  font: inherit;
+}
+.member-guide-tread {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: end;
+  gap: 0.13rem;
+  min-height: var(--step-height, 4.65rem);
+  padding-bottom: 0.35rem;
+  border: 1px solid var(--step-border, #bfd8fa);
+  border-radius: 0.8rem 0.8rem 0.28rem 0.28rem;
+  background: linear-gradient(180deg, #fff, var(--step-fill, #e5f1ff));
+  color: #354365;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.member-guide-tread .member-medal {
+  width: clamp(2.25rem, 10vw, 3.65rem);
+  height: clamp(2.25rem, 10vw, 3.65rem);
+  object-fit: contain;
+}
+.member-guide-step-2 { --step-height: 5.45rem; --step-fill: #d9f2eb; --step-border: #a5d8c9; }
+.member-guide-step-3 { --step-height: 6.25rem; --step-fill: #eae7ff; --step-border: #c7bef5; }
+.member-guide-step-4 { --step-height: 7.05rem; --step-fill: #fff0cf; --step-border: #efd085; }
+.member-guide-step[aria-pressed="true"] .member-guide-tread {
+  border-color: #3759b6;
+  box-shadow: inset 0 0 0 1px #3759b6;
+}
+.member-step-label { font-size: clamp(0.72rem, 2.7vw, 0.94rem); font-weight: 700; }
+.member-guide-detail {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: #f8faff;
+}
+.member-guide-detail h3, .member-guide-detail p { margin: 0 0 0.5rem; }
+.member-guide-detail p:last-child { margin-bottom: 0; }
+.member-guide-numbers { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.65rem 0; }
+.member-guide-numbers div { display: grid; gap: 0.12rem; }
+.member-guide-numbers strong { color: #273e89; font-size: 1.4rem; }
+.member-guide-numbers span { font-size: 0.8rem; }
+.member-guide-footnote { margin: 0.7rem 0; }

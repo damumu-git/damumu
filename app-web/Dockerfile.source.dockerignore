@@ -10,9 +10,9 @@
 !admin/public/licenses/fonts/
 !admin/public/licenses/fonts/*.txt
 !app/
-!app/web/
-!app/web/logo.png
 !app/assets/
+!app/assets/damumu-brand/
+!app/assets/damumu-brand/*.webp
 !app/assets/fonts/
 !app/assets/fonts/ResourceHanRounded-LICENSE.txt
 !app/assets/activity-covers/

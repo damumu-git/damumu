@@ -38,6 +38,7 @@ flutter:
   assets:
     - assets/auth/google-g.png
     - assets/branding/logo.png
+    - assets/damumu-brand/
     - assets/activity-covers/
     - assets/activity-covers/sub/
     - assets/fonts/ResourceHanRounded-LICENSE.txt

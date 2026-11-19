@@ -158,6 +158,15 @@ internal static class ScheduleChecks
             Check((await Send(second, "/api/v1/events", Request("Ordinary repeating fixture", start, repeat: "weekly", count: 2))).StatusCode
                   == HttpStatusCode.Forbidden, "Ordinary member created recurring activities");
 
+            var oversizedGroup = await Send(owner, "/api/v1/web/groups",
+                new { title = "Oversized group", description = "Fixture group", capacity = 51 });
+            Check(oversizedGroup.StatusCode == HttpStatusCode.BadRequest, "A group accepted capacity above 50");
+            var defaultGroup = (await Data(await Send(owner, "/api/v1/web/groups",
+                new { title = "Default capacity", description = "Fixture group" }))).GetProperty("id").GetGuid();
+            var defaultGroupDetails = await Data(await Get(owner, $"/api/v1/web/groups/{defaultGroup}"));
+            Check(defaultGroupDetails.GetProperty("item").GetProperty("capacity").GetInt32() == 50,
+                "Older clients omitting capacity did not receive the 50-person default");
+
             var groupInput = new { title = "Integration group", description = "Fixture group", joinMode = "approval", capacity = 2 };
             Check((await Send(member, "/api/v1/web/groups", groupInput)).StatusCode == HttpStatusCode.Forbidden,
                 "Ordinary member created a group");
