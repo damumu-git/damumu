@@ -2,17 +2,17 @@
 
 ## 当前交接（2026-11-20，韩国时间）
 
-多代理开发环境已在 `feature/context-agent-workflow` 实现，基于尚未合并的安全升级提交 `8afec63`，未部署。新增六种专业角色、Coordinator/Worker 协议、24 KB 上限任务包、规范化文档指纹、依赖记录、独立 Git worktree、任务互斥锁和提交前后文件范围检查。Python 标准库工具提供 doctor/new/packet/worktree/check/status；使用方法见 [韩文开发说明](development/MULTI_AGENT.md)。它不自动调用模型或执行服务器操作。正式文档和最终集成由 Coordinator 负责。
+多代理开发环境与安全升级提交 `8afec63` 已一起合并至 main，尚未部署。新增六种专业角色、Coordinator/Worker 协议、24 KB 上限任务包、规范化文档指纹、依赖记录、独立 Git worktree、任务互斥锁和提交前后文件范围检查。Python 标准库工具提供 doctor/new/packet/worktree/check/status；使用方法见 [韩文开发说明](development/MULTI_AGENT.md)。它不自动调用模型或执行服务器操作。正式文档和最终集成由 Coordinator 负责。
 
 工具的 9 项临时 Git 集成测试全部通过，覆盖隔离、未完成契约拦截、已提交/未追踪范围越界、旧基准及过期上下文、只读角色、任务锁和 Windows junction 路径拦截。实际仓库的任务生成、独立 worktree 和范围检查也通过。独立只读代理已审查设计，发现的问题已修复。此机器旧 `codex-cli 0.114.0` 无法读取现有全局 `service_tier=default`，未修改全局配置；CLI 启动需另行适配版本，Python 工具和当前桌面代理能力独立可用。下一步按需选用工作流；本次无数据库迁移或服务器操作。
 
-安全升级已在 `feature/security-hardening` 完成，尚未合并或部署。安全会面、联系人及相关界面/API 已退役。迁移 `045_security_sessions.sql` 新增可撤销登录、独立管理员和限流记录，并删除退役功能的数据及开关。生产数据库仍为 044，不能将本地测试结果视为线上已升级。
+安全升级已合并至 main，尚未部署。安全会面、联系人及相关界面/API 已退役。迁移 `045_security_sessions.sql` 新增可撤销登录、独立管理员和限流记录，并删除退役功能的数据及开关。生产数据库仍为 044，不能将本地测试结果视为线上已升级。
 
 认证改为网站 HttpOnly Cookie、App 15 分钟访问凭据与轮换刷新凭据（固定 30 天）、管理员密码与 TOTP 双重验证。补齐登录管理、角色权限、名单与私密媒体访问控制、WebSocket 会话复核、应用及代理限流、安全响应头、持久密钥与容器权限限制。原静态 Admin Key 已退出认证，已更新后台依赖。
 
 验证结果：隔离 PostgreSQL 从全量迁移到 045 并重复执行 045 成功，生产模式 API 安全集成测试全部通过（包含刷新重用撤销、Cookie/CSRF、跨账号撤销、管理员权限与验证码防重放、私密图片路径绕过、账号/IP 限流和封禁后 WebSocket 失效）。网页版 Chromium 1440/390 像素登录恢复及退出、Admin 验证码登录通过；Flutter 30 项相关测试通过，针对性分析仅余两条已有 info；Admin lint、构建及 npm audit 通过（0 漏洞）。API 构建通过，NuGet 漏洞元数据查询因网络不可达出现 NU1900，不能据此认定 .NET 依赖无漏洞。Nginx 配置、Compose 和部署脚本检查通过。
 
-下一步合并后按 [安全发布步骤](../deploy/SECURITY.md) 准备媒体权限和持久密钥目录、轮换已暴露凭据、备份并执行迁移 045、创建管理员和验证器，再协调 API/Web/Admin 与新版 App 发布。旧登录将失效。Android/iOS 安装包、真机安全存储和真实 Google/Kakao 登录仍需验收；云端流量防护、外部告警及备份演练需服务器侧配置，本次未更改生产服务器。
+发布前按 [安全发布步骤](../deploy/SECURITY.md) 准备媒体权限和持久密钥目录、轮换已暴露凭据、备份并执行迁移 045、创建管理员和验证器，再协调 API/Web/Admin 与新版 App 发布。旧登录将失效。Android/iOS 安装包、真机安全存储和真实 Google/Kakao 登录仍需验收；云端流量防护、外部告警及备份演练需服务器侧配置，本次未更改生产服务器。
 
 | 项目 | 当前状态 |
 | --- | --- |
