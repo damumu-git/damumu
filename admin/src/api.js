@@ -1,5 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080/api/v1'
-const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY ?? 'muda-admin-local'
+const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
 
 export function mediaUrl(value) {
   if (!value) return ''
@@ -10,10 +9,11 @@ export function mediaUrl(value) {
 async function request(path, options = {}) {
   const isForm = options.body instanceof FormData
   const response = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
     ...options,
     headers: {
       ...(isForm ? {} : { 'Content-Type': 'application/json' }),
-      'X-Admin-Key': ADMIN_KEY,
+      'X-Damu-CSRF': '1',
       ...options.headers,
     },
   })
@@ -21,6 +21,8 @@ async function request(path, options = {}) {
   if (response.status === 204) return null
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
+    if (response.status === 401 && !path.startsWith('/admin-auth/'))
+      window.dispatchEvent(new Event('admin-session-expired'))
     throw new Error(payload?.error?.message ?? `请求失败 (${response.status})`)
   }
   return payload
@@ -36,6 +38,9 @@ function params(values) {
 }
 
 export const api = {
+  adminSession: () => request('/admin-auth/session'),
+  adminLogin: (body) => request('/admin-auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  adminLogout: () => request('/admin-auth/logout', { method: 'POST' }),
   seriesProposals: () => request('/admin/activity-series/proposals'),
   seriesEditor: () => request('/admin/activity-series/official-editor'),
   saveSeriesEditor: (body) => request('/admin/activity-series/official-editor', { method: 'PUT', body: JSON.stringify(body) }),
@@ -62,7 +67,8 @@ export const api = {
     request(`/admin/messages/${id}/moderation`, { method: 'PATCH', body: JSON.stringify(body) }),
   messageMedia: async (id, signal) => {
     const response = await fetch(`${API_BASE}/admin/messages/${id}/media`, {
-      headers: { 'X-Admin-Key': ADMIN_KEY }, signal,
+      credentials: 'include',
+      headers: { 'X-Damu-CSRF': '1' }, signal,
     })
     if (!response.ok) throw new Error('消息附件暂时无法读取')
     return response.blob()
@@ -71,7 +77,8 @@ export const api = {
   pendingEventCovers: () => request('/admin/event-cover-review/count'),
   eventCover: async (id, signal) => {
     const response = await fetch(`${API_BASE}/admin/events/${id}/cover`, {
-      headers: { 'X-Admin-Key': ADMIN_KEY }, signal,
+      credentials: 'include',
+      headers: { 'X-Damu-CSRF': '1' }, signal,
     })
     if (!response.ok) throw new Error('活动图片暂时无法读取')
     return response.blob()
@@ -94,9 +101,6 @@ export const api = {
   report: (id) => request(`/admin/reports/${id}`),
   updateReport: (id, body) =>
     request(`/admin/reports/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  safetyAlerts: (filters = {}) => request(`/admin/safety-alerts${params(filters)}`),
-  updateSafetyAlert: (id, body) =>
-    request(`/admin/safety-alerts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   categories: () => request('/admin/categories'),
   saveCategoryCover: (id, body) =>
     request(`/admin/categories/${id}/cover`, { method: 'PUT', body }),

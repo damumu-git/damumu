@@ -38,19 +38,10 @@ let category = "",
 let dialogRequest = 0;
 
 function readSession() {
-  try {
-    const saved = JSON.parse(localStorage.getItem("damu-remembered-session"));
-    const current = JSON.parse(sessionStorage.getItem("damu-session"));
-    if (saved?.expiresAt > Date.now()) return saved;
-    localStorage.removeItem("damu-remembered-session");
-    if (current?.expiresAt && current.expiresAt <= Date.now()) {
-      sessionStorage.removeItem("damu-session");
-      return null;
-    }
-    return current ?? null;
-  } catch {
-    return null;
-  }
+  // Authentication is restored from the HttpOnly cookie, never browser storage.
+  sessionStorage.removeItem("damu-session");
+  localStorage.removeItem("damu-remembered-session");
+  return null;
 }
 let session = readSession();
 let unreadRequest;
@@ -58,12 +49,12 @@ let unreadRequest;
 function setSession(value) {
   const wasSignedIn = !messagesMenu.hidden;
   session = value;
-  if (value) sessionStorage.setItem("damu-session", JSON.stringify(value));
-  else {
+
+  if (!value) {
     sessionStorage.removeItem("damu-session");
     localStorage.removeItem("damu-remembered-session");
   }
-  if (value?.expiresAt) localStorage.setItem("damu-remembered-session", JSON.stringify(value));
+
   login.hidden = Boolean(value);
   myMenu.hidden = !value;
   messagesMenu.hidden = !value;
@@ -109,9 +100,10 @@ async function request(
   const isForm = data instanceof FormData;
   if (data !== undefined && !isForm)
     headers["Content-Type"] = "application/json";
-  if (auth && session?.accessToken)
-    headers.Authorization = "Bearer " + session.accessToken;
-  const response = await fetch((sameOrigin ? "" : apiRoot + "/api/v1") + path, {
+  headers["X-Damu-CSRF"] = "1";
+  if ((path.startsWith("/auth/") || path.startsWith(oauth + "/")) && data && !(data instanceof FormData))
+    data = { ...data, rememberMe: sessionStorage.getItem("damu-login-remember") === "true" };
+  const response = await fetch((sameOrigin ? "" : "/api/v1") + path, {
     headers,
     signal,
     method: method ?? (data === undefined ? "GET" : "POST"),
@@ -129,8 +121,7 @@ async function request(
   if (!response.ok || !payload || payload.error) {
     if (
       auth &&
-      response.status === 401 &&
-      headers.Authorization === "Bearer " + session?.accessToken
+      response.status === 401
     ) {
       setSession(null);
     }
@@ -142,9 +133,12 @@ async function request(
 }
 
 async function requestPrivateImage(path, signal) {
-  const response = await fetch(apiRoot + path, {
+  const url = new URL(path, apiRoot);
+  if (url.origin !== apiRoot || !url.pathname.startsWith("/uploads/messages/"))
+    throw new Error("图片地址无效");
+  const response = await fetch(url.pathname, {
     signal,
-    headers: session?.accessToken ? { Authorization: "Bearer " + session.accessToken } : {},
+
   });
   if (!response.ok) throw new Error("图片加载失败");
   return URL.createObjectURL(await response.blob());
@@ -621,10 +615,9 @@ function requireLogin(action) {
   else location.assign("/login?next=" + encodeURIComponent(currentPage()));
 }
 function finishLogin(result) {
-  const remember = sessionStorage.getItem("damu-login-remember") === "true";
   sessionStorage.removeItem("damu-login-remember");
   localStorage.removeItem("damu-remembered-session");
-  setSession(remember ? { ...result, expiresAt: Date.now() + 7 * 86400000 } : result);
+  setSession(result);
   const target =
     sessionStorage.getItem("damu-return") ??
     new URLSearchParams(location.search).get("next");
@@ -1841,7 +1834,8 @@ async function showSettings() {
     actionLink("我的好友", "/me/friends"),
     actionLink("我的收藏", "/me/saved"),
     actionLink("查看公开主页", "/people/" + user.id),
-    button("退出登录", () => {
+    button("退出登录", async () => {
+      await request("/auth/logout", { method: "POST", auth: true });
       setSession(null);
       location.assign("/");
     }),
@@ -2279,22 +2273,10 @@ async function route() {
     });
   const editor = /^\/organizer\/activities\/([0-9a-f-]{36})\/edit$/i.exec(path);
   if (editor) return requireLogin(() => showEdit(editor[1]));
-  if (path === "/help" || path === "/safety") {
-    const help = path === "/help";
-    const content = show(help ? "使用帮助" : "线下见面安全");
-    content.append(
-      node(
-        "p",
-        help
-          ? "可以先浏览活动，登录后报名、发起活动或查看消息。"
-          : "优先选择公开场所。集合点只向有权限的参与者显示。请提前核对时间、交通与预计花费。",
-        "detail-copy",
-      ),
-      actionLink(
-        help ? "查看见面安全" : "查看使用帮助",
-        help ? "/safety" : "/help",
-      ),
-    );
+  if (path === "/help") {
+    const content = show("使用帮助");
+    content.append(node("p", "可以先浏览活动，登录后报名、发起活动或查看消息。", "detail-copy"),
+      actionLink("社区规则", "/terms"));
     return;
   }
   if (path === "/terms") {
@@ -2487,4 +2469,6 @@ window.setInterval(() => {
   }
 }, 45_000);
 installSelectMenus();
-route();
+request("/me").then((user) => setSession({ user }))
+  .catch(() => setSession(null))
+  .finally(() => route());

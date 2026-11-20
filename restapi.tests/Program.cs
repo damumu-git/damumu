@@ -7,6 +7,11 @@ using Muda.Api.Infrastructure;
 CancellationChecks.ValidateReasons();
 FeedbackChecks.Validate();
 PrivacyChecks.ValidateRegistration();
+if (args.FirstOrDefault() == "--security-db")
+{
+    await SecurityChecks.RunAsync();
+    return;
+}
 if (args.FirstOrDefault() == "--schedule-db")
 {
     await ScheduleChecks.RunAsync();

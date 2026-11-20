@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:zaihandazi/session_transport.dart';
 import 'package:zaihandazi/auth.dart';
 import 'package:zaihandazi/login_preferences.dart';
 import 'package:zaihandazi/main.dart';
@@ -21,7 +23,11 @@ http.Response loginResponse() => http.Response(
 );
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() async {
+    FlutterSecureStorage.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({});
+    await SessionTransport.clear();
+  });
 
   test(
     'unchecked auto login keeps only in-memory session, survives foreground and not restart',
@@ -203,7 +209,10 @@ void main() {
       await tester.pump();
       expect(tester.testTextInput.isVisible, isFalse);
       expect(auth.user, isNull);
-      pendingLogin.complete(loginResponse());
+      await tester.runAsync(() async {
+        pendingLogin.complete(loginResponse());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      });
       await tester.pumpAndSettle();
       expect(auth.user?.id, 'u1');
       final prefs = await SharedPreferences.getInstance();

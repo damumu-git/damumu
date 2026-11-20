@@ -4,12 +4,13 @@ namespace Muda.Api.Endpoints;
 
 public static class RealtimeEndpoints
 {
+    private static readonly SemaphoreSlim SocketSlots = new(500);
     public static RouteGroupBuilder MapRealtimeEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/realtime", async (
             HttpContext context,
             RealtimeConnectionManager connections,
-            AuthService auth,
+            SessionSecurity sessions,
             CancellationToken ct) =>
         {
             if (!context.WebSockets.IsWebSocketRequest)
@@ -25,8 +26,17 @@ public static class RealtimeEndpoints
                 return;
             }
 
-            using var socket = await context.WebSockets.AcceptWebSocketAsync();
-            await connections.RunAsync(socket, auth, ct);
+            var origin = context.Request.Headers.Origin.ToString();
+            if (origin.Length > 0 && origin != SessionSecurity.WebOrigin)
+                throw new ApiException(403, "invalid_origin", "连接来源无效");
+            if (!await SocketSlots.WaitAsync(0, ct))
+                throw new ApiException(429, "connection_limit", "实时连接繁忙，请稍后再试");
+            try
+            {
+                using var socket = await context.WebSockets.AcceptWebSocketAsync();
+                await connections.RunAsync(socket, sessions, ct);
+            }
+            finally { SocketSlots.Release(); }
         });
         return api;
     }

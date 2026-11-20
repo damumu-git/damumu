@@ -7,9 +7,10 @@ import './controls.css'
 import './enterprise-theme.css'
 import { AdminDialogProvider } from './AdminControls.jsx'
 import { EmojiAssetsProvider } from './EmojiAssets.jsx'
+import AdminLogin from './AdminLogin.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <AdminDialogProvider><EmojiAssetsProvider><App /></EmojiAssetsProvider></AdminDialogProvider>
+    <AdminLogin><AdminDialogProvider><EmojiAssetsProvider><App /></EmojiAssetsProvider></AdminDialogProvider></AdminLogin>
   </StrictMode>,
 )

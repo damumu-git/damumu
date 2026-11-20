@@ -43,13 +43,13 @@ internal static class AccountRateLimits
 
     private static Policy? SpecificPolicy(string route) => route switch
     {
-        "/api/v1/contact-requests" => ContactRequests,
+        "/api/v1/contact-requests" or "/api/v1/friend-requests" => ContactRequests,
         "/api/v1/conversations/direct" or "/api/v1/conversations/{id:guid}/messages" or
             "/api/v1/conversations/{id:guid}/messages/{messageId:guid}" => Messages,
         "/api/v1/events" or "/api/v1/events/{id:guid}/publish" or "/api/v1/series" or "/api/v1/series/proposals" or
             "/api/v1/web/intents" or "/api/v1/web/groups" => Publishing,
         "/api/v1/events/covers" or "/api/v1/conversations/{id:guid}/media" or
-            "/api/v1/me/avatar" => Uploads,
+            "/api/v1/me/avatar" or "/api/v1/web/groups/{id:guid}/cover" => Uploads,
         "/api/v1/reports" or "/api/v1/me/suggestions" or "/api/v1/feedback" or
             "/api/v1/conversations/{id:guid}/messages/{messageId:guid}/report" => Reports,
         _ => null

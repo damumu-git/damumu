@@ -88,6 +88,7 @@ public sealed class AccountDeletionService(
             DELETE FROM push_device WHERE user_id=@userId;
             DELETE FROM user_external_identity WHERE user_id=@userId;
             DELETE FROM user_credential WHERE user_id=@userId;
+            DELETE FROM auth_session WHERE user_id=@userId;
             DELETE FROM notification WHERE user_id=@userId;
             DELETE FROM user_suggestion WHERE user_id=@userId;
             DELETE FROM conversation_member WHERE user_id=@userId;

@@ -7,6 +7,11 @@ public sealed class PrivacyRetentionService(
     {
         await db.ExecuteAsync("SELECT muda_purge_expired_personal_data()", cancellationToken: ct);
         await db.ExecuteAsync("""
+            DELETE FROM auth_session WHERE expires_at<=now() OR revoked_at<=now()-interval '1 day';
+            DELETE FROM admin_session WHERE expires_at<=now();
+            DELETE FROM auth_attempt WHERE window_started_at<now()-interval '1 day' AND COALESCE(blocked_until,now())<=now();
+            """, cancellationToken: ct);
+        await db.ExecuteAsync("""
             WITH expired AS (
                 DELETE FROM friend_request WHERE created_at<=now()-interval '3 months' RETURNING id
             )

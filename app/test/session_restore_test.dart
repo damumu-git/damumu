@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:zaihandazi/session_transport.dart';
 import 'package:zaihandazi/auth.dart';
 import 'package:zaihandazi/social_login.dart';
 
@@ -20,9 +22,18 @@ http.Response profile() => http.Response(
   200,
 );
 
+Future<void> seedSession(String token) => SessionTransport.capture({
+  'accessToken': token,
+  'expiresAt': int.parse(token.split('.')[1]) * 1000,
+}, true);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() async {
+    FlutterSecureStorage.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({});
+    await SessionTransport.clear();
+  });
 
   test(
     'fresh install never silently logs into the developer account',
@@ -90,9 +101,7 @@ void main() {
   test(
     'expired session is removed before making any network request',
     () async {
-      SharedPreferences.setMockInitialValues({
-        'auth_token': session(const Duration(seconds: -1)),
-      });
+      await seedSession(session(const Duration(seconds: -1)));
       await http.runWithClient(() async {
         final controller = AuthController();
         await controller.restore();
@@ -111,9 +120,7 @@ void main() {
     test(
       'server rejection $status removes session, even without JSON',
       () async {
-        SharedPreferences.setMockInitialValues({
-          'auth_token': session(const Duration(days: 1)),
-        });
+        await seedSession(session(const Duration(days: 1)));
         await http.runWithClient(() async {
           final controller = AuthController();
           await controller.restore();
@@ -132,7 +139,7 @@ void main() {
   for (final failure in ['offline', 'server', 'timeout']) {
     test('$failure retains credential and retry restores session', () async {
       final token = session(const Duration(days: 1));
-      SharedPreferences.setMockInitialValues({'auth_token': token});
+      await seedSession(token);
       var calls = 0;
       await http.runWithClient(
         () async {
@@ -140,10 +147,7 @@ void main() {
           await controller.restore();
           expect(controller.restoreFailed, isTrue);
           expect(controller.user, isNull);
-          expect(
-            (await SharedPreferences.getInstance()).getString('auth_token'),
-            token,
-          );
+          expect(await SessionTransport.restore(), token);
           await controller.restore();
           expect(controller.restoreFailed, isFalse);
           expect(controller.user?.id, 'user-1');
@@ -163,7 +167,7 @@ void main() {
     'foreground recheck preserves current page and form during network failures',
     () async {
       final token = session(const Duration(days: 1));
-      SharedPreferences.setMockInitialValues({'auth_token': token});
+      await seedSession(token);
       var calls = 0;
       await http.runWithClient(
         () async {
@@ -189,9 +193,7 @@ void main() {
   test(
     'logout wins over an in-flight restore and stays logged out after restart',
     () async {
-      SharedPreferences.setMockInitialValues({
-        'auth_token': session(const Duration(days: 1)),
-      });
+      await seedSession(session(const Duration(days: 1)));
       final pending = Completer<http.Response>();
       final started = Completer<void>();
       await http.runWithClient(
@@ -211,7 +213,9 @@ void main() {
           expect(restarted.token, isNull);
           restarted.dispose();
         },
-        () => MockClient((_) {
+        () => MockClient((request) {
+          if (request.url.path.endsWith('/logout'))
+            return Future.value(http.Response('', 204));
           started.complete();
           return pending.future;
         }),

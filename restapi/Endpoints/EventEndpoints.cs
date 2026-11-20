@@ -263,8 +263,17 @@ public static class EventEndpoints
                 LEFT JOIN user_profile up ON up.user_id=em.user_id
                 LEFT JOIN system_avatar member_avatar ON up.avatar_url='system:'||member_avatar.id::text
                 WHERE em.event_id=@id AND em.status IN ('approved', 'attended')
+                  AND EXISTS (
+                      SELECT 1 FROM event visible WHERE visible.id=@id AND (
+                          visible.organizer_user_id=@viewerId OR EXISTS (
+                              SELECT 1 FROM event_member viewer WHERE viewer.event_id=visible.id
+                              AND viewer.user_id=@viewerId AND viewer.status IN ('approved','attended')
+                              AND viewer.left_at IS NULL
+                          )
+                      )
+                  )
                 ORDER BY em.joined_at
-                """, new { id }, ct);
+                """, new { id, viewerId }, ct);
             FeedbackEligibility? feedback = null;
             if (viewerId.HasValue)
                 feedback = await FeedbackPolicy.ResolveAsync(

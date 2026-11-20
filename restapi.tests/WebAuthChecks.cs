@@ -24,6 +24,8 @@ internal static class WebAuthChecks
         builder.Services.AddSingleton(NpgsqlDataSource.Create("Host=127.0.0.1;Port=1;Database=unused"));
         builder.Services.AddSingleton<SocialAccountService>();
         builder.Services.AddSingleton<AuthService>();
+        builder.Services.AddSingleton<Db>();
+        builder.Services.AddSingleton<SessionSecurity>();
         builder.Services.AddSingleton<MediaStorage>();
         builder.Configuration["Media:RootPath"] = Path.GetTempPath();
         builder.Configuration["Media:PublicBaseUrl"] = "https://api.damumu.com/uploads";

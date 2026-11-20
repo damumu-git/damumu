@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:web_socket/web_socket.dart';
+import 'session_transport.dart';
 
 const _apiBase = String.fromEnvironment(
   'API_BASE_URL',
@@ -55,6 +56,7 @@ class RealtimeService {
     final token = _token;
     if (token == null || generation != _generation) return;
     try {
+      final access = await SessionTransport.accessToken(token);
       final apiUri = Uri.parse(_apiBase);
       final socketUri = apiUri.replace(
         scheme: apiUri.scheme == 'https' ? 'wss' : 'ws',
@@ -69,7 +71,7 @@ class RealtimeService {
       }
       _socket = socket;
       _reconnectAttempt = 0;
-      socket.sendText(jsonEncode({'type': 'authenticate', 'token': token}));
+      socket.sendText(jsonEncode({'type': 'authenticate', 'token': access}));
       _socketSubscription = socket.events.listen(
         (event) => _handleSocketEvent(event, generation),
         onError: (_) => _scheduleReconnect(generation),

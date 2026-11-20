@@ -26,7 +26,7 @@ public static class UserEndpoints
         });
 
         api.MapPost("/auth/register", async (
-            RegisterRequest request, Db db, AuthService auth, CancellationToken ct) =>
+            RegisterRequest request, HttpContext context, Db db, AuthService auth, SessionSecurity sessions, CancellationToken ct) =>
         {
             PrivacyRules.ValidateRegistration(request.AgeConfirmed, request.PrivacyAcknowledged, request.PrivacyVersion);
             var nickname = request.Nickname?.Trim();
@@ -74,10 +74,7 @@ public static class UserEndpoints
                     privacyVersion = PrivacyRules.NoticeVersion
                 }, ct);
 
-            return ApiSupport.Created($"/api/v1/users/{userId}", new
-            {
-                accessToken = auth.CreateToken(userId),
-                user = new
+            return ApiSupport.Created($"/api/v1/users/{userId}", await sessions.SignInAsync(context, userId, new
                 {
                     id = userId,
                     nickname,
@@ -85,16 +82,16 @@ public static class UserEndpoints
                     memberLevel = 1,
                     avatarUrl = avatarId.HasValue ? $"system:{avatarId}" : null,
                     avatarImageUrl
-                }
-            });
+                }, request.RememberMe, ct));
         });
 
         api.MapPost("/auth/login", async (
-            LoginRequest request, Db db, AuthService auth, CancellationToken ct) =>
+            LoginRequest request, HttpContext context, Db db, AuthService auth, SessionSecurity sessions, CancellationToken ct) =>
         {
             var email = request.Email?.Trim().ToLowerInvariant();
-            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(request.Password))
+            if (string.IsNullOrWhiteSpace(email) || email.Length > 254 || string.IsNullOrEmpty(request.Password) || request.Password.Length > 256)
                 throw new ApiException(400, "credentials_required", "请输入邮箱和密码");
+            await sessions.CheckAttemptAsync("login:" + email, ct);
             var user = await db.QueryOneAsync(
                 """
                 SELECT u.id, u.status, c.email, c.password_hash,
@@ -106,20 +103,24 @@ public static class UserEndpoints
                 LEFT JOIN system_avatar sa ON p.avatar_url='system:'||sa.id::text
                 WHERE lower(c.email)=@email AND u.deleted_at IS NULL
                 """, new { email }, ct);
-            if (user is null || !auth.VerifyPassword(
-                    request.Password, (string)user["password_hash"]!))
+            var passwordValid = user is null ? auth.VerifyPassword(request.Password, auth.DummyPasswordHash) :
+                auth.VerifyPassword(request.Password, (string)user["password_hash"]!);
+            if (!passwordValid || user is null)
+            {
+                await sessions.FailedAttemptAsync("login:" + email, ct);
                 throw new ApiException(401, "invalid_credentials", "邮箱或密码不正确");
+            }
             if (!string.Equals(user["status"]?.ToString(), "active", StringComparison.Ordinal))
                 throw new ApiException(403, "account_unavailable", "账号当前不可用");
 
             var userId = (Guid)user["id"]!;
+            if (!((string)user["password_hash"]!).StartsWith("pbkdf2-sha256$600000$", StringComparison.Ordinal))
+                await db.ExecuteAsync("UPDATE user_credential SET password_hash=@hash WHERE user_id=@userId",
+                    new { userId, hash = auth.HashPassword(request.Password) }, ct);
             await db.ExecuteAsync(
                 "UPDATE user_credential SET last_login_at=now() WHERE user_id=@userId",
                 new { userId }, ct);
-            return ApiSupport.Ok(new
-            {
-                accessToken = auth.CreateToken(userId),
-                user = new
+            return ApiSupport.Ok(await sessions.SignInAsync(context, userId, new
                 {
                     id = userId,
                     nickname = user["nickname"],
@@ -127,8 +128,7 @@ public static class UserEndpoints
                     email = user["email"],
                     avatarUrl = user["avatarUrl"],
                     avatarImageUrl = user["avatarImageUrl"]
-                }
-            });
+                }, request.RememberMe, ct));
         });
 
         api.MapPost("/auth/dev-login", async (
@@ -222,6 +222,22 @@ public static class UserEndpoints
             var nickname = EmptyToNull(request.Nickname);
             if (nickname is not null && nickname.Length is < 2 or > 30)
                 throw new ApiException(400, "nickname_invalid", "昵称长度需要为 2–30 个字符");
+            if (request.Bio?.Length > 1000 || request.Occupation?.Length > 120 ||
+                request.ContactValue?.Length > 200 || request.ContactType?.Length > 32 ||
+                request.Languages?.Length > 10 || request.Languages?.Any(value => string.IsNullOrWhiteSpace(value) || value.Length > 16) == true)
+                throw new ApiException(400, "profile_invalid", "个人资料内容过长");
+            var avatarReference = media.ToStoredReference(EmptyToNull(request.AvatarUrl));
+            if (avatarReference is not null)
+            {
+                var validSystem = avatarReference.StartsWith("system:", StringComparison.Ordinal)
+                    && Guid.TryParse(avatarReference[7..], out var systemId)
+                    && await db.ScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM system_avatar WHERE id=@systemId AND is_active)",
+                        new { systemId }, ct);
+                var validUpload = System.Text.RegularExpressions.Regex.IsMatch(avatarReference,
+                    "^/uploads/avatars/" + userId.ToString("N") + "/[a-f0-9]{32}\\.jpg$");
+                if (!validSystem && !validUpload)
+                    throw new ApiException(400, "avatar_invalid", "请选择自己的已上传头像或系统头像");
+            }
             var profile = await db.QueryOneAsync(
                 """
                 UPDATE user_profile
@@ -243,7 +259,7 @@ public static class UserEndpoints
                 {
                     userId,
                     nickname,
-                    avatarUrl = media.ToStoredReference(EmptyToNull(request.AvatarUrl)),
+                    avatarUrl = avatarReference,
                     bio = EmptyToNull(request.Bio),
                     cityCode = EmptyToNull(request.CityCode),
                     districtCode = EmptyToNull(request.DistrictCode),
@@ -603,8 +619,8 @@ public static class UserEndpoints
 }
 
 public sealed record RegisterRequest(string? Nickname, string? Email, string? Password, Guid? AvatarId,
-    bool AgeConfirmed = false, bool PrivacyAcknowledged = false, string? PrivacyVersion = null);
-public sealed record LoginRequest(string? Email, string? Password);
+    bool AgeConfirmed = false, bool PrivacyAcknowledged = false, string? PrivacyVersion = null, bool RememberMe = false);
+public sealed record LoginRequest(string? Email, string? Password, bool RememberMe = false);
 public sealed record SystemAvatarRequest(Guid? AvatarId);
 public sealed record DevLoginRequest(string Nickname, string? CityCode);
 public sealed record UpdateProfileRequest(

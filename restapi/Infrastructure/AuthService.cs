@@ -5,7 +5,9 @@ namespace Muda.Api.Infrastructure;
 
 public sealed class AuthService(IConfiguration configuration)
 {
-    private const int Iterations = 120_000;
+    public string DummyPasswordHash =>
+        "pbkdf2-sha256$600000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    private const int Iterations = 600_000;
     private readonly byte[] _tokenKey = Encoding.UTF8.GetBytes(
         configuration["Auth:TokenKey"]
         ?? throw new InvalidOperationException("Auth:TokenKey is required."));
@@ -37,10 +39,10 @@ public sealed class AuthService(IConfiguration configuration)
         }
     }
 
-    public string CreateToken(Guid userId)
+    public string CreateToken(Guid userId, DateTimeOffset? expires = null)
     {
-        var expiresAt = DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
-        var payload = $"{userId:N}.{expiresAt}";
+        var expiresAt = (expires ?? DateTimeOffset.UtcNow.AddDays(30)).ToUnixTimeSeconds();
+        var payload = $"{userId:N}.{expiresAt}.{Base64Url(RandomNumberGenerator.GetBytes(24))}";
         var signature = HMACSHA256.HashData(_tokenKey, Encoding.UTF8.GetBytes(payload));
         return $"{payload}.{Base64Url(signature)}";
     }
@@ -49,11 +51,11 @@ public sealed class AuthService(IConfiguration configuration)
     {
         userId = default;
         var pieces = token.Split('.');
-        if (pieces.Length != 3) return false;
+        if (token.Length > 1024 || pieces.Length != 4) return false;
         try
         {
-            var payload = $"{pieces[0]}.{pieces[1]}";
-            var supplied = FromBase64Url(pieces[2]);
+            var payload = $"{pieces[0]}.{pieces[1]}.{pieces[2]}";
+            var supplied = FromBase64Url(pieces[3]);
             var expected = HMACSHA256.HashData(_tokenKey, Encoding.UTF8.GetBytes(payload));
             return CryptographicOperations.FixedTimeEquals(supplied, expected)
                 && Guid.TryParseExact(pieces[0], "N", out userId)

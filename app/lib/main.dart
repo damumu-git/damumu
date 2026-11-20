@@ -29,6 +29,7 @@ import 'emoji_picture.dart';
 import 'chat_image.dart';
 import 'event_service.dart';
 import 'direct_contact.dart';
+import 'session_devices.dart';
 import 'friends.dart';
 import 'feedback.dart';
 import 'feedback_model.dart';
@@ -238,8 +239,9 @@ class _DaziAppState extends State<DaziApp> with WidgetsBindingObserver {
                       width: width,
                       height: constraints.maxHeight,
                       child: MediaQuery(
-                        data: MediaQuery.of(context)
-                            .copyWith(size: Size(width, constraints.maxHeight)),
+                        data: MediaQuery.of(
+                          context,
+                        ).copyWith(size: Size(width, constraints.maxHeight)),
                         child: app,
                       ),
                     ),
@@ -704,8 +706,9 @@ class _AppShellState extends State<AppShell> {
       _index = 0;
     });
     _loadEvents();
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('活动发布成功，已生成活动群聊')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('活动发布成功，已生成活动群聊')));
   }
 
   void _locationChanged(AppLocation location) {
@@ -1723,8 +1726,9 @@ class _ManualLocationSheetState extends State<_ManualLocationSheet> {
                     ),
                   ),
                   IconButton(
-                    tooltip: MaterialLocalizations.of(context)
-                        .closeButtonTooltip,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
                   ),
@@ -2909,10 +2913,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
             expandedHeight: 235,
             pinned: true,
             backgroundColor: _mint,
-            actions: [
-              const _HomeAction(),
-              const SizedBox(width: 12),
-            ],
+            actions: [const _HomeAction(), const SizedBox(width: 12)],
             leading: IconButton.filledTonal(
               onPressed: () => Navigator.pop(context),
               icon: const Icon(Icons.arrow_back),
@@ -3309,10 +3310,12 @@ class _EventDetailPageState extends State<EventDetailPage> {
     if (token == null || id == null || _openingEventChat) return;
     setState(() => _openingEventChat = true);
     try {
-      final result = await ActivitySeriesService.request(
-        '/events/$id/conversation',
-        token: token,
-      ) as SeriesRow;
+      final result =
+          await ActivitySeriesService.request(
+                '/events/$id/conversation',
+                token: token,
+              )
+              as SeriesRow;
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -3522,8 +3525,9 @@ class _EventDetailPageState extends State<EventDetailPage> {
         e.isJoined = false;
       });
       widget.onChanged();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('已退出活动')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已退出活动')));
     } catch (error) {
       if (mounted) {
         setState(() => _joining = false);
@@ -3647,13 +3651,19 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
         final profile = snapshot.data!;
         final nickname = '${profile['nickname'] ?? '用户'}';
         final currentTime = DateTime.now();
-        final activities = (profile['activities'] as List? ?? const []).whereType<Map>().toList();
+        final activities = (profile['activities'] as List? ?? const [])
+            .whereType<Map>()
+            .toList();
         String section(Map activity) {
-          if (activity['event_status'] == 'cancelled') return 'profileCancelledActivities';
+          if (activity['event_status'] == 'cancelled')
+            return 'profileCancelledActivities';
           final end = DateTime.tryParse('${activity['ends_at'] ?? ''}');
-          return activity['event_status'] == 'completed' || (end != null && !end.isAfter(currentTime))
-              ? 'profilePastActivities' : 'profileUpcomingActivities';
+          return activity['event_status'] == 'completed' ||
+                  (end != null && !end.isAfter(currentTime))
+              ? 'profilePastActivities'
+              : 'profileUpcomingActivities';
         }
+
         final tags = (profile['positive_tags'] as List? ?? const [])
             .whereType<Map>()
             .take(6)
@@ -3709,8 +3719,8 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                         children: [
                           MemberLevelBadge(profile['member_level']),
                           MemberLevelGuideButton(
-                            profileLevel:
-                                (profile['member_level'] as num?)?.toInt(),
+                            profileLevel: (profile['member_level'] as num?)
+                                ?.toInt(),
                             foreground: Colors.white,
                           ),
                         ],
@@ -3760,21 +3770,28 @@ class _PublicUserProfilePageState extends State<PublicUserProfilePage> {
                       for (final key in [
                         'profileUpcomingActivities',
                         'profilePastActivities',
-                        if (auth.user?.id == widget.userId) 'profileCancelledActivities',
+                        if (auth.user?.id == widget.userId)
+                          'profileCancelledActivities',
                       ])
                         ChoiceChip(
                           label: Text(context.tr(key)),
                           selected: _activitySection == key,
-                          onSelected: (_) => setState(() => _activitySection = key),
+                          onSelected: (_) =>
+                              setState(() => _activitySection = key),
                         ),
                     ],
                   ),
-                if (activities.isNotEmpty && !activities.any((activity) => section(activity) == _activitySection))
+                if (activities.isNotEmpty &&
+                    !activities.any(
+                      (activity) => section(activity) == _activitySection,
+                    ))
                   Padding(
                     padding: const EdgeInsets.all(12),
                     child: Text(context.tr('profileNoActivitiesInSection')),
                   ),
-                for (final activity in activities.where((activity) => section(activity) == _activitySection))
+                for (final activity in activities.where(
+                  (activity) => section(activity) == _activitySection,
+                ))
                   ListTile(
                     title: Text(activity['title'] as String),
                     subtitle: activity['category_name'] is String
@@ -5127,13 +5144,15 @@ class _CreateEventPageState extends State<CreateEventPage> {
   Future<void> _next() async {
     if (_coverBusy || _publishing) return;
     if (_step == 0 && _title.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请先填写活动名称')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先填写活动名称')));
       return;
     }
     if (_step == 0 && _leafCategoryId == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请选择大分类和小分类')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请选择大分类和小分类')));
       return;
     }
     if (_step == 0 &&
@@ -5145,18 +5164,21 @@ class _CreateEventPageState extends State<CreateEventPage> {
       return;
     }
     if (_step == 1 && (_startsAt == null || _endsAt == null)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请选择活动的开始时间和结束时间')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请选择活动的开始时间和结束时间')));
       return;
     }
     if (_step == 1 && !_endsAt!.isAfter(_startsAt!)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('结束时间必须晚于开始时间')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('结束时间必须晚于开始时间')));
       return;
     }
     if (_step == 1 && (_cityCode == null || _districtCode == null)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请选择城市和所在区域')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请选择城市和所在区域')));
       return;
     }
     if (_step < 2) {
@@ -5165,8 +5187,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
     final priceAmount = parseFormattedAmount(_price.text);
     if (priceAmount == null || priceAmount < 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请输入有效的预计人均费用')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入有效的预计人均费用')));
       return;
     }
     if (_repeatFrequency.isNotEmpty &&
@@ -5235,8 +5258,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
       if (!mounted) return;
       setState(() => _publishing = false);
       final message = error.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       return;
     }
     if (!mounted) return;
@@ -5800,8 +5824,9 @@ class _MessagesPageState extends State<MessagesPage> {
                   if (item.type == 'group') context.tr('communityGroupChat'),
                   if (item.eventStartsAt != null)
                     activityTime(context, item.eventStartsAt!),
-                  ...?item.eventCategories[Localizations.localeOf(context)
-                      .languageCode],
+                  ...?item.eventCategories[Localizations.localeOf(
+                    context,
+                  ).languageCode],
                 ].join(' · '),
                 message: item.lastMessageType == 'event_cancelled'
                     ? '${context.tr('eventCancelled')} · ${context.tr('cancellationReason')}：${item.lastMessageBody ?? ''}'
@@ -5820,7 +5845,9 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   Widget _notices() {
-    final notices = _notifications.where((item) => !_onlyUnreadNotices || !item.read);
+    final notices = _notifications.where(
+      (item) => !_onlyUnreadNotices || !item.read,
+    );
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -5828,62 +5855,72 @@ class _MessagesPageState extends State<MessagesPage> {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          Wrap(spacing: 8, children: [
-            ChoiceChip(
-              label: Text(context.tr('noticeAll')),
-              selected: !_onlyUnreadNotices,
-              onSelected: (_) => setState(() => _onlyUnreadNotices = false),
-            ),
-            ChoiceChip(
-              label: Text(context.tr('noticeUnreadOnly')),
-              selected: _onlyUnreadNotices,
-              onSelected: (_) => setState(() => _onlyUnreadNotices = true),
-            ),
-          ]),
+          Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: Text(context.tr('noticeAll')),
+                selected: !_onlyUnreadNotices,
+                onSelected: (_) => setState(() => _onlyUnreadNotices = false),
+              ),
+              ChoiceChip(
+                label: Text(context.tr('noticeUnreadOnly')),
+                selected: _onlyUnreadNotices,
+                onSelected: (_) => setState(() => _onlyUnreadNotices = true),
+              ),
+            ],
+          ),
           if (notices.isEmpty)
-            Padding(padding: const EdgeInsets.all(16), child: Text(context.tr(_onlyUnreadNotices ? 'noticeNoUnread' : 'noNotifications'))),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                context.tr(
+                  _onlyUnreadNotices ? 'noticeNoUnread' : 'noNotifications',
+                ),
+              ),
+            ),
           ...notices.map(
-              (item) => Slidable(
-                key: ValueKey('notification-${item.id}'),
-                startActionPane: ActionPane(
-                  motion: const StretchMotion(),
-                  extentRatio: .26,
-                  children: [
-                    SlidableAction(
-                      onPressed: (_) => _readNotification(item),
-                      backgroundColor: AppPalette.primary,
-                      foregroundColor: AppPalette.onPrimary,
-                      icon: Icons.done_all,
-                      label: '已读',
-                    ),
-                  ],
-                ),
-                endActionPane: ActionPane(
-                  motion: const StretchMotion(),
-                  extentRatio: .26,
-                  children: [
-                    SlidableAction(
-                      onPressed: (_) => _deleteNotification(item),
-                      backgroundColor: _orange,
-                      foregroundColor: Colors.white,
-                      icon: Icons.delete_outline,
-                      label: '删除',
-                    ),
-                  ],
-                ),
-                child: Card(
-                  margin: const EdgeInsets.symmetric(vertical: 5),
-                  child: _NoticeTile(
+            (item) => Slidable(
+              key: ValueKey('notification-${item.id}'),
+              startActionPane: ActionPane(
+                motion: const StretchMotion(),
+                extentRatio: .26,
+                children: [
+                  SlidableAction(
+                    onPressed: (_) => _readNotification(item),
+                    backgroundColor: AppPalette.primary,
+                    foregroundColor: AppPalette.onPrimary,
+                    icon: Icons.done_all,
+                    label: '已读',
+                  ),
+                ],
+              ),
+              endActionPane: ActionPane(
+                motion: const StretchMotion(),
+                extentRatio: .26,
+                children: [
+                  SlidableAction(
+                    onPressed: (_) => _deleteNotification(item),
+                    backgroundColor: _orange,
+                    foregroundColor: Colors.white,
+                    icon: Icons.delete_outline,
+                    label: '删除',
+                  ),
+                ],
+              ),
+              child: Card(
+                margin: const EdgeInsets.symmetric(vertical: 5),
+                child: _NoticeTile(
                   icon: _notificationIcon(item.type),
                   title: item.title,
                   subtitle: item.body,
                   time: _relativeTime(item.createdAt),
                   unread: !item.read,
                   onTap: () => _openNotification(item),
-                  ),
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -5980,8 +6017,9 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   Future<void> _openChat(ConversationItem item) async {
-    await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => ChatPage(conversation: item)));
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => ChatPage(conversation: item)));
     await _load();
   }
 
@@ -6076,8 +6114,9 @@ class NotificationDetailPage extends StatelessWidget {
         const SizedBox(height: 20),
         Text(
           item.title,
-          style: Theme.of(context).textTheme.headlineSmall
-              ?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
         Text(
@@ -6228,7 +6267,8 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
     _realtimeSubscription = RealtimeService.instance.events.listen((event) {
-      final selected = event.data['conversationId']?.toString() == widget.conversation.id;
+      final selected =
+          event.data['conversationId']?.toString() == widget.conversation.id;
       if ((event.type == 'conversation.changed' &&
               (widget.conversation.type == 'direct' || selected)) ||
           ((event.type == 'message.created' ||
@@ -6438,7 +6478,8 @@ class _ChatPageState extends State<ChatPage> {
                                         child: Image.network(
                                           message.activityCoverUrl!,
                                           width: 58,
-                                          errorBuilder: (_, _, _) => const Icon(Icons.event_outlined),
+                                          errorBuilder: (_, _, _) =>
+                                              const Icon(Icons.event_outlined),
                                           height: 58,
                                           fit: BoxFit.cover,
                                           headers: privateImageHeaders(
@@ -6448,18 +6489,30 @@ class _ChatPageState extends State<ChatPage> {
                                         ),
                                       ),
                                 title: message.activityId == null
-                                    ? Text(message.activityTitle ?? context.tr('friendActivityUnavailable'))
+                                    ? Text(
+                                        message.activityTitle ??
+                                            context.tr(
+                                              'friendActivityUnavailable',
+                                            ),
+                                      )
                                     : OutlinedButton(
-                                        onPressed: () => _openSeriesEvent(context, message.activityId!),
-                                        child: Text(message.activityTitle ?? context.tr('activityShared')),
+                                        onPressed: () => _openSeriesEvent(
+                                          context,
+                                          message.activityId!,
+                                        ),
+                                        child: Text(
+                                          message.activityTitle ??
+                                              context.tr('activityShared'),
+                                        ),
                                       ),
                                 subtitle: Text(
                                   [
                                         if (message.activityStartsAt != null)
-                                          MaterialLocalizations.of(context)
-                                              .formatMediumDate(
-                                                message.activityStartsAt!,
-                                              ),
+                                          MaterialLocalizations.of(
+                                            context,
+                                          ).formatMediumDate(
+                                            message.activityStartsAt!,
+                                          ),
                                         message.activityCategory,
                                         message.activityOrganizer,
                                       ]
@@ -6498,19 +6551,23 @@ class _ChatPageState extends State<ChatPage> {
                     }
                     final avatar = IconButton(
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                      constraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 40,
+                      ),
                       tooltip: context.tr('viewSenderProfile'),
-                      onPressed: () => _openMemberPerson(context, message.senderUserId!),
+                      onPressed: () =>
+                          _openMemberPerson(context, message.senderUserId!),
                       icon: UserAvatarImage(
-                      nickname:
-                          message.senderName ??
-                          (mine ? viewer?.nickname ?? '' : ''),
-                      radius: 17,
-                      avatarUrl:
-                          message.senderAvatar ??
-                          (mine
-                              ? viewer?.avatarImageUrl ?? viewer?.avatarUrl
-                              : null),
+                        nickname:
+                            message.senderName ??
+                            (mine ? viewer?.nickname ?? '' : ''),
+                        radius: 17,
+                        avatarUrl:
+                            message.senderAvatar ??
+                            (mine
+                                ? viewer?.avatarImageUrl ?? viewer?.avatarUrl
+                                : null),
                       ),
                     );
                     return Align(
@@ -7398,7 +7455,9 @@ class ProfilePage extends StatelessWidget {
                             spacing: 4,
                             children: [
                               MemberLevelBadge(user.memberLevel),
-                              MemberLevelGuideButton(profileLevel: user.memberLevel),
+                              MemberLevelGuideButton(
+                                profileLevel: user.memberLevel,
+                              ),
                             ],
                           ),
                           Text(user.email),
@@ -7605,8 +7664,9 @@ class ProfilePage extends StatelessWidget {
                 icon: Icons.language,
                 title: context.tr('language'),
                 subtitle:
-                    languageLabels[Localizations.localeOf(context)
-                        .languageCode],
+                    languageLabels[Localizations.localeOf(
+                      context,
+                    ).languageCode],
                 onTap: () => _showLanguagePicker(context),
               ),
               const Divider(height: 1, indent: 58),
@@ -7621,6 +7681,18 @@ class ProfilePage extends StatelessWidget {
                 icon: Icons.logout,
                 title: context.tr('logout'),
                 onTap: auth.logout,
+              ),
+              _Menu(
+                icon: Icons.devices_outlined,
+                title: context.tr('sessionsTitle'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => SessionDevicesPage(
+                      token: auth.token!,
+                      onSignOut: auth.logout,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -7775,21 +7847,27 @@ Future<void> _openSimilarEvent(
 }
 
 void _openGroupsPage(BuildContext context) {
-  Navigator.of(context).push(MaterialPageRoute<void>(
-    builder: (_) => CommunityGroupsPage(
-      openActivity: _openSeriesEvent,
-      openPerson: _openMemberPerson,
-      openChat: (context, group) => Navigator.of(context).push<void>(MaterialPageRoute(
-        builder: (_) => ChatPage(conversation: ConversationItem(
-          id: group['conversation_id'] as String,
-          type: 'group',
-          title: group['title'] as String,
-          unreadCount: 0,
-          memberCount: (group['member_count'] as num).toInt(),
-        )),
-      )),
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => CommunityGroupsPage(
+        openActivity: _openSeriesEvent,
+        openPerson: _openMemberPerson,
+        openChat: (context, group) => Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => ChatPage(
+              conversation: ConversationItem(
+                id: group['conversation_id'] as String,
+                type: 'group',
+                title: group['title'] as String,
+                unreadCount: 0,
+                memberCount: (group['member_count'] as num).toInt(),
+              ),
+            ),
+          ),
+        ),
+      ),
     ),
-  ));
+  );
 }
 
 void _openSeriesPage(
@@ -7842,10 +7920,9 @@ Future<void> _openSeriesEvent(BuildContext context, String id) async {
   final token = auth.token;
   if (token == null) return;
   try {
-    final result = await ActivitySeriesService.request(
-      '/events/$id',
-      token: token,
-    ) as SeriesRow;
+    final result =
+        await ActivitySeriesService.request('/events/$id', token: token)
+            as SeriesRow;
     final schedules = ActivitySeriesService.rows(result['schedules']);
     final schedule = schedules
         .where((row) => row['status'] == 'scheduled')
@@ -8096,8 +8173,9 @@ class _MyActivitiesPageState extends State<MyActivitiesPage>
             final row = rows[index];
             final organizedByMe =
                 isOrganizer || row['member_role'] == 'organizer';
-            final startsAt = DateTime.tryParse('${row['starts_at']}')
-                ?.toLocal();
+            final startsAt = DateTime.tryParse(
+              '${row['starts_at']}',
+            )?.toLocal();
             final endsAt = DateTime.tryParse('${row['ends_at']}');
             final isPast =
                 row['event_status'] == 'completed' ||
@@ -8626,8 +8704,9 @@ class _OrganizerApplicationsState extends State<_OrganizerApplications> {
     final note = '${application['application_note'] ?? ''}'.trim();
     final trustScore = application['trust_score'] ?? 0;
     final nickname = '${application['nickname'] ?? context.tr('applicant')}';
-    final createdAt = DateTime.tryParse('${application['created_at'] ?? ''}')
-        ?.toLocal();
+    final createdAt = DateTime.tryParse(
+      '${application['created_at'] ?? ''}',
+    )?.toLocal();
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(

@@ -1,3 +1,5 @@
+升级到可撤销会话及独立 Admin 登录前，请先完成 [安全升级步骤](SECURITY.md)。迁移 045 会清理退役会面和联系人数据，并要求服务器准备持久化密钥目录及 API 文件权限。
+
 # Lightsail 单机测试部署
 
 本目录用于 Ubuntu 24.04 Lightsail 单机测试环境。公网只访问宿主机 Nginx；
@@ -146,11 +148,9 @@ cp deploy/.env.example deploy/.env
 chmod 600 deploy/.env
 ```
 
-编辑 `deploy/.env`，至少配置 `DATABASE_CONNECTION`、`AUTH_TOKEN_KEY` 和
-`ADMIN_API_KEY`。生成两个不同的随机密钥：
+编辑 `deploy/.env`，配置 `DATABASE_CONNECTION` 和独立随机生成的 `AUTH_TOKEN_KEY`。管理员账号通过安全升级指南中的服务器命令创建：
 
 ```bash
-openssl rand -hex 32
 openssl rand -hex 32
 ```
 

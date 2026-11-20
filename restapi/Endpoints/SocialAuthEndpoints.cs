@@ -9,14 +9,14 @@ public static class SocialAuthEndpoints
     {
         api.MapPost("/auth/social/{provider}", async (string provider, SocialLoginRequest request,
             HttpContext context, ISocialIdentityVerifier verifier, SocialAccountService accounts,
-            AuthService auth, CancellationToken ct) =>
+            SessionSecurity sessions, CancellationToken ct) =>
         {
             context.Response.Headers.CacheControl = "no-store";
             var identity = await verifier.VerifyAsync(provider, request.Token ?? "", ct);
             var user = await accounts.LoginAsync(identity, request, ct, registrationOnly: request.RegistrationOnly);
             return user is null
                 ? ApiSupport.Ok(new { registrationRequired = true })
-                : ApiSupport.Ok(new { accessToken = auth.CreateToken((Guid)user["id"]!), user });
+                : ApiSupport.Ok(await sessions.SignInAsync(context, (Guid)user["id"]!, user, false, ct));
         });
         return api;
     }

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'session_transport.dart';
 
 import 'l10n.dart';
 
@@ -30,7 +30,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
   };
 
   Future<List<Map<String, dynamic>>> _load() async {
-    final response = await http
+    final response = await SessionTransport.client
         .get(_endpoint, headers: _headers)
         .timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) throw const FormatException();
@@ -44,7 +44,7 @@ class _SuggestionPageState extends State<SuggestionPage> {
     FocusScope.of(context).unfocus();
     setState(() => _sending = true);
     try {
-      final response = await http
+      final response = await SessionTransport.client
           .post(_endpoint, headers: _headers, body: jsonEncode({'text': text}))
           .timeout(const Duration(seconds: 10));
       if (response.statusCode != 201) throw const FormatException();

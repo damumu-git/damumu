@@ -27,7 +27,6 @@
     route("users", "用户管理", "Users", true, "◉"),
     route("events", "活动管理", "Events", true, "◇"),
     route("reports", "举报治理", "Reports", true, "△"),
-    route("safety", "安全警报", "Safety", true, "!"),
     route("categories", "分类配置", "Categories", true, "⊞"),
     route("regions", "地区管理", "Regions", true, "⌖"),
     route("emoji-upload", "上传图标", "EmojiAssetManager", false),
@@ -49,7 +48,6 @@
     ),
     route("event-action", "活动处置", "EventDetail.moderate / Events.moderate"),
     route("report-action", "举报处置", "Reports.update"),
-    route("safety-action", "警报响应", "Safety.update"),
     route("delete-category", "删除分类确认", "Categories"),
     route("delete-region", "删除地区确认", "Regions"),
   ];
@@ -239,20 +237,14 @@
       text: "示例举报：参与者未按约定时间出现。",
     },
   ];
-  const alerts = [
-    { name: "小雨", type: "安全会面逾时", status: "待响应" },
-    { name: "安安", type: "用户主动求助", status: "已联系" },
-  ];
   let userIndex = 0,
     eventIndex = 0,
     categoryIndex = 0,
     regionIndex = 0,
     reportIndex = 0,
-    alertIndex = 0,
     userAction = "暂停账号",
     eventAction = "隐藏活动",
     reportAction = "开始调查",
-    safetyAction = "已联系紧急联系人",
     search = "",
     filter = "",
     role = "",
@@ -342,19 +334,6 @@
         ),
       )
       .join("") || '<p class="empty-search">没有符合条件的举报</p>';
-  const safetyCards = () =>
-    alerts
-      .map((r, i) => ({ r, i }))
-      .filter(
-        ({ r }) => !filter || filter === "全部状态" || r.status === filter,
-      )
-      .map(({ r, i }) =>
-        panel(
-          "",
-          `<div class="row wrap between"><div><div class="row">${badge(r.status, "amber")}<small>10/26 14:10</small></div><h3 style="margin:14px 0">${P.esc(r.name)} · ${r.type}</h3><p class="muted">示例活动 · 下次确认 14:00</p></div><div class="stack">${["已联系紧急联系人", "标记已解决", "确认误报"].map((x) => b(x, `safety:${i}:${x}`, x === "标记已解决" ? "primary" : "")).join("")}</div></div>`,
-        ),
-      )
-      .join("") || '<p class="empty-search">没有符合条件的警报</p>';
   const categoryCards = () =>
     categories
       .map((c, i) => ({ c, i }))
@@ -394,7 +373,6 @@
             ["累计用户", "1,284", "近7日 +86"],
             ["在架活动", "42", "累计 186 场"],
             ["待处理举报", "2", "按优先级处置"],
-            ["安全警报", "2", "需及时响应"],
           ],
         )}<div class="grid2">${panel("社区增长与报名", `<div class="row"><small>● 用户</small><small style="color:#bd914b">● 报名</small></div><div class="chart">${[38, 55, 43, 66, 48, 80, 64].map((h, i) => `<div class="bar-group"><i style="height:${h}%"></i><i style="height:${h * 0.7}%"></i><span>10/${20 + i}</span></div>`).join("")}</div>`)}${panel("过去24小时", `<span class="eyebrow">COMMUNITY PULSE</span><h1 style="font-size:58px;margin:20px 0">326</h1><p class="muted">条站内消息</p><div class="divider"></div><div class="row between"><span>累计签到</span><strong>684</strong></div><div class="divider"></div>${note("此处为示例数据，不代表服务器健康状态。")}`)}</div><div class="grid2">${panel(
           "最新活动",
@@ -485,11 +463,6 @@
         return panel(
           "",
           `${heading("举报治理", "按优先级处理举报，记录原因与处置结果")}${filters("搜索举报内容", ["全部状态", "新举报", "已分诊", "调查中", "已解决", "已驳回"])}<div class="grid2" id="list-content">${reportCards()}</div>`,
-        );
-      case "safety":
-        return panel(
-          "",
-          `${heading("安全警报", "联系人通知和运营响应不代替紧急救援")}${note("App 安全会面仍有占位能力。此处展示后台警报处置界面，不表示告警链路已验收。")}${filters("搜索警报", ["全部状态", "待响应", "已联系", "已解决", "误报"])}<div class="stack" id="list-content">${safetyCards()}</div>`,
         );
       case "categories":
         return panel(
@@ -589,14 +562,6 @@
           "处理说明",
           "report-confirm",
           "reports",
-        );
-      case "safety-action":
-        return actionPage(
-          "警报响应",
-          `${alerts[alertIndex].name} · ${safetyAction}`,
-          "记录本次响应情况",
-          "safety-confirm",
-          "safety",
         );
       case "delete-category":
         return actionPage(
@@ -717,44 +682,7 @@
       };
     }),
   );
-  alerts.forEach((_, i) =>
-    ["已联系紧急联系人", "标记已解决", "确认误报"].forEach((label) => {
-      actions[`safety:${i}:${label}`] = () => {
-        alertIndex = i;
-        safetyAction = label;
-        go("safety-action");
-      };
-    }),
-  );
-  function registerCatalogActions() {
-    categories.forEach((_, i) => {
-      actions[`category:${i}`] = () => {
-        categoryIndex = i;
-        go("category-edit");
-      };
-      actions[`delete-category:${i}`] = () => {
-        categoryIndex = i;
-        go("delete-category");
-      };
-    });
-    regions.forEach((_, i) => {
-      actions[`region:${i}`] = () => {
-        regionIndex = i;
-        go("region-edit");
-      };
-      actions[`delete-region:${i}`] = () => {
-        regionIndex = i;
-        go("delete-region");
-      };
-    });
-  }
-  registerCatalogActions();
-  ["全部", "大分类", "小分类"].forEach((x, i) => {
-    actions[`level:${i}`] = () => {
-      categoryLevel = x;
-      runtime.draw();
-    };
-  });
+
   actions["approve-member"] = ({ target, toast }) => {
     target.closest("tr").children[2].innerHTML = badge("已通过");
     target.outerHTML = "<small>已通过</small>";
@@ -790,7 +718,6 @@
         users: userRows,
         events: eventRows,
         reports: reportCards,
-        safety: safetyCards,
         categories: categoryCards,
         audit: auditRows,
       }[id] || (() => "")
@@ -861,14 +788,7 @@
         }[reportAction];
         go("reports");
       }
-      if (confirm === "safety-confirm") {
-        alerts[alertIndex].status = {
-          已联系紧急联系人: "已联系",
-          标记已解决: "已解决",
-          确认误报: "误报",
-        }[safetyAction];
-        go("safety");
-      }
+
       if (confirm === "delete-category-confirm") {
         categories[categoryIndex].disabled = true;
         P.toast("删除确认界面已演示；目录示例保留，防止页面引用失效。");

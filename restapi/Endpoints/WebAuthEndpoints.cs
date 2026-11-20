@@ -113,7 +113,7 @@ public static class WebAuthEndpoints
         });
 
         group.MapPost("/complete", async (WebSocialRegistration request, HttpContext context,
-            IDataProtectionProvider protection, SocialAccountService accounts, AuthService auth,
+            IDataProtectionProvider protection, SocialAccountService accounts, SessionSecurity sessions,
             CancellationToken ct) =>
         {
             if (!string.Equals(context.Request.Headers.Origin, Origin, StringComparison.Ordinal))
@@ -135,7 +135,7 @@ public static class WebAuthEndpoints
             if (user is null)
                 return ApiSupport.Ok(new { registrationRequired = true, privacyVersion = PrivacyRules.NoticeVersion });
             context.Response.Cookies.Delete(IdentityCookie, Cookie(SameSiteMode.Strict));
-            return ApiSupport.Ok(new { accessToken = auth.CreateToken((Guid)user["id"]!), user });
+            return ApiSupport.Ok(await sessions.SignInAsync(context, (Guid)user["id"]!, user, request.RememberMe, ct));
         });
         return api;
     }
@@ -191,4 +191,4 @@ public static class WebAuthEndpoints
 }
 
 public sealed record WebSocialRegistration(string? Nickname, bool AgeConfirmed, bool PrivacyAcknowledged,
-    string? PrivacyVersion);
+    string? PrivacyVersion, bool RememberMe = false);

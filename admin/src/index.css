@@ -17,3 +17,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   outline-offset: 2px;
 }
 #root { min-height: 100vh; }
+ .admin-signin {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+.admin-signin form {
+  width: min(26rem, 100%);
+  display: grid;
+  gap: 1rem;
+}
+.admin-account-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+  padding: .5rem 1rem;
+}

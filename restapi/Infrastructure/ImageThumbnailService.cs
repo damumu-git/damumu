@@ -19,7 +19,8 @@ public static class ImageThumbnailService
         {
             if (codec.FrameCount > 1)
                 throw new ApiException(400, "animated_image_not_supported", "不支持动态图片或 Live Photo");
-            if (codec.Info.Width > 6000 || codec.Info.Height > 6000)
+            if (codec.Info.Width > 4096 || codec.Info.Height > 4096 ||
+                (long)codec.Info.Width * codec.Info.Height > 16_000_000)
                 throw new ApiException(400, "image_dimensions_invalid", "图片尺寸过大");
         }
 

@@ -29,27 +29,45 @@ public static class ApiSupport
     internal static Guid? GetBearerUserId(HttpContext context)
     {
         if (context.Items.TryGetValue(BearerUserKey, out var cached)) return (Guid?)cached;
-        var authorization = context.Request.Headers.Authorization.FirstOrDefault();
-        var token = authorization?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) == true
-            ? authorization[7..].Trim()
-            : null;
-        if (token is null) return null;
-        var auth = context.RequestServices.GetRequiredService<AuthService>();
-        Guid? account = auth.TryValidateToken(token, out var userId) ? userId : null;
-        context.Items[BearerUserKey] = account;
-        return account;
+        return null;
     }
+
+    internal static void SetValidatedUser(HttpContext context, Guid? userId) => context.Items[BearerUserKey] = userId;
 
     public static RouteGroupBuilder RequireAdmin(this RouteGroupBuilder group) =>
         group.AddEndpointFilter(async (invocation, next) =>
         {
             var context = invocation.HttpContext;
-            var expected = context.RequestServices.GetRequiredService<IConfiguration>()["Admin:ApiKey"];
-            var supplied = context.Request.Headers["X-Admin-Key"].FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(expected) || supplied != expected)
-                return Results.Json(
-                    new { data = (object?)null, meta = (object?)null, error = new { code = "admin_unauthorized", message = "管理员凭证无效" }, traceId = Activity.Current?.Id },
-                    statusCode: 401);
+            var security = context.RequestServices.GetRequiredService<AdminSecurity>();
+            var account = await security.CurrentAsync(context, context.RequestAborted)
+                ?? throw new ApiException(401, "admin_unauthorized", "请登录管理员账号");
+            context.Response.Headers.CacheControl = "private,no-store";
+            var role = (string)account["role"]!;
+            var write = context.Request.Method is not ("GET" or "HEAD");
+            var ownerOnly = context.Request.Path.StartsWithSegments("/api/v1/admin/feature-flags")
+                || context.Request.Path.StartsWithSegments("/api/v1/admin/settings")
+                || context.Request.Path.StartsWithSegments("/api/v1/admin/categories")
+                || context.Request.Path.StartsWithSegments("/api/v1/admin/regions")
+                || context.Request.Path.StartsWithSegments("/api/v1/admin/system-avatars")
+                || context.Request.Path.StartsWithSegments("/api/v1/admin/emoji-assets")
+                || context.Request.Path.StartsWithSegments("/api/v1/admin/activity-series/official-editor")
+                || context.Request.Path.StartsWithSegments("/api/v1/admin/announcements");
+            if (write && (role == "viewer" || ownerOnly && role != "owner"))
+                throw new ApiException(403, "admin_forbidden", "该操作需要更高的管理权限");
+            // Historical request records carry an optional app-user actor. It must never be supplied by the browser.
+            foreach (var argument in invocation.Arguments)
+                argument?.GetType().GetProperty("ActorUserId")?.SetValue(argument, null);
+            var db = context.RequestServices.GetRequiredService<Db>();
+            await db.ExecuteAsync("""
+                INSERT INTO audit_log(admin_account_id,actor_role,action,target_type,trace_id,metadata)
+                VALUES(@id,'admin',@action,'admin_api',@traceId,jsonb_build_object('method',@method,'route',@route))
+                """, new
+                {
+                    id = account["id"], action = write ? "admin.write.requested" : "admin.read",
+                    traceId = Activity.Current?.Id ?? context.TraceIdentifier,
+                    method = context.Request.Method,
+                    route = (context.GetEndpoint() as Microsoft.AspNetCore.Routing.RouteEndpoint)?.RoutePattern.RawText
+                }, context.RequestAborted);
             return await next(invocation);
         });
 }

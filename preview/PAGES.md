@@ -64,7 +64,6 @@
 | 用户管理 | `admin/index.html#users` | admin/src/App.jsx · Users | 业务预览 |
 | 活动管理 | `admin/index.html#events` | admin/src/App.jsx · Events | 业务预览 |
 | 举报治理 | `admin/index.html#reports` | admin/src/App.jsx · Reports | 业务预览 |
-| 安全警报 | `admin/index.html#safety` | admin/src/App.jsx · Safety | 业务预览 |
 | 分类配置 | `admin/index.html#categories` | admin/src/App.jsx · Categories | 业务预览 |
 | 地区管理 | `admin/index.html#regions` | admin/src/App.jsx · Regions | 业务预览 |
 | 上传图标 | `admin/index.html#emoji-upload` | admin/src/App.jsx · EmojiAssetManager | 业务预览 |

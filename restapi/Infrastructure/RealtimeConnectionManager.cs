@@ -8,31 +8,45 @@ namespace Muda.Api.Infrastructure;
 
 public sealed class RealtimeConnectionManager(
     NpgsqlDataSource dataSource,
+    SessionSecurity sessionSecurity,
     ILogger<RealtimeConnectionManager> logger)
 {
     private const int MaxMessageBytes = 16 * 1024;
     private static readonly TimeSpan AuthenticationTimeout = TimeSpan.FromSeconds(10);
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Guid, Connection>> _connections = new();
+    private readonly SemaphoreSlim connectionSlots = new(500);
     internal Guid InstanceId { get; } = Guid.NewGuid();
 
-    public async Task RunAsync(WebSocket socket, AuthService auth, CancellationToken requestAborted)
+    public async Task RunAsync(WebSocket socket, SessionSecurity sessions, CancellationToken requestAborted)
     {
         Guid userId;
+        string credential;
         try
         {
             using var authenticationTimeout = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
             authenticationTimeout.CancelAfter(AuthenticationTimeout);
-            var authentication = await ReceiveJsonAsync(socket, authenticationTimeout.Token);
+            using var authentication = await ReceiveJsonAsync(socket, authenticationTimeout.Token);
             if (authentication is null
+                || authentication.RootElement.ValueKind != JsonValueKind.Object
                 || !authentication.RootElement.TryGetProperty("type", out var type)
+                || type.ValueKind != JsonValueKind.String
                 || type.GetString() != "authenticate"
                 || !authentication.RootElement.TryGetProperty("token", out var tokenElement)
+                || tokenElement.ValueKind != JsonValueKind.String
                 || tokenElement.GetString() is not { } token
-                || !auth.TryValidateToken(token, out userId))
+                || token.Length > 1024)
             {
                 await CloseAsync(socket, WebSocketCloseStatus.PolicyViolation, "authentication_failed");
                 return;
             }
+            credential = token;
+            var account = await sessions.ValidateAsync(credential, requestAborted);
+            if (!account.HasValue)
+            {
+                await CloseAsync(socket, WebSocketCloseStatus.PolicyViolation, "authentication_failed");
+                return;
+            }
+            userId = account.Value;
         }
         catch (OperationCanceledException)
         {
@@ -45,23 +59,49 @@ public sealed class RealtimeConnectionManager(
             return;
         }
 
-        var connection = new Connection(Guid.NewGuid(), userId, socket);
-        var userConnections = _connections.GetOrAdd(userId, _ => new());
-        userConnections[connection.Id] = connection;
-        await connection.SendAsync(new { type = "connected", data = new { userId } }, requestAborted);
+        var connection = new Connection(Guid.NewGuid(), userId, socket, credential);
+        ConcurrentDictionary<Guid, Connection>? userConnections = null;
+        if (!await connectionSlots.WaitAsync(0, requestAborted))
+        {
+            await CloseAsync(socket, WebSocketCloseStatus.PolicyViolation, "connection_limit");
+            return;
+        }
 
         try
         {
+            lock (_connections)
+            {
+                userConnections = _connections.GetOrAdd(userId, _ => new());
+                if (userConnections.Count >= 5) return;
+                userConnections[connection.Id] = connection;
+            }
+            await connection.SendAsync(new { type = "connected", data = new { userId } }, requestAborted);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+            timeout.CancelAfter(TimeSpan.FromSeconds(65));
+            var verifiedAt = DateTimeOffset.UtcNow;
+            var windowStarted = verifiedAt;
+            var received = 0;
             while (socket.State == WebSocketState.Open && !requestAborted.IsCancellationRequested)
             {
-                using var message = await ReceiveJsonAsync(socket, requestAborted);
+                using var message = await ReceiveJsonAsync(socket, timeout.Token);
                 if (message is null) break;
+                if (message.RootElement.ValueKind != JsonValueKind.Object) break;
+                var now = DateTimeOffset.UtcNow;
+                if (now - windowStarted >= TimeSpan.FromSeconds(10)) { windowStarted = now; received = 0; }
+                if (++received > 20) break;
+                timeout.CancelAfter(TimeSpan.FromSeconds(65));
+                if (now - verifiedAt > TimeSpan.FromSeconds(15))
+                {
+                    if (await sessions.ValidateAsync(credential, requestAborted) != userId) break;
+                    verifiedAt = now;
+                }
                 if (message.RootElement.TryGetProperty("type", out var incomingType)
+                    && incomingType.ValueKind == JsonValueKind.String
                     && incomingType.GetString() == "ping")
                     await connection.SendAsync(new { type = "pong", data = new { } }, requestAborted);
             }
         }
-        catch (OperationCanceledException) when (requestAborted.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             // The request or application is stopping.
         }
@@ -75,9 +115,15 @@ public sealed class RealtimeConnectionManager(
         }
         finally
         {
-            userConnections.TryRemove(connection.Id, out _);
-            if (userConnections.IsEmpty) _connections.TryRemove(userId, out _);
-            connection.Dispose();
+            lock (_connections)
+            {
+                if (userConnections is not null)
+                {
+                    userConnections.TryRemove(connection.Id, out _);
+                    if (userConnections.IsEmpty) _connections.TryRemove(userId, out _);
+                }
+            }
+            connectionSlots.Release();
             await CloseAsync(socket, WebSocketCloseStatus.NormalClosure, "closed");
         }
     }
@@ -123,12 +169,16 @@ public sealed class RealtimeConnectionManager(
             {
                 try
                 {
+                    if (await sessionSecurity.ValidateAsync(pair.Value.Token, cancellationToken) != userId)
+                    {
+                        await CloseAsync(pair.Value.Socket, WebSocketCloseStatus.PolicyViolation, "session_expired");
+                        continue;
+                    }
                     await pair.Value.SendAsync(payload, cancellationToken);
                 }
                 catch (Exception exception) when (exception is WebSocketException or OperationCanceledException)
                 {
-                    userConnections.TryRemove(pair.Key, out var removed);
-                    removed?.Dispose();
+                    userConnections.TryRemove(pair.Key, out _);
                 }
             }
         }
@@ -164,35 +214,42 @@ public sealed class RealtimeConnectionManager(
         if (socket.State is not (WebSocketState.Open or WebSocketState.CloseReceived)) return;
         try
         {
-            await socket.CloseAsync(status, reason, CancellationToken.None);
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            await socket.CloseAsync(status, reason, timeout.Token);
         }
-        catch (WebSocketException)
+        catch (Exception error) when (error is WebSocketException or OperationCanceledException)
         {
             socket.Abort();
         }
     }
 
-    private sealed class Connection(Guid id, Guid userId, WebSocket socket) : IDisposable
+    private sealed class Connection(Guid id, Guid userId, WebSocket socket, string token)
     {
         private readonly SemaphoreSlim _sendLock = new(1, 1);
         public Guid Id { get; } = id;
         public Guid UserId { get; } = userId;
+        public string Token { get; } = token;
+        public WebSocket Socket { get; } = socket;
 
         public async Task SendAsync(object payload, CancellationToken cancellationToken)
         {
             var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-            await _sendLock.WaitAsync(cancellationToken);
+            if (!await _sendLock.WaitAsync(0, cancellationToken))
+            {
+                Socket.Abort();
+                return;
+            }
             try
             {
-                if (socket.State == WebSocketState.Open)
-                    await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                if (Socket.State == WebSocketState.Open)
+                    await Socket.SendAsync(bytes, WebSocketMessageType.Text, true, timeout.Token);
             }
             finally
             {
                 _sendLock.Release();
             }
         }
-
-        public void Dispose() => _sendLock.Dispose();
     }
 }

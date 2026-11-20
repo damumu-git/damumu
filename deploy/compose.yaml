@@ -10,6 +10,8 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Muda: ${DATABASE_CONNECTION}
       Auth__TokenKey: ${AUTH_TOKEN_KEY}
+      Security__KeyDirectory: /var/lib/damumu/keys
+      AllowedHosts: api.damumu.com;www.damumu.com;admin.damumu.com;127.0.0.1;localhost
       SocialLogin__google__Enabled: ${GOOGLE_LOGIN_ENABLED:-false}
       SocialLogin__google__ClientId: ${GOOGLE_SERVER_CLIENT_ID:-}
       SocialLogin__kakao__Enabled: ${KAKAO_LOGIN_ENABLED:-false}
@@ -18,7 +20,6 @@ services:
       WebSocialLogin__google__ClientSecret: ${GOOGLE_WEB_CLIENT_SECRET:-}
       WebSocialLogin__kakao__ClientId: ${KAKAO_WEB_REST_KEY:-}
       WebSocialLogin__kakao__ClientSecret: ${KAKAO_WEB_CLIENT_SECRET:-}
-      Admin__ApiKey: ${ADMIN_API_KEY}
       Firebase__ProjectId: ${FIREBASE_PROJECT_ID:-}
       Media__RootPath: /var/lib/damumu/uploads
       Media__PublicBaseUrl: ${MEDIA_PUBLIC_BASE_URL:-https://api.damumu.com/uploads}
@@ -32,7 +33,26 @@ services:
       - host.docker.internal:host-gateway
     networks:
       - backend
+    user: "1654:1654"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    cpus: 1.5
+    pids_limit: 128
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
+      - type: bind
+        source: /srv/damumu/keys
+        target: /var/lib/damumu/keys
+        bind:
+          create_host_path: false
       - type: bind
         source: /srv/damumu/uploads
         target: /var/lib/damumu/uploads
@@ -49,6 +69,19 @@ services:
     build:
       context: ../website
     restart: unless-stopped
+    read_only: true
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 128
+    tmpfs:
+      - /var/cache/nginx:size=16m,mode=755
+      - /var/run:size=1m,mode=755
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt: ["no-new-privileges:true"]
     ports:
       - 127.0.0.1:8081:80
     healthcheck:
@@ -62,6 +95,19 @@ services:
       context: ..
       dockerfile: app-web/Dockerfile.source
     restart: unless-stopped
+    read_only: true
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 128
+    tmpfs:
+      - /var/cache/nginx:size=16m,mode=755
+      - /var/run:size=1m,mode=755
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt: ["no-new-privileges:true"]
     ports:
       - 127.0.0.1:8083:80
     healthcheck:
@@ -78,8 +124,20 @@ services:
         # origin. Host Nginx proxies /api/ to the API container.
         VITE_API_BASE: /api/v1
         VITE_BASE: /
-        VITE_ADMIN_KEY: ${ADMIN_API_KEY}
     restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 128
+    tmpfs:
+      - /var/cache/nginx:size=16m,mode=755
+      - /var/run:size=1m,mode=755
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - 127.0.0.1:8082:80
     healthcheck:

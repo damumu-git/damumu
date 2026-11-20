@@ -326,6 +326,38 @@ export function createMemberPages(ui) {
     settings.append(
       node("p", session().user.email ?? "第三方账号", "meta"),
     );
+    const sessions = await request("/me/sessions", { auth: true });
+    const devices = node("ul", null, "contact-list");
+    for (const entry of sessions) {
+      const row = node("li", null, "activity-section");
+      row.append(node("strong", entry.current ? "本次登录" : "其他登录"),
+        node("p", time(entry.created_at), "meta"),
+        button("退出此登录", async (event) => {
+          if (!window.confirm("确定退出此登录？")) return;
+          const control = event.currentTarget;
+          control.disabled = true;
+          try {
+            await request("/me/sessions/" + entry.id, { auth: true, method: "DELETE" });
+            if (entry.current) { setSession(null); location.assign("/login"); }
+            else row.remove();
+          } catch (error) {
+            control.disabled = false;
+            showError(content, error);
+          }
+        }));
+      devices.append(row);
+    }
+    settings.append(node("h3", "登录管理"), devices,
+      button("退出全部登录", async (event) => {
+        if (!window.confirm("所有设备将需要重新登录。确定继续？")) return;
+        const control = event.currentTarget;
+        control.disabled = true;
+        try {
+          await request("/auth/logout-all", { auth: true, method: "POST" });
+          setSession(null);
+          location.assign("/login");
+        } catch (error) { control.disabled = false; showError(content, error); }
+      }));
     const actions = node("div", null, "section-nav");
     actions.append(
       actionLink(

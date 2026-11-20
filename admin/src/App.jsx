@@ -21,7 +21,6 @@ const navigation = [
   { id: 'messages', label: '消息管理' },
   { id: 'reports', label: '举报治理' },
   { id: 'content-filter', label: '敏感词管理' },
-  { id: 'safety', label: '安全警报' },
   { id: 'suggestions', label: '用户建议' },
   { id: 'categories', label: '分类配置' },
   { id: 'regions', label: '地区管理' },
@@ -193,7 +192,6 @@ function Dashboard() {
     { label: '累计用户', value: metrics.total_users, note: `近 7 日 +${metrics.new_users_7d ?? 0}`, accent: 'green' },
     { label: '在架活动', value: metrics.active_events, note: `累计 ${metrics.total_events ?? 0} 场`, accent: 'amber' },
     { label: '待处理举报', value: metrics.open_reports, note: '按优先级处置', accent: 'red' },
-    { label: '安全警报', value: metrics.open_safety_alerts, note: '需及时响应', accent: 'blue' },
   ]
   const trend = payload?.trend ?? []
   const maxTrend = Math.max(1, ...trend.map((item) => Number(item.users) + Number(item.applications)))
@@ -875,43 +873,6 @@ function Reports() {
   )
 }
 
-function Safety() {
-  const dialog = useAdminDialog()
-  const [status, setStatus] = useState('')
-  const [notice, setNotice] = useState('')
-  const { resource, pager } = usePagedResource(api.safetyAlerts, { status })
-  const rows = resource.data?.data ?? []
-  const update = async (alert, nextStatus) => {
-    const note = await dialog.prompt('记录本次响应情况：')
-    if (note === null) return
-    try {
-      await api.updateSafetyAlert(alert.id, { status: nextStatus, note, actorUserId: null })
-      setNotice('安全警报响应已记录')
-      resource.reload()
-    } catch (error) { setNotice(error.message) }
-  }
-  return (
-    <section className="panel full-panel">
-      <div className="panel-heading"><div><span className="kicker">Safety response</span><h3>安全警报</h3><p>此处仅提供联系人通知和运营响应，不代替紧急救援</p></div><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">全部状态</option><option value="open">待响应</option><option value="contacted">已联系</option><option value="resolved">已解决</option></select></div>
-      {notice && <div className="notice" onClick={() => setNotice('')}>{notice}<span>×</span></div>}
-      <PageState {...resource} empty={!rows.length} onRetry={resource.reload}>
-        <div className="safety-list">{rows.map((alert) => (
-          <article className={`safety-card ${alert.status === 'open' ? 'urgent' : ''}`} key={alert.id}>
-            <div className="safety-mark">!</div>
-            <div className="safety-copy"><div><Status value={alert.status} /><time>{formatDate(alert.created_at)}</time></div><h4>{alert.nickname ?? '未设置昵称'} · {alert.alert_type}</h4><p>{alert.event_title ?? '非活动场景'} · 下次确认 {formatDate(alert.next_due_at)}</p></div>
-            <div className="card-actions vertical">
-              {alert.status === 'open' && <button className="button dark" onClick={() => update(alert, 'contacted')}>已联系紧急联系人</button>}
-              {!['resolved', 'false_alarm'].includes(alert.status) && <button className="button primary" onClick={() => update(alert, 'resolved')}>标记已解决</button>}
-              {!['resolved', 'false_alarm'].includes(alert.status) && <button className="button ghost" onClick={() => update(alert, 'false_alarm')}>确认误报</button>}
-            </div>
-          </article>
-        ))}</div>
-      </PageState>
-      <ListPager {...pager} />
-    </section>
-  )
-}
-
 const categoryPayload = (category, overrides = {}) => ({
   code: category.code,
   nameZhCn: category.name_zh_cn,
@@ -1307,7 +1268,7 @@ function Settings() {
   )
 }
 
-const pages = { 'web-guides': WebGuides, 'activity-series': ActivitySeries, 'content-filter': ContentFilterPage, 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, messages: Messages, reports: Reports, safety: Safety, suggestions: Suggestions, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
+const pages = { 'web-guides': WebGuides, 'activity-series': ActivitySeries, 'content-filter': ContentFilterPage, 'emoji-assets': EmojiAssetManager, dashboard: Dashboard, users: Users, events: Events, messages: Messages, reports: Reports, suggestions: Suggestions, categories: Categories, regions: Regions, avatars: SystemAvatars, audit: Audit, 'event-log': EventLogPage, settings: Settings }
 
 function AnnouncementDialog({ onClose }) {
   const [title, setTitle] = useState('')

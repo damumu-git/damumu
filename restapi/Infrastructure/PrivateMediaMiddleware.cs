@@ -4,6 +4,14 @@ public sealed class PrivateMediaMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context, Db db)
     {
+        if (context.Request.Path.StartsWithSegments("/uploads", StringComparison.OrdinalIgnoreCase))
+        {
+            var path = context.Request.Path.Value!;
+            var segments = path.Split('/');
+            if (segments.Skip(1).Any(segment => string.IsNullOrEmpty(segment) || segment is "." or ".." ||
+                segment.Contains('\\') || segment.Contains('%') || segment.Contains(':')))
+                throw new ApiException(404, "media_not_found", "图片不存在或无权访问");
+        }
         if (context.Request.Path.StartsWithSegments("/uploads/events", StringComparison.OrdinalIgnoreCase))
         {
             context.Response.Headers.CacheControl = "private,no-store";

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'session_transport.dart';
 import 'package:http_parser/http_parser.dart' as parser;
 import 'feedback_model.dart';
 import 'l10n.dart';
@@ -169,7 +170,7 @@ class RegionService {
   }
 
   static Future<List<AdministrativeRegion>> load() async {
-    final response = await http
+    final response = await SessionTransport.client
         .get(Uri.parse('$_apiBase/regions'))
         .timeout(const Duration(seconds: 8));
     return _regionsFromResponse(response);
@@ -217,7 +218,7 @@ class EventService {
     String eventId,
     String reason,
   ) async {
-    final response = await http
+    final response = await SessionTransport.client
         .post(
           Uri.parse('$_apiBase/events/$eventId/cancel'),
           headers: {
@@ -245,7 +246,9 @@ class EventService {
               contentType: parser.MediaType('image', 'jpeg'),
             ),
           );
-    final streamed = await request.send().timeout(const Duration(seconds: 20));
+    final streamed = await SessionTransport.client
+        .send(request)
+        .timeout(const Duration(seconds: 20));
     final response = await http.Response.fromStream(streamed);
     final data = _decodeResponse(response, '图片上传失败，请稍后再试')['data'] as Map;
     return (
@@ -255,7 +258,7 @@ class EventService {
   }
 
   static Future<void> deleteCover(String token, String id) async {
-    await http
+    await SessionTransport.client
         .delete(
           Uri.parse('$_apiBase/events/covers/$id'),
           headers: {'Authorization': 'Bearer $token'},
@@ -268,7 +271,7 @@ class EventService {
     String eventId,
     String coverMediaId,
   ) async {
-    final response = await http
+    final response = await SessionTransport.client
         .put(
           Uri.parse('$_apiBase/events/$eventId/cover'),
           headers: {
@@ -291,7 +294,7 @@ class EventService {
     String token,
     String eventId,
   ) async {
-    final response = await http
+    final response = await SessionTransport.client
         .get(
           Uri.parse('$_apiBase/events/$eventId'),
           headers: {'Authorization': 'Bearer $token'},
@@ -317,7 +320,7 @@ class EventService {
     String? token,
     String? eventId,
   }) async {
-    final response = await http
+    final response = await SessionTransport.client
         .get(
           Uri.parse('$_apiBase/users/$userId/public-profile').replace(
             queryParameters: eventId == null ? null : {'eventId': eventId},
@@ -340,10 +343,11 @@ class EventService {
       'targetType': targetType,
     };
     if (targetUserId != null) query['targetUserId'] = targetUserId;
-    final response = await http
+    final response = await SessionTransport.client
         .get(
-          Uri.parse('$_apiBase/feedback/eligibility')
-              .replace(queryParameters: query),
+          Uri.parse(
+            '$_apiBase/feedback/eligibility',
+          ).replace(queryParameters: query),
           headers: {'Authorization': 'Bearer $token'},
         )
         .timeout(const Duration(seconds: 10));
@@ -361,7 +365,7 @@ class EventService {
     required String tagCode,
     String? description,
   }) async {
-    final response = await http
+    final response = await SessionTransport.client
         .post(
           Uri.parse('$_apiBase/feedback'),
           headers: {
@@ -386,7 +390,7 @@ class EventService {
     String eventId, {
     String? note,
   }) async {
-    final response = await http
+    final response = await SessionTransport.client
         .post(
           Uri.parse('$_apiBase/events/$eventId/join'),
           headers: {
@@ -405,7 +409,7 @@ class EventService {
   }
 
   static Future<void> leave(String token, String eventId) async {
-    final response = await http
+    final response = await SessionTransport.client
         .post(
           Uri.parse('$_apiBase/events/$eventId/leave'),
           headers: {'Authorization': 'Bearer $token'},
@@ -457,7 +461,7 @@ class EventService {
     }
     if (city != null && city.isNotEmpty) query['city'] = city;
     if (district != null && district.isNotEmpty) query['district'] = district;
-    final response = await http
+    final response = await SessionTransport.client
         .get(
           Uri.parse('$_apiBase/activities').replace(queryParameters: query),
           headers: followingToken == null
@@ -504,7 +508,7 @@ class EventService {
         if (owned != null) 'owned': '$owned',
       },
     );
-    final response = await http
+    final response = await SessionTransport.client
         .get(uri, headers: {'Authorization': 'Bearer $token'})
         .timeout(const Duration(seconds: 10));
     final data =
@@ -520,7 +524,7 @@ class EventService {
   }
 
   static Future<List<Map<String, dynamic>>> myActivities(String token) async {
-    final response = await http
+    final response = await SessionTransport.client
         .get(
           Uri.parse('$_apiBase/me/activities'),
           headers: {'Authorization': 'Bearer $token'},
@@ -536,7 +540,7 @@ class EventService {
     String token,
     String eventId,
   ) async {
-    final response = await http
+    final response = await SessionTransport.client
         .get(
           Uri.parse('$_apiBase/events/$eventId/members?status=applied'),
           headers: {'Authorization': 'Bearer $token'},
@@ -575,7 +579,7 @@ class EventService {
     String action, {
     Map<String, dynamic>? body,
   }) async {
-    final response = await http
+    final response = await SessionTransport.client
         .post(
           Uri.parse('$_apiBase/events/$eventId/members/$userId/$action'),
           headers: {
@@ -621,7 +625,7 @@ class EventService {
     int? repeatCount,
     DateTime? repeatUntil,
   }) async {
-    final response = await http
+    final response = await SessionTransport.client
         .post(
           Uri.parse('$_apiBase/events'),
           headers: {

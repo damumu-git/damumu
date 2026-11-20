@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'session_transport.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -296,6 +297,13 @@ class UnreadSummary {
 }
 
 class SocialService {
+  static Future<List<Map<String, dynamic>>> loginSessions(String token) async =>
+      (await _request(token, '/me/sessions') as List)
+          .map((item) => (item as Map).cast<String, dynamic>()).toList();
+
+  static Future<void> endLoginSession(String token, String id) =>
+      _request(token, '/me/sessions/$id', method: 'DELETE');
+
   static Future<void> purgeExpiredLocalMessages() async {
     final preferences = await SharedPreferences.getInstance();
     final cutoff = privacyRetentionCutoff(DateTime.now());
@@ -339,7 +347,9 @@ class SocialService {
     request.headers['Content-Type'] = 'application/json';
     if (body != null) request.body = jsonEncode(body);
     final response = await http.Response.fromStream(
-      await request.send().timeout(const Duration(seconds: 10)),
+      await SessionTransport.client
+          .send(request)
+          .timeout(const Duration(seconds: 10)),
     );
     if (response.statusCode == 204) return null;
     Object? decoded;
@@ -663,7 +673,9 @@ class SocialService {
       ),
     );
     final response = await http.Response.fromStream(
-      await request.send().timeout(const Duration(seconds: 20)),
+      await SessionTransport.client
+          .send(request)
+          .timeout(const Duration(seconds: 20)),
     );
     final decoded = jsonDecode(utf8.decode(response.bodyBytes));
     if (decoded is! Map ||

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'session_transport.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -33,7 +34,7 @@ class ActivitySeriesService {
       request.body = jsonEncode(data);
     }
     final response = await http.Response.fromStream(
-      await request.send(),
+      await SessionTransport.client.send(request),
     ).timeout(const Duration(seconds: 12));
     final envelope = jsonDecode(utf8.decode(response.bodyBytes)) as Map;
     if (response.statusCode < 200 || response.statusCode >= 300) {

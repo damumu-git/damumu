@@ -43,6 +43,8 @@ public sealed partial class ContentFilter(Db db)
         }).Where(field => !string.IsNullOrWhiteSpace(field)).ToArray();
         if (fields.Length > 0)
         {
+            if (fields.Any(field => field?.Length > 20000))
+                throw new ApiException(400, "content_too_long", "输入内容过长");
             var context = invocation.HttpContext;
             var filter = context.RequestServices.GetRequiredService<ContentFilter>();
             await filter.ValidateAsync(fields, context.RequestAborted);

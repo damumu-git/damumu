@@ -273,6 +273,13 @@ const _strings = <String, Map<String, String>>{
     'contactUnfollow': '取消关注',
     'contactMessage': '发私信',
     'contactRequests': '联系请求',
+    'sessionsTitle': '登录管理',
+    'sessionsCurrent': '本次登录',
+    'sessionsOther': '其他登录',
+    'sessionsEnd': '退出此登录',
+    'sessionsEndAll': '退出全部登录',
+    'sessionsEndConfirm': '确定退出此登录？',
+    'sessionsEndAllConfirm': '所有设备将需要重新登录。确定继续？',
     'friendList': '我的好友',
     'friendRequests': '好友申请',
     'friendAdd': '加好友',
@@ -615,7 +622,8 @@ const _strings = <String, Map<String, String>>{
   'en': {
     'googleRegister': 'Sign up with Google',
     'kakaoRegister': 'Sign up with Kakao',
-    'socialAlreadyRegistered': 'This account is already registered. Please sign in.',
+    'socialAlreadyRegistered':
+        'This account is already registered. Please sign in.',
     'profileUpcomingActivities': 'Current activities',
     'profilePastActivities': 'Past activities',
     'profileCancelledActivities': 'Cancelled',
@@ -634,7 +642,8 @@ const _strings = <String, Map<String, String>>{
     'groupCancelRequest': 'Withdraw request',
     'groupLeave': 'Leave group',
     'groupPending': 'Your request is awaiting the group owner’s approval.',
-    'groupMemberListNotice': 'Your nickname will appear on the public member list when you join.',
+    'groupMemberListNotice':
+        'Your nickname will appear on the public member list when you join.',
     'groupManage': 'Manage group',
     'groupApplications': 'Join requests',
     'groupApplicationsEmpty': 'No pending requests.',
@@ -675,11 +684,16 @@ const _strings = <String, Map<String, String>>{
     'memberLevelGuideProfileRank': 'Profile level',
     'memberLevelGuideCondition1': 'Granted at sign-up',
     'memberLevelGuideCondition2': 'Successfully host 3+ activities',
-    'memberLevelGuideCondition3': 'Host 10+ successful activities with 51+ likes, or pass identity verification',
-    'memberLevelGuideCondition4': 'Host 10+ successful activities with 51+ likes and pass identity verification',
-    'memberLevelGuideRecurring': 'Create series, groups and recurring activities · Up to {count} per plan',
-    'memberLevelGuideSuccessful': 'Successful activity · It ended and a participant other than the host checked in.',
-    'memberLevelGuideVerification': 'Korean identity verification is currently unavailable.',
+    'memberLevelGuideCondition3':
+        'Host 10+ successful activities with 51+ likes, or pass identity verification',
+    'memberLevelGuideCondition4':
+        'Host 10+ successful activities with 51+ likes and pass identity verification',
+    'memberLevelGuideRecurring':
+        'Create series, groups and recurring activities · Up to {count} per plan',
+    'memberLevelGuideSuccessful':
+        'Successful activity · It ended and a participant other than the host checked in.',
+    'memberLevelGuideVerification':
+        'Korean identity verification is currently unavailable.',
     'communityGroupChat': 'Group chat',
     'communityGroupPinned': 'Pinned announcement',
     'communityGroupHide': 'Hide from list',
@@ -696,7 +710,8 @@ const _strings = <String, Map<String, String>>{
     'recurringWeekly': 'Weekly',
     'recurringMonthly': 'Monthly',
     'recurringCount': 'Planned slots, including this one',
-    'recurringHelp': 'Up to 12 slots within six months. Confirm each later slot within 14 days before it starts. Missing monthly dates are skipped. Later slots use the category cover, which you can replace after publishing.',
+    'recurringHelp':
+        'Up to 12 slots within six months. Confirm each later slot within 14 days before it starts. Missing monthly dates are skipped. Later slots use the category cover, which you can replace after publishing.',
     'recurringEmpty': 'No plans. Select a repeat frequency when publishing.',
     'recurringPaused': 'Paused',
     'recurringActive': 'Active',
@@ -718,7 +733,8 @@ const _strings = <String, Map<String, String>>{
     'joiningNotAccepted': 'Unable to join this time',
     'joiningResultHelp':
         'You will receive an in-app message after the host responds',
-    'scheduleConflictConsent': 'Once you join a confirmed activity, other overlapping pending applications and waitlists are automatically withdrawn.',
+    'scheduleConflictConsent':
+        'Once you join a confirmed activity, other overlapping pending applications and waitlists are automatically withdrawn.',
     'joiningApply': 'Request to join',
 
     'autoLogin30Days': 'Stay signed in for 30 days',
@@ -912,6 +928,14 @@ const _strings = <String, Map<String, String>>{
     'contactUnfollow': 'Unfollow',
     'contactMessage': 'Message',
     'contactRequests': 'Contact requests',
+    'sessionsTitle': 'Login sessions',
+    'sessionsCurrent': 'This login',
+    'sessionsOther': 'Other login',
+    'sessionsEnd': 'Sign out',
+    'sessionsEndAll': 'Sign out everywhere',
+    'sessionsEndConfirm': 'Sign out this login?',
+    'sessionsEndAllConfirm':
+        'All devices will need to sign in again. Continue?',
     'friendList': 'My friends',
     'friendRequests': 'Friend requests',
     'friendAdd': 'Add friend',
@@ -1318,7 +1342,8 @@ const _strings = <String, Map<String, String>>{
     'recurringWeekly': '매주',
     'recurringMonthly': '매월',
     'recurringCount': '계획 회차 수(현재 회차 포함)',
-    'recurringHelp': '최대 12회, 6개월 이내로 계획해요. 후속 회차는 시작 14일 전부터 확인 후 게시해요. 해당 날짜가 없는 달은 건너뛰어요. 후속 회차는 카테고리 표지를 사용하며 게시 후 바꿀 수 있어요.',
+    'recurringHelp':
+        '최대 12회, 6개월 이내로 계획해요. 후속 회차는 시작 14일 전부터 확인 후 게시해요. 해당 날짜가 없는 달은 건너뛰어요. 후속 회차는 카테고리 표지를 사용하며 게시 후 바꿀 수 있어요.',
     'recurringEmpty': '계획이 없어요. 활동 게시 시 반복 주기를 선택해 주세요.',
     'recurringPaused': '일시 중지',
     'recurringActive': '진행 중',
@@ -1518,6 +1543,13 @@ const _strings = <String, Map<String, String>>{
     'contactUnfollow': '팔로우 취소',
     'contactMessage': '메시지 보내기',
     'contactRequests': '연락 요청',
+    'sessionsTitle': '로그인 관리',
+    'sessionsCurrent': '현재 로그인',
+    'sessionsOther': '다른 로그인',
+    'sessionsEnd': '로그아웃',
+    'sessionsEndAll': '모든 기기 로그아웃',
+    'sessionsEndConfirm': '이 로그인을 종료할까요?',
+    'sessionsEndAllConfirm': '모든 기기에서 다시 로그인해야 해요. 계속할까요?',
     'friendList': '내 친구',
     'friendRequests': '친구 요청',
     'friendAdd': '친구 추가',

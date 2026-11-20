@@ -1,3 +1,5 @@
+认证会话使用迁移 045。App 通过访问令牌和轮换刷新凭据登录，网站通过同源 HttpOnly Cookie，Admin 使用独立账号与 TOTP。生产须配置持久化 Security:KeyDirectory，完整准备步骤见 [安全升级说明](../deploy/SECURITY.md)。安全会面、联系人及警报接口已退役。
+
 # 搭木木（DAMUMU）REST API
 
 原生 Google/Kakao 授权使用 `/api/v1/auth/social/{provider}`，独立网页 OAuth 使用 `/api/v1/auth/web/*`。服务端校验第三方身份后将其关联到本地账号，按提供方和第三方主体识别用户。分别参见 [原生登录配置](../docs/SOCIAL_LOGIN_SETUP.md) 和 [网页登录配置](../app-web/README.md#网页-google-和-kakao-登录)。

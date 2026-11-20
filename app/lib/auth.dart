@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
+import 'session_transport.dart';
 import 'package:http_parser/http_parser.dart' as parser;
 import 'package:image/image.dart' as img;
 import 'package:image_cropper/image_cropper.dart';
@@ -141,7 +142,12 @@ class AuthApi {
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     if (body != null) request.body = jsonEncode(body);
     final response = await (() async {
-      final streamed = await request.send();
+      http.StreamedResponse streamed;
+      try {
+        streamed = await SessionTransport.client.send(request);
+      } on SessionExpiredException {
+        throw AuthApiException(401, '');
+      }
       return http.Response.fromStream(streamed);
     })().timeout(const Duration(seconds: 15));
     if (response.statusCode >= 200 &&
@@ -238,6 +244,14 @@ class AuthApi {
     return result['nickname'] as String;
   }
 
+  static Future<void> endSession(String token, {bool all = false}) async {
+    await _json(
+      all ? '/auth/logout-all' : '/auth/logout',
+      method: 'POST',
+      token: token,
+    );
+  }
+
   static Future<void> deleteAccount(String token) async {
     await _json('/me', method: 'DELETE', token: token);
   }
@@ -255,7 +269,9 @@ class AuthApi {
         contentType: parser.MediaType('image', 'jpeg'),
       ),
     );
-    final response = await http.Response.fromStream(await request.send());
+    final response = await http.Response.fromStream(
+      await SessionTransport.client.send(request),
+    );
     final decoded = jsonDecode(utf8.decode(response.bodyBytes));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(decoded['error']?['message'] ?? '头像上传失败');
@@ -296,7 +312,8 @@ class AuthController extends ChangeNotifier {
   // This is only a local expiry hint. /me verifies the signature and account.
   bool get sessionExpired {
     final parts = token?.split('.');
-    if (parts == null || parts.length != 3) return false;
+    if (parts == null || parts.length != 4) return false;
+    if (!SessionTransport.expired) return false;
     final expires = int.tryParse(parts[1]);
     return expires != null &&
         expires <= DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -317,6 +334,7 @@ class AuthController extends ChangeNotifier {
     );
     if (result['registrationRequired'] == true) return false;
     await _setAutoLogin(autoLogin);
+    await SessionTransport.capture(result, _persistSession);
     token = result['accessToken'] as String;
     user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
     await _saveToken(token);
@@ -343,7 +361,7 @@ class AuthController extends ChangeNotifier {
       // A non-persistent login remains valid while this app process is alive.
       token = background
           ? token
-          : (_persistSession ? preferences.getString('auth_token') : null);
+          : (_persistSession ? await SessionTransport.restore() : null);
       if (!_persistSession) await preferences.remove('auth_token');
       if (token != null && sessionExpired) {
         await _discardSession();
@@ -371,6 +389,7 @@ class AuthController extends ChangeNotifier {
         try {
           final result = await AuthApi.login(_devTestEmail, _devTestPassword);
           if (version != _sessionVersion) return;
+          await SessionTransport.capture(result, _persistSession);
           token = result['accessToken'] as String;
           user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
           await _saveToken(token);
@@ -402,6 +421,7 @@ class AuthController extends ChangeNotifier {
     final result = await AuthApi.login(email.trim(), password);
     await _setAutoLogin(autoLogin);
     await LoginPreferences.saveId(email, rememberId);
+    await SessionTransport.capture(result, _persistSession);
     token = result['accessToken'] as String;
     user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
     await _saveToken(token);
@@ -425,6 +445,7 @@ class AuthController extends ChangeNotifier {
       privacyAcknowledged: privacyAcknowledged,
     );
     await _setAutoLogin(true);
+    await SessionTransport.capture(result, _persistSession);
     token = result['accessToken'] as String;
     user = AuthUser.fromJson(result['user'] as Map<String, dynamic>);
     await _saveToken(token);
@@ -460,6 +481,11 @@ class AuthController extends ChangeNotifier {
   Future<void> logout() async {
     _sessionVersion++;
     final previousToken = token;
+    try {
+      if (previousToken != null) await AuthApi.endSession(previousToken);
+    } catch (_) {
+      // Local logout still clears device credentials when offline.
+    }
     await _discardSession();
     loading = false;
     notifyListeners();
@@ -492,9 +518,8 @@ class AuthController extends ChangeNotifier {
 
   Future<void> _saveToken(String? value) async {
     final preferences = await SharedPreferences.getInstance();
-    value == null || !_persistSession
-        ? await preferences.remove('auth_token')
-        : await preferences.setString('auth_token', value);
+    await preferences.remove('auth_token');
+    if (value == null) await SessionTransport.clear();
   }
 
   Future<void> _clearPrivateLocalData(String? userId) async {
@@ -963,7 +988,9 @@ class _AuthPageState extends State<AuthPage> {
                       fit: BoxFit.contain,
                       excludeFromSemantics: true,
                     ),
-                    label: Text(context.tr(_register ? 'googleRegister' : 'googleLogin')),
+                    label: Text(
+                      context.tr(_register ? 'googleRegister' : 'googleLogin'),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   FilledButton.icon(
@@ -981,7 +1008,9 @@ class _AuthPageState extends State<AuthPage> {
                       height: 20,
                       excludeFromSemantics: true,
                     ),
-                    label: Text(context.tr(_register ? 'kakaoRegister' : 'kakaoLogin')),
+                    label: Text(
+                      context.tr(_register ? 'kakaoRegister' : 'kakaoLogin'),
+                    ),
                   ),
                 ],
               ),
@@ -1002,7 +1031,12 @@ class _AuthPageState extends State<AuthPage> {
       if (credential == null || !mounted) return;
       final auth = AuthScope.of(context);
       final locale = Localizations.localeOf(context).languageCode;
-      if (await auth.loginSocial(credential, autoLogin: _autoLogin, registrationOnly: _register)) return;
+      if (await auth.loginSocial(
+        credential,
+        autoLogin: _autoLogin,
+        registrationOnly: _register,
+      ))
+        return;
       if (!mounted) return;
       setState(() => _busy = false);
       final nickname = await showDialog<String>(
@@ -1215,7 +1249,9 @@ Map<String, String>? privateImageHeaders(BuildContext context, String value) {
       .dependOnInheritedWidgetOfExactType<AuthScope>()
       ?.notifier
       ?.token;
-  return token == null ? null : {'Authorization': 'Bearer $token'};
+  return token == null
+      ? null
+      : {'Authorization': 'Bearer ${SessionTransport.resolve(token)}'};
 }
 
 Future<void> showAvatarEditor(BuildContext context) async {

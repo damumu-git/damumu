@@ -239,6 +239,8 @@ compose config --quiet
 
 [[ -d /srv/damumu/uploads && -r /srv/damumu/uploads ]] || \
   die "Prepare /srv/damumu/uploads first; see deploy/README.md. Docker will not create a missing media directory."
+[[ -d /srv/damumu/keys && "$(stat -c '%u' /srv/damumu/keys)" == 1654 ]] || \
+  die "Security upgrade requires: sudo bash deploy/prepare-security.sh. See deploy/SECURITY.md."
 api_container="$(compose ps -aq api)"
 if [[ -n "$api_container" ]]; then
   old_volume="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/app/uploads"}}{{if eq .Type "volume"}}{{.Name}}{{end}}{{end}}{{end}}' "$api_container")"

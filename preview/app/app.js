@@ -255,22 +255,6 @@
       true,
     ),
     route("help", "帮助与社区规则", "说明与安全", "_ProfileInfoPage"),
-    route(
-      "safety",
-      "安全中心",
-      "说明与安全",
-      "SafetyCenterPage",
-      "当前安全会面为本地演示，联系人通知与位置分享尚未接通。",
-      true,
-    ),
-    route(
-      "emergency",
-      "紧急帮助",
-      "说明与安全",
-      "_showEmergency",
-      "仅展示现有操作入口，不发送通知、不分享位置。",
-      true,
-    ),
   ];
   const eventData = [
     {
@@ -316,7 +300,6 @@
     feedFilter = "全部",
     search = "",
     messages = [],
-    safeActive = false,
     feedbackTag = "友善",
     capacity = 6;
   let draft = {
@@ -526,7 +509,7 @@
                   `<div><strong>${v}</strong><small>${k}</small></div>`,
               )
               .join("")}</div>`,
-          )}<div class="app-hero" data-route="safety" role="button" tabindex="0"><span class="eyebrow">CARE FOR EACH OTHER</span><h2>安全中心　→</h2><p>安心见面，从多一点准备开始</p></div>${panel("", `${menu("我的活动", "查看我发布和参加的活动", "my-activities")}${menu("信誉与评价", "守时 · 友善 · 沟通顺畅", "trust")}${menu("屏蔽与举报", "", "blocks")}`)}${panel("", `${menu("帮助与规则", "", "help")}${menu("隐私与账号", "", "privacy")}${menu("权限设置", "首次启动介绍与权限选择", "intro-welcome")}${menu("通知与外部处理", "当前外部服务默认停用", "external")}${menu("语言", "简体中文", "language")}${menu("注销账号", "", "delete-account")}${menu("退出登录", "", "logout")}`)}`,
+          )}${panel("", `${menu("我的活动", "查看我发布和参加的活动", "my-activities")}${menu("信誉与评价", "守时 · 友善 · 沟通顺畅", "trust")}${menu("屏蔽与举报", "", "blocks")}`)}${panel("", `${menu("帮助与规则", "", "help")}${menu("隐私与账号", "", "privacy")}${menu("权限设置", "首次启动介绍与权限选择", "intro-welcome")}${menu("通知与外部处理", "当前外部服务默认停用", "external")}${menu("语言", "简体中文", "language")}${menu("注销账号", "", "delete-account")}${menu("退出登录", "", "logout")}`)}`,
         );
       case "login":
       case "register":
@@ -581,15 +564,7 @@
         );
       case "help":
         return stack(
-          `${heading("帮助与社区规则", "profile")}${panel("参加活动前", "<p>确认时间、地区和预计线下费用。不要向陌生人提前转账，通过审核后核对集合点。</p>")}${panel("友好相处", "<p>尊重他人边界，守时沟通。禁止商业导流、歧视、危险和违法活动。</p>")}${l("安全中心", "safety", "primary wide")}`,
-        );
-      case "safety":
-        return stack(
-          `${heading("安全中心", "profile")}${note("现有安全会面仅本地演示；真实联系人通知、位置分享及逾时提醒尚未接通。")}<div class="app-hero"><span class="eyebrow">SAFETY FIRST</span><h1>${safeActive ? "安全会面进行中" : "开启安全会面"}</h1><p>按时确认状态，做好见面准备。</p><div style="margin-top:20px">${b(safeActive ? "我现在安全 · 完成确认" : "开始设置", "safety-toggle", "wide")}</div></div>${s("确认频率", ["30 分钟", "60 分钟", "90 分钟"])}${panel("紧急联系人", "<p>示例联系人 · 010••••0000</p><small>仅界面示意，尚不可实际编辑或通知。</small>")}${panel("", `${b("位置分享 · 尚未接通", "placeholder", "wide")}${b("紧急分享模板 · 尚未接通", "placeholder", "wide")}`)}${l("需要紧急帮助", "emergency", "danger wide")}<small>本功能不是救援服务。如面临即时危险，请联系当地紧急服务。</small>`,
-        );
-      case "emergency":
-        return stack(
-          `${heading("紧急帮助", "safety")}<h2>先确保自己的安全</h2><p>若正处于危险中，请优先联系当地紧急服务。</p>${b("通知紧急联系人并分享位置", "placeholder", "danger wide")}${note("当前正式入口尚未接通通知与位置分享。预览不会联系任何人。")}`,
+          `${heading("帮助与社区规则", "profile")}${panel("参加活动前", "<p>确认时间、地区和预计线下费用。不要向陌生人提前转账，通过审核后核对集合点。</p>")}${panel("友好相处", "<p>尊重他人边界，守时沟通。禁止商业导流、歧视、危险和违法活动。</p>")}`,
         );
       default:
         throw new Error(`Unmapped app route: ${id}`);
@@ -651,10 +626,7 @@
     toast("仅模拟注销，不影响真实账号");
     go("login");
   };
-  actions["safety-toggle"] = ({ draw }) => {
-    safeActive = !safeActive;
-    draw();
-  };
+
   actions.placeholder = ({ toast }) =>
     toast("现有代码尚未接通该功能，此处仅展示界面。");
   actions["send-image"] = ({ go, toast }) => {

@@ -48,7 +48,6 @@ public static class AdminEndpoints
                     (SELECT count(*) FROM event WHERE deleted_at IS NULL) AS total_events,
                     (SELECT count(*) FROM event WHERE status IN ('published','full')) AS active_events,
                     (SELECT count(*) FROM report WHERE status IN ('submitted','triaged','investigating','appealed')) AS open_reports,
-                    (SELECT count(*) FROM safety_alert WHERE status IN ('open','contacted')) AS open_safety_alerts,
                     (SELECT count(*) FROM event_member WHERE status='attended') AS total_checkins,
                     (SELECT count(*) FROM message WHERE created_at >= now()-interval '24 hours') AS messages_24h
                 """, cancellationToken: ct);
@@ -567,52 +566,6 @@ public static class AdminEndpoints
             await WriteAudit(db, request.ActorUserId, "admin.report.updated", "report", id,
                 new { request.Status, request.ResolutionCode, request.Note }, ct);
             return ApiSupport.Ok(report);
-        });
-
-        admin.MapGet("/safety-alerts", async (
-            Db db, string? status, int? limit, int? offset, CancellationToken ct) =>
-        {
-            var take = Math.Clamp(limit ?? 30, 1, 100);
-            var skip = Math.Max(offset ?? 0, 0);
-            var rows = await db.QueryAsync(
-                """
-                SELECT sa.id, sa.alert_type, sa.status, sa.contact_notified_at,
-                       sa.resolved_at, sa.created_at, ss.user_id, ss.event_id,
-                       ss.next_due_at, up.nickname, e.title AS event_title
-                FROM safety_alert sa
-                JOIN safety_session ss ON ss.id=sa.safety_session_id
-                LEFT JOIN user_profile up ON up.user_id=ss.user_id
-                LEFT JOIN event e ON e.id=ss.event_id
-                WHERE (@status IS NULL OR sa.status=@status)
-                ORDER BY CASE sa.status WHEN 'open' THEN 0 WHEN 'contacted' THEN 1 ELSE 2 END,
-                         sa.created_at, sa.id
-                LIMIT @take OFFSET @skip
-                """, new { status, take, skip }, ct);
-            var total = await db.ScalarAsync<long>(
-                "SELECT count(*) FROM safety_alert WHERE (@status IS NULL OR status=@status)",
-                new { status }, ct);
-            return ApiSupport.Ok(rows, new { total, limit = take, offset = skip });
-        });
-
-        admin.MapPatch("/safety-alerts/{id:guid}", async (
-            Guid id, AdminSafetyAlertRequest request, Db db, CancellationToken ct) =>
-        {
-            if (request.Status is not ("contacted" or "acknowledged" or "resolved" or "false_alarm"))
-                throw new ApiException(400, "invalid_status", "不支持的警报状态");
-            var alert = await db.QueryOneAsync(
-                """
-                UPDATE safety_alert
-                SET status=@status,
-                    contact_notified_at=CASE WHEN @status='contacted' THEN now() ELSE contact_notified_at END,
-                    resolved_at=CASE WHEN @status IN ('resolved','false_alarm') THEN now() ELSE resolved_at END,
-                    resolution_note=COALESCE(@note, resolution_note)
-                WHERE id=@id
-                RETURNING id, status, contact_notified_at, resolved_at, resolution_note, updated_at
-                """, new { id, request.Status, request.Note }, ct);
-            if (alert is null) throw new ApiException(404, "alert_not_found", "安全警报不存在");
-            await WriteAudit(db, request.ActorUserId, "admin.safety_alert.updated", "safety_alert", id,
-                new { request.Status, request.Note }, ct);
-            return ApiSupport.Ok(alert);
         });
 
         admin.MapGet("/system-avatars", async (Db db, CancellationToken ct) =>
@@ -1171,9 +1124,10 @@ public static class AdminEndpoints
                 """
                 SELECT al.id, al.actor_user_id, al.actor_role, al.action, al.target_type,
                        al.target_id, al.trace_id, al.metadata, al.created_at,
-                       up.nickname AS actor_name
+                       COALESCE(aa.username,up.nickname) AS actor_name
                 FROM audit_log al
                 LEFT JOIN user_profile up ON up.user_id=al.actor_user_id
+                LEFT JOIN admin_account aa ON aa.id=al.admin_account_id
                 WHERE (@action IS NULL OR al.action=@action)
                   AND (@targetType IS NULL OR al.target_type=@targetType)
                 ORDER BY al.created_at DESC, al.id DESC
@@ -1306,8 +1260,6 @@ public sealed record AdminBulkEventRequest(Guid[]? Ids, string Action, string? R
 public sealed record AdminCoverReviewRequest(Guid CoverMediaId, string Status, string ExpectedStatus, string? Reason);
 public sealed record AdminReportActionRequest(
     string Status, string? ResolutionCode, string? Note, long RowVersion, Guid? ActorUserId);
-public sealed record AdminSafetyAlertRequest(
-    string Status, string? Note, Guid? ActorUserId);
 public sealed record AdminCategoryRequest(
     string Code,
     string NameZhCn,

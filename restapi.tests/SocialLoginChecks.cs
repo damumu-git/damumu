@@ -65,7 +65,7 @@ internal static class SocialLoginChecks
         // tables are intentionally outside this focused local integration check.
         var migrations = Path.Combine(root, "restapi/Migrations");
         var sql = string.Join("\n", Directory.GetFiles(migrations, "*.sql").Order().Select(File.ReadAllText));
-        foreach (var table in new[] { "app_user", "user_profile", "system_avatar" })
+        foreach (var table in new[] { "app_user", "user_profile", "system_avatar", "auth_session" })
         {
             var ddl = Regex.Match(sql, $@"CREATE TABLE IF NOT EXISTS {table} \([\s\S]*?\n\);").Value;
             Check(ddl.Length > 0, $"Missing table {table}");
@@ -86,6 +86,8 @@ internal static class SocialLoginChecks
         builder.Services.AddSingleton(source);
         builder.Services.AddSingleton<SocialAccountService>();
         builder.Services.AddSingleton<AuthService>();
+        builder.Services.AddSingleton<Db>();
+        builder.Services.AddSingleton<SessionSecurity>();
         builder.Services.AddSingleton<MediaStorage>();
         builder.Services.AddSingleton<ISocialIdentityVerifier>(new TestVerifier(run));
         await using var app = builder.Build();

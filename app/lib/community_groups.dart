@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'session_transport.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -317,10 +318,12 @@ class _GroupDetailState extends State<_GroupDetail> {
 
   Future<void> _attachActivity() async {
     try {
-      final data = await ActivitySeriesService.request(
-        '/me/activities?owned=true&limit=100',
-        token: _loadedToken,
-      ) as SeriesRow;
+      final data =
+          await ActivitySeriesService.request(
+                '/me/activities?owned=true&limit=100',
+                token: _loadedToken,
+              )
+              as SeriesRow;
       if (!mounted) return;
       final events = ActivitySeriesService.rows(data['items'])
           .where(
@@ -585,13 +588,15 @@ class _GroupEditorState extends State<_GroupEditor> {
           );
         if (!snapshot.hasData)
           return const Center(child: CircularProgressIndicator());
-        final categories = ActivitySeriesService.rows(snapshot.data![0])
-            .where((item) => item['level'] == 1);
+        final categories = ActivitySeriesService.rows(
+          snapshot.data![0],
+        ).where((item) => item['level'] == 1);
         final coverCategory = categories
             .where((item) => item['id'] == _coverType)
             .firstOrNull;
-        final regions = ActivitySeriesService.rows(snapshot.data![1])
-            .where((item) => item['level'] == 1);
+        final regions = ActivitySeriesService.rows(
+          snapshot.data![1],
+        ).where((item) => item['level'] == 1);
         return Form(
           key: _form,
           child: ListView(
@@ -807,22 +812,24 @@ class _GroupEditorState extends State<_GroupEditor> {
     setState(() => _saving = true);
     try {
       if (_created == null) {
-        final created = await ActivitySeriesService.request(
-          _groups,
-          token: widget.token,
-          method: 'POST',
-          data: {
-            'title': _title.text.trim(),
-            'description': _description.text.trim(),
-            'regionCode': _region,
-            'categoryIds': _selected.toList(),
-            'coverCategoryId': _coverType,
-            'capacity': int.tryParse(_capacity.text.trim()),
-            'minAge': min,
-            'maxAge': max,
-            'joinMode': _approval ? 'approval' : 'open',
-          },
-        ) as SeriesRow;
+        final created =
+            await ActivitySeriesService.request(
+                  _groups,
+                  token: widget.token,
+                  method: 'POST',
+                  data: {
+                    'title': _title.text.trim(),
+                    'description': _description.text.trim(),
+                    'regionCode': _region,
+                    'categoryIds': _selected.toList(),
+                    'coverCategoryId': _coverType,
+                    'capacity': int.tryParse(_capacity.text.trim()),
+                    'minAge': min,
+                    'maxAge': max,
+                    'joinMode': _approval ? 'approval' : 'open',
+                  },
+                )
+                as SeriesRow;
         _created = created['id'] as String;
       }
       if (_image case final Uint8List image) {
@@ -839,8 +846,9 @@ class _GroupEditorState extends State<_GroupEditor> {
             contentType: MediaType('image', 'jpeg'),
           ),
         );
-        final response = await http.Response.fromStream(await request.send())
-            .timeout(const Duration(seconds: 15));
+        final response = await http.Response.fromStream(
+          await SessionTransport.client.send(request),
+        ).timeout(const Duration(seconds: 15));
         if (response.statusCode < 200 || response.statusCode >= 300) {
           final payload = jsonDecode(utf8.decode(response.bodyBytes)) as Map;
           throw StateError(
