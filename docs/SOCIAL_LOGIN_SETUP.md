@@ -1,8 +1,6 @@
 # Google / Kakao 原生登录配置
 
-代码覆盖 Android / iOS App 的第三方登录、服务端身份校验和首次注册。
-默认关闭，尚未进行真实账号授权验收。当前客户端导入与待办见`STATUS.md`。
-Flutter Web / 桌面端暂不发起第三方授权，继续使用邮箱；离线预览只演示页面。
+本页说明 Android 和 iOS 的 Google/Kakao 授权、服务端校验及首次注册。原生发布开关默认关闭，当前真机验收待办见 [项目状态](STATUS.md)。Flutter Web 和桌面开发入口使用邮箱，独立活动网页版使用 [自己的 OAuth 配置](../app-web/README.md#网页-google-和-kakao-登录)。
 
 ## 本机配置文件
 

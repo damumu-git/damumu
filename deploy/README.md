@@ -239,6 +239,8 @@ flutter build apk \
 
 ## 更新与回滚
 
+生产版本、已应用迁移及最近一次线上检查见 [当前交接](../docs/STATUS.md)。Android 和 iOS 签名包按各自发布流程交付。
+
 更新前先创建 Lightsail 快照。首次安装快捷命令：
 
 ```bash
@@ -303,4 +305,4 @@ Pull Request 创建 revert、合并回 `main`，再运行 `damumu-deploy`。如�
 
 ## 活动网页版测试访问密码
 
-www.damumu.com 由宿主机 Nginx Basic Auth 保护。凭据文件为 /etc/nginx/.htpasswd-damumu-web，由 root 管理、www-data 组可读，权限0640。新服务器先用 htpasswd 创建此文件再安装配置。凭据和密码哈希不进入仓库。/healthz 返回200，发布流程另验证首页匿名访问返回401。测试者通过入口密码后仍需正常登录搭慕业务账号。
+www.damumu.com 由宿主机 Nginx Basic Auth 保护。凭据文件为 /etc/nginx/.htpasswd-damumu-web，由 root 管理、www-data 组可读，权限0640。新服务器先用 htpasswd 创建此文件再安装配置。凭据和密码哈希不进入仓库。/healthz 返回200，发布流程另验证首页匿名访问返回401。测试者通过入口密码后仍需正常登录搭木木业务账号。

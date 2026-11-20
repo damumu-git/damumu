@@ -1,6 +1,6 @@
-# 慕搭 REST API
+# 搭木木（DAMUMU）REST API
 
-Google/Kakao原生登录新增 `/api/v1/auth/social/{provider}` 和迁移024；服务端校验第三方身份后才签发本地会话，不按邮箱自动合并。平台未配置时默认关闭。详见 `docs/SOCIAL_LOGIN_SETUP.md`（仓库根目录）。
+原生 Google/Kakao 授权使用 `/api/v1/auth/social/{provider}`，独立网页 OAuth 使用 `/api/v1/auth/web/*`。服务端校验第三方身份后将其关联到本地账号，按提供方和第三方主体识别用户。分别参见 [原生登录配置](../docs/SOCIAL_LOGIN_SETUP.md) 和 [网页登录配置](../app-web/README.md#网页-google-和-kakao-登录)。
 
 Development可加载Git忽略的`appsettings.Local.json`填写本机Google公开Client ID；环境变量/命令行优先，生产不加载且文件不进入Docker/发布输出。AWS仍使用`deploy/.env`，配置导入不会自动部署或开放登录。
 
@@ -19,6 +19,11 @@ AWS Lightsail 上的 PostgreSQL 只允许服务器内部网络访问，不开放
 只有调试 REST API 或本地 Admin 时才启动本地服务。此时使用隔离的本地 PostgreSQL，或先建立
 SSH 隧道，再通过 `ConnectionStrings__Muda` 提供完整连接字符串。不要把 AWS 数据库端口开放到公网。
 Admin 不直接连接 PostgreSQL；它通过本地 REST API 访问数据库。
+
+## 活动详情权限与迁移
+
+- `GET /api/v1/events/{id}` 的 `data.item.viewer_can_open_chat` 控制客户端群聊入口，`data.feedback.eligible` 控制活动评价。实际进入群聊通过 `GET /api/v1/events/{id}/conversation` 重新检查资格。
+- 数据库变更以 [有序 SQL 迁移](Migrations/) 为准，当前生产迁移和运行版本见 [项目状态](../docs/STATUS.md)。发布按 [部署指南](../deploy/README.md#更新与回滚) 执行。
 
 ## 可选：独立的本地 Docker 环境
 

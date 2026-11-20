@@ -39,7 +39,7 @@ At task completion:
 
 ## Product invariants
 
-- DAMUMU (current UI name: 搭慕) is a Korea-focused offline activity and
+- DAMUMU (current UI name: 搭木木) is a Korea-focused offline activity and
   companion-finding app.
 - The platform does not collect activity fees, provide payments, guarantee
   transfers, or act as an escrow service. Amounts shown are estimated offline
@@ -58,6 +58,8 @@ At task completion:
 ## Repository map
 
 - `app/`: Flutter/Dart user application.
+- `app-web/`: standalone activity website using the shared API.
+- `website/`: standalone product introduction and policy pages.
 - `restapi/`: ASP.NET Core 10 API backed by PostgreSQL/PostGIS.
 - `admin/`: React 19/Vite operations console.
 - `restapi/Migrations/`: ordered SQL migrations.
@@ -96,16 +98,18 @@ At task completion:
 - App: Flutter/Dart for Web, Android, and iOS.
 - Admin: React 19 with Vite.
 - Marketing site: standalone static site under `website/`.
-- Object storage, push notifications, and realtime messaging: not yet selected;
-  do not present them as implemented infrastructure.
+- Media uses host storage. Realtime updates use WebSocket. Firebase Cloud
+  Messaging is integrated and defaults to disabled pending external processing
+  approval. See `docs/PROJECT.md` for the infrastructure baseline.
 
 ## Important implementation constraints
 
 - The Flutter event identifier currently has legacy integer/hash behavior. New
   event detail, join, leave, edit, and organizer flows should preserve the real
   database UUID string end-to-end.
-- Event creation should eventually be one database transaction so a failed event
-  insert cannot leave an orphaned place.
+- Keep event publication transactional. Places, events, recurring plans,
+  organizer membership, and tags are created together. Schedule conflict and
+  publication quota checks use the same per-user lock.
 - The current custom user token and static admin API key are development-stage
   mechanisms, not production authentication.
 - Existing category icons are stored mainly as emoji. Do not delete or reinterpret

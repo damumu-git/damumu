@@ -1,10 +1,10 @@
-# 在韩搭子 App
+# 搭木木（DAMUMU）App
 
 固定界面Emoji已接入API图片目录，分类和活动优先读取返回的图标URL，保留旧服务和断网回退；不替换用户聊天正文。详见仓库根目录 `docs/EMOJI_LIBRARY.md`。
 
 ## 界面主题
 
-正式Logo采用用户选定的蓝底暖白“环抱”方案，已用于登录、注册、Android/iOS 安装图标、Android 启动图及 Web 加载页。iOS 原生启动画面使用与引导页一致的浅蓝底色。母版与尺寸导出见根目录 `branding/README.md`；原生界面和安装图标需要重新构建安装包。
+登录、注册及引导页使用 DAMUMU 新标记，昵称和等级说明使用等级勋章。素材位于 `assets/damumu-brand/`。原生安装图标、启动资源及 Flutter Web 加载页沿用现有资源。安装资源说明见 [品牌素材](../branding/README.md)。
 
 全局字体采用简体中文版资源圆体，覆盖中文、英文及数字。韩文使用 Noto Sans KR，
 Emoji 与生僻字符走现有回退。App 离线预览和独立网页版使用相同的字体源。来源、许可与重建说明见
@@ -17,7 +17,7 @@ Emoji 与生僻字符走现有回退。App 离线预览和独立网页版使用�
 
 ## 启动
 
-Google/Kakao原生登录代码已接入，默认未开放；需要创建平台应用、执行迁移024并配置公开ID后真机联调。首次登录仍需昵称、满14岁及政策确认；Web/桌面暂保留邮箱登录。配置见根目录 `docs/SOCIAL_LOGIN_SETUP.md`。
+原生 Google/Kakao 通过客户端和服务端开关独立配置。首次注册须补全昵称、确认满 14 岁并阅读隐私政策。已有第三方账号从注册入口授权时会收到登录提示。Flutter Web 和桌面开发入口使用邮箱，独立的活动网页版按自己的配置提供 Google/Kakao。详见 [原生登录配置](../docs/SOCIAL_LOGIN_SETUP.md) 和 [活动网页版](../app-web/README.md)。
 
 开发启动脚本会自动读取本机`app/config/social-login.local.json`；模板为
 `app/config/social-login.example.json`。iOS可选读取`ios/Flutter/SocialLogin.local.xcconfig`中的回调设置。
@@ -34,7 +34,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080/api/v1
 用户模块支持邮箱注册/登录、登录态恢复、服务端系统头像目录，以及拍摄/相册选择、
 锁定 1:1 裁剪和 512×512 JPEG 压缩上传。
 活动封面锁定 4:3，输出 1280×960 JPEG；手机原照片由 App 先预缩图并自动压缩，
-2 MB 仅限制最终上传文件。Web 的裁剪依赖本地 `web/vendor/cropperjs/`（1.6.2，
+1.5 MB 仅限制最终上传文件。Web 的裁剪依赖本地 `web/vendor/cropperjs/`（1.6.2，
 含许可证），不要删除 `web/index.html` 内对应 CSS 和 JS 引用。
 
 界面支持中文、English、한국어，可从“我的 → 语言”切换并持久保存。用户注册、
@@ -66,6 +66,12 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080/api/v1
 不会保存密码或第三方平台Token用于自动登录；仅复用已有的本地会话Token。
 
 开发测试账号默认不自动登录。开发者需明确传入`--dart-define=DEV_AUTO_LOGIN=true`才会启用旧测试入口；正式构建不要开启。
+
+## 活动详情与小组
+
+首页和发现将预计费用独立显示，活动详情按服务端权限显示活动群聊和评价。活动收藏暂时隐藏。名称前显示等级徽记，文字标签旁可打开等级说明。小组创建支持封面预览、分类、加入方式和人数上限，群主可管理成员并发布置顶公告。
+
+App 源码合并、网页版上线和原生安装包交付分别记录在 [当前交接](../docs/STATUS.md)。
 
 ## 活动列表分页
 
