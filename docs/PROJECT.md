@@ -27,6 +27,7 @@ DAMUMU（中文名称「搭木木」，韩文名称「다무무」）是一款�
 - `app-web/`：面向 `www.damumu.com` 的独立用户网站，以公共 API 提供活动和账号数据，随统一部署发布。
 - `preview/`：App / Admin 两个离线 UI 设计预览入口，示例数据与正式服务隔离；用于视觉评审，不自动发布或同步生产页面。
 - `docs/`：项目上下文、当前状态与架构决策。
+- `tools/agents/` 与 `tools/agent_workspace.py`：基于任务上下文、角色分工和独立 Git worktree 的开发协作环境，使用方法见 `docs/development/MULTI_AGENT.md`。不自动调用模型或部署服务。
 
 ## 技术栈
 

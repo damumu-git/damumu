@@ -69,6 +69,19 @@ At task completion:
 
 ## Working rules
 
+### Context-engineered multi-agent work
+
+For substantial multi-module tasks, use `tools/agents/COORDINATOR.md` and
+`docs/development/MULTI_AGENT.md`. Independent tasks may be delegated to the
+API, App, Web, Admin, operations and read-only review roles when user/host policy
+permits. Prefer one agent for small changes. Use at most three workers at once
+or the lower host limit, fresh bounded task packets and separate writer worktrees.
+Workers follow `tools/agents/WORKER.md`; only the coordinator owns canonical docs,
+integration, final commit/push and release. Never assume worktrees isolate services
+or that subagents automatically start in different checkouts.
+
+### General
+
 1. Inspect the relevant UI, API, database, and admin paths before changing a
    cross-cutting feature.
 2. Preserve user changes. Check `git status --short` and the relevant diff before
@@ -110,8 +123,8 @@ At task completion:
 - Keep event publication transactional. Places, events, recurring plans,
   organizer membership, and tags are created together. Schedule conflict and
   publication quota checks use the same per-user lock.
-- The current custom user token and static admin API key are development-stage
-  mechanisms, not production authentication.
+- Follow ADR-043 for revocable user sessions and independent administrator
+  authentication. Do not restore browser static admin keys or token-only access.
 - Existing category icons are stored mainly as emoji. Do not delete or reinterpret
   this data until an `icon_key` migration and compatibility plan are approved.
 - PostgreSQL and unknown server exceptions must produce safe JSON errors; do not

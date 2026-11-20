@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "max_workers": 3,
+  "roles": {
+    "api": {"mode": "write", "owns": ["restapi/", "restapi.tests/"], "reads": ["restapi/README.md", "deploy/SECURITY.md"], "checks": ["dotnet build restapi/Muda.Api.csproj", "Run affected API integration tests against an isolated database"]},
+    "app": {"mode": "write", "owns": ["app/"], "reads": ["app/README.md"], "checks": ["flutter analyze", "flutter test <affected tests>"]},
+    "web": {"mode": "write", "owns": ["app-web/", "website/"], "reads": ["app-web/README.md", "website/README.md"], "checks": ["Check changed JavaScript syntax", "Verify desktop and mobile layouts and real API permissions"]},
+    "admin": {"mode": "write", "owns": ["admin/"], "reads": ["admin/README.md"], "checks": ["npm --prefix admin run lint", "npm --prefix admin run build"]},
+    "ops": {"mode": "write", "owns": ["deploy/"], "reads": ["deploy/README.md", "deploy/SECURITY.md"], "checks": ["Validate Compose, shell syntax and Nginx configuration without deploying"]},
+    "review": {"mode": "read-only", "owns": [], "reads": ["deploy/SECURITY.md"], "checks": ["Review authorization, contracts, migrations, concurrency and regression evidence"]}
+  }
+}
