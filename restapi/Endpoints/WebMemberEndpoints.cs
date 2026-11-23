@@ -145,16 +145,20 @@ public static class WebMemberEndpoints
             Guid id, Guid memberUserId, HttpContext context, Db db, CancellationToken ct) =>
         {
             var organizer = ApiSupport.RequireUserId(context);
-            var changed = await db.ExecuteAsync("""
-                UPDATE event_member m SET status='attended',checked_in_at=now()
-                FROM event e WHERE e.id=m.event_id AND e.id=@id AND e.organizer_user_id=@organizer
-                  AND e.deleted_at IS NULL AND e.status IN ('published','full','completed')
-                  AND m.user_id=@memberUserId AND m.status='approved' AND m.left_at IS NULL
-                  AND EXISTS (SELECT 1 FROM event_schedule s WHERE s.event_id=e.id AND s.status='scheduled'
-                    AND now() >= COALESCE(s.check_in_opens_at,s.starts_at-interval '1 hour')
-                    AND now() <= COALESCE(s.check_in_closes_at,s.ends_at+interval '24 hours'))
-                """, new { id, memberUserId, organizer }, ct);
-            if (changed == 0) throw new ApiException(409, "check_in_unavailable", "没有可签到的记录或签到时间未开放");
+            await db.InEventAdmissionAsync(id, memberUserId, async transaction =>
+            {
+                var changed = await transaction.ExecuteAsync("""
+                    UPDATE event_member m SET status='attended',checked_in_at=now()
+                    FROM event e WHERE e.id=m.event_id AND e.id=@id AND e.organizer_user_id=@organizer
+                      AND e.deleted_at IS NULL AND e.status IN ('published','full','completed')
+                      AND m.user_id=@memberUserId AND m.status='approved' AND m.left_at IS NULL
+                      AND EXISTS (SELECT 1 FROM event_schedule s WHERE s.event_id=e.id AND s.status='scheduled'
+                        AND now() >= COALESCE(s.check_in_opens_at,s.starts_at-interval '1 hour')
+                        AND now() <= COALESCE(s.check_in_closes_at,s.ends_at+interval '24 hours'))
+                    """, new { id, memberUserId, organizer }, ct);
+                if (changed == 0) throw new ApiException(409, "check_in_unavailable", "没有可签到的记录或签到时间未开放");
+                return changed;
+            }, ct);
             return ApiSupport.Ok(new { status = "attended" });
         });
         return api;
