@@ -43,6 +43,7 @@ internal static class ScheduleChecks
             catch (Exception error) { Console.WriteLine(error); context.Response.StatusCode = 500; }
         });
         app.MapGroup("/api/v1").MapEventEndpoints();
+        app.MapGroup("/api/v1").MapWebMemberEndpoints();
         app.MapGroup("/api/v1").MapRecurringEventEndpoints();
         app.MapGroup("/api/v1").MapUserEndpoints();
         app.MapGroup("/api/v1").MapActivityEndpoints();
@@ -199,6 +200,23 @@ internal static class ScheduleChecks
             Check((await Get(member, chat)).StatusCode == HttpStatusCode.Forbidden, "Expelled group member retained chat access");
             Console.WriteLine("PASS: four member levels, strict activity likes, publication limits and group membership/announcement authorization");
 
+            async Task CheckAdmissionCounts(params Guid[] eventIds)
+            {
+                var mismatches = await db.QueryAsync("""
+                    SELECT e.id, e.approved_count, e.waitlist_count,
+                           COALESCE(sum(m.party_size) FILTER (WHERE m.status IN ('approved','attended')), 0) AS occupied,
+                           count(*) FILTER (WHERE m.status='waitlisted') AS waiting
+                    FROM event e LEFT JOIN event_member m ON m.event_id=e.id
+                    WHERE e.id=ANY(@eventIds)
+                    GROUP BY e.id
+                    HAVING e.approved_count <> COALESCE(sum(m.party_size)
+                               FILTER (WHERE m.status IN ('approved','attended')), 0)
+                        OR e.waitlist_count <> count(*) FILTER (WHERE m.status='waitlisted')
+                    """, new { eventIds });
+                Check(mismatches.Count == 0, "Admission counters disagree with membership: " +
+                    JsonSerializer.Serialize(mismatches));
+            }
+
             var a = await Create(hosts[0], Request("A", start));
             var placeCount = await db.ScalarAsync<long>("SELECT count(*) FROM place");
             Check((await Send(hosts[0], "/api/v1/events", Request("Overlap", start.AddHours(1)))).StatusCode == HttpStatusCode.Conflict,
@@ -211,10 +229,15 @@ internal static class ScheduleChecks
                 await Data(await Send(member, $"/api/v1/events/{eventId}/join", new { partySize = 1 }));
             var waitingEvent = await Create(hosts[3], Request("Waiting", start));
             await db.ExecuteAsync("""
-                INSERT INTO event_member(event_id,user_id,status,waitlist_position) VALUES(@waitingEvent,@member,'waitlisted',1);
-                UPDATE event SET waitlist_count=1 WHERE id=@waitingEvent;
-                """, new { waitingEvent, member });
-            await Data(await Send(member, $"/api/v1/events/{c}/join", new { partySize = 1 }));
+                INSERT INTO event_member(event_id,user_id,status,waitlist_position,party_size)
+                VALUES(@waitingEvent,@member,'waitlisted',1,1),(@waitingEvent,@second,'waitlisted',2,2);
+                UPDATE event SET waitlist_count=2 WHERE id=@waitingEvent;
+                """, new { waitingEvent, member, second });
+            await CheckAdmissionCounts(a, b, c, waitingEvent);
+            await Data(await Send(second, $"/api/v1/events/{waitingEvent}/leave", new { }));
+            await CheckAdmissionCounts(waitingEvent);
+            await Data(await Send(member, $"/api/v1/events/{c}/join", new { partySize = 2 }));
+            await CheckAdmissionCounts(a, b, c, waitingEvent);
             Check(await db.ScalarAsync<long>("SELECT count(*) FROM event_member WHERE user_id=@member AND status='withdrawn' AND withdrawal_reason='schedule_conflict'", new { member }) == 3,
                 "Overlapping pending requests were not withdrawn");
             Check(await db.ScalarAsync<long>("SELECT count(*) FROM notification WHERE user_id=@member AND notification_type='schedule_conflict_withdrawn'", new { member }) == 3,
@@ -231,8 +254,48 @@ internal static class ScheduleChecks
             Check(decisions.Count(response => response.IsSuccessStatusCode) == 1, "Concurrent approvals both succeeded");
             Check(await db.ScalarAsync<long>("SELECT count(*) FROM event_member WHERE user_id=@second AND status='approved'", new { second }) == 1,
                 "Concurrent admission produced overlapping commitments");
-            Check(await db.ScalarAsync<long>("SELECT count(*) FROM event_member WHERE user_id=@second AND status='withdrawn'", new { second }) == 1,
+            Check(await db.ScalarAsync<long>("SELECT count(*) FROM event_member WHERE user_id=@second AND event_id IN (@a,@b) AND status='withdrawn'",
+                new { second, a, b }) == 1,
                 "Losing pending request was not withdrawn");
+
+            await CheckAdmissionCounts(a, b);
+            Check((await Send(Guid.NewGuid(), $"/api/v1/events/{a}/leave", new { })).StatusCode == HttpStatusCode.Conflict,
+                "Withdrawal without a membership must return conflict");
+            var racingMember = Guid.NewGuid();
+            await db.ExecuteAsync("INSERT INTO app_user(id) VALUES(@racingMember)", new { racingMember });
+            for (var attempt = 0; attempt < 4; attempt++)
+            {
+                await Data(await Send(racingMember, $"/api/v1/events/{a}/join", new { partySize = 2 }));
+                var review = Send(owner, $"/api/v1/events/{a}/members/{racingMember}/approve", new { });
+                var leave = Send(racingMember, $"/api/v1/events/{a}/leave", new { });
+                await Task.WhenAll(review, leave);
+                using var reviewResponse = await review;
+                using var leaveResponse = await leave;
+                Check(reviewResponse.IsSuccessStatusCode || reviewResponse.StatusCode == HttpStatusCode.NotFound,
+                    "Approval racing withdrawal must succeed or find no pending application");
+                await Data(leaveResponse);
+                Check(await db.ScalarAsync<string>("SELECT status FROM event_member WHERE event_id=@a AND user_id=@racingMember",
+                    new { a, racingMember }) == "withdrawn", "Concurrent approval left a withdrawn member approved");
+                await CheckAdmissionCounts(a);
+            }
+
+            await Data(await Send(racingMember, $"/api/v1/events/{c}/join", new { partySize = 2 }));
+            await CheckAdmissionCounts(c);
+            await Data(await Send(racingMember, $"/api/v1/events/{c}/leave", new { }));
+            await CheckAdmissionCounts(c);
+            await Data(await Send(racingMember, $"/api/v1/events/{c}/join", new { partySize = 2 }));
+            await Data(await Send(racingMember, $"/api/v1/events/{c}/check-in", new { }));
+            await CheckAdmissionCounts(c);
+
+            var guest = Guid.NewGuid();
+            await db.ExecuteAsync("INSERT INTO app_user(id) VALUES(@guest)", new { guest });
+            await Data(await Send(guest, $"/api/v1/events/{c}/join", new { partySize = 2 }));
+            await db.ExecuteAsync("UPDATE event_schedule SET check_in_opens_at=now() WHERE event_id=@c", new { c });
+            var organizerCheckIn = $"/api/v1/events/{c}/members/{guest}/check-in";
+            Check((await Send(owner, organizerCheckIn, new { })).StatusCode == HttpStatusCode.Conflict,
+                "Another organizer could check in an attendee");
+            await Data(await Send(hosts[2], organizerCheckIn, new { }));
+            await CheckAdmissionCounts(c);
 
             var recurring = await Data(await Send(hosts[0], "/api/v1/events",
                 Request("Weekly plan", start.AddDays(1), repeat: "weekly", count: 12)));
@@ -329,7 +392,7 @@ internal static class ScheduleChecks
                 throw new Exception("Schedule edit introduced an organizer overlap");
             }
             catch (PostgresException error) when (error.ConstraintName == "event_schedule_conflict") { }
-            Console.WriteLine("PASS: HTTP creation rollback, adjacent times, overlapping applications, withdrawal notices, concurrent approval, finite/idempotent recurring publication, authorization and reminder deduplication");
+            Console.WriteLine("PASS: HTTP creation rollback, adjacent times, overlapping applications, withdrawal notices, concurrent approval and withdrawal, admission counter reconciliation, finite/idempotent recurring publication, authorization and reminder deduplication");
         }
         finally { await app.StopAsync(); }
     }

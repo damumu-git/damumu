@@ -341,7 +341,8 @@ public sealed class Db(NpgsqlDataSource dataSource)
     private static async Task LockAdmissionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         Guid userId, CancellationToken ct)
     {
-        await using var guard = new NpgsqlCommand("SELECT lock_event_user(@userId)", connection, transaction);
+        await using var guard = new NpgsqlCommand(
+            "SELECT lock_event_user(id) FROM app_user WHERE id=@userId", connection, transaction);
         guard.Parameters.AddWithValue("userId", userId);
         await guard.ExecuteNonQueryAsync(ct);
     }
@@ -477,6 +478,52 @@ public sealed class Db(NpgsqlDataSource dataSource)
         await transaction.CommitAsync(cancellationToken);
         return member;
     }
+
+    internal Task<T> InEventAdmissionAsync<T>(Guid eventId, Guid userId, Func<Db, Task<T>> operation, CancellationToken ct) =>
+        InTransactionAsync(async db =>
+        {
+            // Match join and review: lock the user's schedule, then the event, then the membership.
+            await LockAdmissionAsync(db.transactionConnection!, db.activeTransaction!, userId, ct);
+            await db.ExecuteAsync("SELECT id FROM event WHERE id=@eventId FOR UPDATE", new { eventId }, ct);
+            return await operation(db);
+        }, ct);
+
+    public Task<Dictionary<string, object?>> LeaveEventAsync(Guid eventId, Guid userId, CancellationToken ct) =>
+        InEventAdmissionAsync(eventId, userId, async db =>
+        {
+            var member = await db.QueryOneAsync(
+                """
+                WITH target AS MATERIALIZED (
+                    SELECT party_size, status
+                    FROM event_member
+                    WHERE event_id=@eventId AND user_id=@userId
+                      AND member_role='participant'
+                      AND status IN ('applied', 'approved', 'waitlisted')
+                    FOR UPDATE
+                ), changed AS (
+                    UPDATE event_member em
+                    SET status='withdrawn', left_at=now(), waitlist_position=NULL
+                    FROM target
+                    WHERE em.event_id=@eventId AND em.user_id=@userId
+                    RETURNING em.id, em.event_id, em.user_id, em.status, em.left_at
+                ), event_updated AS (
+                    UPDATE event e
+                    SET approved_count=GREATEST(0, e.approved_count-
+                            CASE WHEN target.status='approved' THEN target.party_size ELSE 0 END),
+                        waitlist_count=GREATEST(0, e.waitlist_count-
+                            CASE WHEN target.status='waitlisted' THEN 1 ELSE 0 END),
+                        status=CASE
+                            WHEN e.status='full' AND target.status='approved' THEN 'published'
+                            ELSE e.status
+                        END
+                    FROM target
+                    WHERE e.id=@eventId
+                    RETURNING e.id
+                )
+                SELECT changed.* FROM changed
+                """, new { eventId, userId }, ct);
+            return member ?? throw new ApiException(409, "cannot_leave", "当前没有可退出的报名");
+        }, ct);
 
     public Task<Dictionary<string, object?>> ReviewMemberAsync(
         Guid eventId,

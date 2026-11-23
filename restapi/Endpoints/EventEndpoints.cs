@@ -647,38 +647,7 @@ public static class EventEndpoints
             Guid id, HttpContext context, Db db, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
-            var member = await db.QueryOneAsync(
-                """
-                WITH target AS MATERIALIZED (
-                    SELECT party_size, status
-                    FROM event_member
-                    WHERE event_id=@id AND user_id=@userId
-                      AND member_role='participant'
-                      AND status IN ('applied', 'approved', 'waitlisted')
-                    FOR UPDATE
-                ), changed AS (
-                    UPDATE event_member em
-                    SET status='withdrawn', left_at=now(), waitlist_position=NULL
-                    FROM target
-                    WHERE em.event_id=@id AND em.user_id=@userId
-                    RETURNING em.id, em.event_id, em.user_id, em.status, em.left_at
-                ), event_updated AS (
-                    UPDATE event e
-                    SET approved_count=GREATEST(0, e.approved_count-
-                            CASE WHEN target.status='approved' THEN target.party_size ELSE 0 END),
-                        waitlist_count=GREATEST(0, e.waitlist_count-
-                            CASE WHEN target.status='waitlisted' THEN 1 ELSE 0 END),
-                        status=CASE
-                            WHEN e.status='full' AND target.status='approved' THEN 'published'
-                            ELSE e.status
-                        END
-                    FROM target
-                    WHERE e.id=@id
-                    RETURNING e.id
-                )
-                SELECT changed.* FROM changed
-                """, new { id, userId }, ct);
-            if (member is null) throw new ApiException(409, "cannot_leave", "当前没有可退出的报名");
+            var member = await db.LeaveEventAsync(id, userId, ct);
             return ApiSupport.Ok(member);
         });
 
@@ -748,14 +717,17 @@ public static class EventEndpoints
             Guid id, HttpContext context, Db db, CancellationToken ct) =>
         {
             var userId = ApiSupport.RequireUserId(context);
-            var member = await db.QueryOneAsync(
-                """
-                UPDATE event_member
-                SET status='attended', checked_in_at=now(), check_in_method='code'
-                WHERE event_id=@id AND user_id=@userId AND status='approved'
-                RETURNING id, event_id, user_id, status, checked_in_at
-                """, new { id, userId }, ct);
-            if (member is null) throw new ApiException(409, "cannot_check_in", "未获准参加或已签到");
+            var member = await db.InEventAdmissionAsync(id, userId, async transaction =>
+            {
+                var checkedIn = await transaction.QueryOneAsync(
+                    """
+                    UPDATE event_member
+                    SET status='attended', checked_in_at=now(), check_in_method='code'
+                    WHERE event_id=@id AND user_id=@userId AND status='approved'
+                    RETURNING id, event_id, user_id, status, checked_in_at
+                    """, new { id, userId }, ct);
+                return checkedIn ?? throw new ApiException(409, "cannot_check_in", "未获准参加或已签到");
+            }, ct);
             return ApiSupport.Ok(member);
         });
 
